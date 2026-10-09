@@ -1,0 +1,88 @@
+; Boot only. Gameplay lives in remote PCK.
+; Godot 4.7.1+
+; Autoloads MUST live in the shell: content GDScript cannot see globals that
+; were never registered in project.godot (mounting a PCK does not add autoloads).
+config_version=5
+
+[application]
+
+config/name="烬海征服者"
+run/main_scene="res://scenes/boot.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://icon.png"
+config/version="202609.13.17"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="userdata"
+
+[autoload]
+
+AdminBus="*res://scripts/admin/admin_bus.gd"
+DataStore="*res://scripts/core/data_store.gd"
+GameSession="*res://scripts/core/game_session.gd"
+
+[debug]
+
+; Shell must boot BEFORE content PCK mounts. Treat most GDScript warnings as warn (1),
+; not error (2): Android debug reloads scripts and hard-fails Autoload/Boot otherwise
+; (grey-screen Autoload/Boot). Content project can stay stricter.
+gdscript/warnings/enable=true
+gdscript/warnings/exclude_addons=true
+gdscript/warnings/untyped_declaration=1
+gdscript/warnings/inferred_declaration=1
+gdscript/warnings/unsafe_method_access=1
+gdscript/warnings/unsafe_property_access=1
+gdscript/warnings/unsafe_call_argument=1
+gdscript/warnings/unsafe_cast=1
+gdscript/warnings/unsafe_void_return=1
+gdscript/warnings/inference_on_variant=1
+gdscript/warnings/native_method_override=1
+gdscript/warnings/unreachable_code=1
+gdscript/warnings/unreachable_pattern=1
+gdscript/warnings/unused_variable=1
+gdscript/warnings/unused_local_constant=1
+gdscript/warnings/unused_private_class_variable=1
+gdscript/warnings/unused_parameter=1
+gdscript/warnings/unused_signal=1
+gdscript/warnings/shadowed_variable=1
+gdscript/warnings/shadowed_variable_base_class=1
+gdscript/warnings/shadowed_global_identifier=1
+gdscript/warnings/standalone_expression=1
+gdscript/warnings/standalone_ternary=1
+gdscript/warnings/incompatible_ternary=1
+gdscript/warnings/unassigned_variable=1
+gdscript/warnings/unassigned_variable_op_assign=1
+gdscript/warnings/integer_division=1
+gdscript/warnings/narrowing_conversion=1
+gdscript/warnings/int_as_enum_without_cast=1
+gdscript/warnings/int_as_enum_without_match=1
+gdscript/warnings/enum_variable_without_default=1
+gdscript/warnings/return_value_discarded=1
+gdscript/warnings/redundant_await=1
+gdscript/warnings/empty_file=1
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/mode=2
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+;; Mobile: one framebuffer for 2D+3D (BUG_REGRESSION §3.1d LDPlayer top-right scrap).
+window/stretch/mode.mobile="viewport"
+window/stretch/aspect.mobile="expand"
+
+[rendering]
+
+; PC buy-ship AV on Vulkan Forward+ (BUG_REGRESSION §3.1c); Android/MuMu also need GLES.
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+rendering_device/driver="opengl3"
+rendering_device/driver.windows="opengl3"
+rendering_device/driver.android="opengl3"
+rendering_device/fallback_to_opengl3=true
+textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0.06, 0.08, 0.12, 1)
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/android_emulator_launcher/plugin.cfg")

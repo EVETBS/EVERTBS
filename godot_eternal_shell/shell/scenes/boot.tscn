@@ -1,0 +1,88 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/boot.gd" id="1"]
+
+[node name="Boot" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="BG" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.1, 0.14, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Center/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "EVE自走棋"
+horizontal_alignment = 1
+
+[node name="Status" type="Label" parent="Center/VBox"]
+custom_minimum_size = Vector2(480, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "请选择进入方式（须点选其一）"
+autowrap_mode = 3
+horizontal_alignment = 1
+
+[node name="Progress" type="ProgressBar" parent="Center/VBox"]
+visible = false
+custom_minimum_size = Vector2(480, 24)
+layout_mode = 2
+max_value = 100.0
+show_percentage = false
+
+[node name="Buttons" type="HBoxContainer" parent="Center/VBox"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="Offline" type="Button" parent="Center/VBox/Buttons"]
+custom_minimum_size = Vector2(200, 48)
+layout_mode = 2
+text = "直接进入游戏"
+tooltip_text = "不联网，用本机/安装包内置内容进游戏"
+
+[node name="Retry" type="Button" parent="Center/VBox/Buttons"]
+custom_minimum_size = Vector2(200, 48)
+layout_mode = 2
+text = "核实版本是否最新"
+tooltip_text = "主动检查指针仓/HF 是否有新内容"
+
+[node name="Update" type="Button" parent="Center/VBox/Buttons"]
+visible = false
+layout_mode = 2
+text = "更新"
+
+[node name="Skip" type="Button" parent="Center/VBox/Buttons"]
+visible = false
+layout_mode = 2
+text = "暂不更新"
+
+[node name="HTTPRequest" type="HTTPRequest" parent="."]
+## true: Android/MuMu 上 use_threads=false 会出现「字节已满但 request_completed 永不触发」卡在 100%。
+## 主线程仍可每帧读 get_downloaded_bytes 刷新进度。
+use_threads = true
+download_chunk_size = 65536
+max_redirects = 8

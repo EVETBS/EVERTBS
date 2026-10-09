@@ -1,0 +1,31 @@
+﻿# Godot
+**/.godot/
+*.translation
+*.import
+
+# Local engine binary (junction; do not commit)
+/tools/godot/
+/tools/godot/**
+
+# Shell builds / packs / caches
+godot_eternal_shell/builds/**
+!godot_eternal_shell/builds/**/.gitkeep
+godot_eternal_shell/content_dist/**
+!godot_eternal_shell/content_dist/**/.gitkeep
+godot_eternal_shell/shell/bundled_content/packs/**
+!godot_eternal_shell/shell/bundled_content/packs/.gitkeep
+godot_eternal_shell/tools/cache/
+godot_eternal_shell/tools/cache/**
+godot_eternal_shell/tools/_adb_*.png
+godot_eternal_shell/installer/._sc_
+godot_eternal_shell/shell/._sc_
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Scratch
+_*.txt
+_*.log
+*.tmp
