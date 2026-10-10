@@ -1,0 +1,166 @@
+{
+  "bubble": {
+    "id": "bubble",
+    "name": "拦截泡发射器",
+    "pull_range_cells": 3,
+    "min_uptime_s": 15,
+    "cap_cost": 150,
+    "icon": "res://assets/ui/equipment/bubble.png",
+    "pc_typeid": 22782
+  },
+  "shield_field": {
+    "id": "shield_field",
+    "name": "护盾立场",
+    "icon": "res://assets/ui/equipment/shield_field.png",
+    "kind": "guard_shield"
+  },
+  "armor_link": {
+    "id": "armor_link",
+    "name": "装甲链接",
+    "icon": "res://assets/ui/equipment/armor_link.png",
+    "kind": "guard_armor"
+  },
+  "shield_booster_m": {
+    "id": "shield_booster_m",
+    "name": "中型护盾回充",
+    "cycle_s": 3.0,
+    "cap_cost": 60,
+    "heal_shield": 78,
+    "icon": "res://assets/ui/equipment/shield_booster_m.png",
+    "pc_typeid": 10836
+  },
+  "armor_repairer_m": {
+    "id": "armor_repairer_m",
+    "name": "中型装甲维修器",
+    "cycle_s": 12.0,
+    "cap_cost": 160,
+    "heal_armor": 276,
+    "icon": "res://assets/ui/equipment/armor_repairer_m.png",
+    "pc_typeid": 3528
+  },
+  "pd_small_kinetic": {
+    "id": "pd_small_kinetic",
+    "name": "小型动能近防炮",
+    "range_cells": 0,
+    "cycle_s": 1.4,
+    "damage": 144,
+    "cap_cost": 6,
+    "fx": "rail",
+    "tracking": 1086.0,
+    "signature_resolution": 40.0,
+    "falloff_m": 4730.0,
+    "ref_typeid": 485
+  },
+  "pd_medium_thermal": {
+    "id": "pd_medium_thermal",
+    "name": "中型热能近防炮",
+    "range_cells": 0,
+    "cycle_s": 2.2,
+    "damage": 330,
+    "cap_cost": 12,
+    "fx": "laser",
+    "tracking": 28.8,
+    "signature_resolution": 40.0,
+    "falloff_m": 4000.0,
+    "ref_typeid": 456
+  },
+  "weapon_medium_laser": {
+    "id": "weapon_medium_laser",
+    "name": "中型激光",
+    "kind": "laser",
+    "range_cells": 0,
+    "cycle_s": 4.05,
+    "cap_cost": 8,
+    "tracking": 28.8,
+    "optimal_m": 9450.0,
+    "falloff_m": 4000.0,
+    "damage_emp": 84,
+    "damage_thermal": 60,
+    "damage_kinetic": 0,
+    "damage_explosive": 0,
+    "fx": "laser",
+    "ref_typeid": 456
+  },
+  "weapon_large_cannon": {
+    "id": "weapon_large_cannon",
+    "name": "大型火炮",
+    "kind": "cannon",
+    "range_cells": 2,
+    "cycle_s": 20.0,
+    "cap_cost": 0,
+    "tracking": 0.9,
+    "optimal_m": 40000.0,
+    "falloff_m": 35000.0,
+    "damage_emp": 0,
+    "damage_thermal": 0,
+    "damage_kinetic": 127.544,
+    "damage_explosive": 637.721,
+    "fx": "cannon",
+    "ref_typeid": 498
+  },
+  "weapon_remote_armor_m": {
+    "id": "weapon_remote_armor_m",
+    "name": "中型远维甲",
+    "kind": "remote_armor",
+    "range_cells": 1,
+    "cycle_s": 6.0,
+    "cap_cost": 155,
+    "heal_armor": 196,
+    "fx": "repair",
+    "ref_typeid": 11357
+  },
+  "implant_sniper": {
+    "id": "implant_sniper",
+    "name": "狙击技术",
+    "every": 10,
+    "mul": 10,
+    "tracking_override": 9999
+  },
+  "implant_focus_crystal": {
+    "id": "implant_focus_crystal",
+    "name": "聚焦晶体",
+    "stack_pct": 1,
+    "cap_pct": 20,
+    "shield_cd": 20
+  },
+  "implant_armor_support": {
+    "id": "implant_armor_support",
+    "name": "装甲支援",
+    "res_pct": 10
+  },
+  "modifiers": {
+    "range_mul": 2.0,
+    "resistance_mul": 2.0
+  },
+  "tonnage_weight": {
+    "frigate": 1,
+    "destroyer": 2,
+    "cruiser": 4,
+    "battlecruiser": 7,
+    "battleship": 14
+  },
+  "tonnage_work_rate": {
+    "frigate": 100.0,
+    "destroyer": 25.0,
+    "cruiser": 17.5,
+    "battlecruiser": 12.5,
+    "battleship": 7.25
+  },
+  "tonnage_build_s": {
+    "frigate": 30.0,
+    "destroyer": 60.0,
+    "cruiser": 120.0,
+    "battlecruiser": 300.0,
+    "battleship": 600.0
+  },
+  "storage_slots_per_tonnage": 2,
+  "resource_build_time_reduction_per_point": 0.05,
+  "build_time_reduction_cap": 0.99,
+  "tonnage_resource_unlock": {
+    "frigate": 0,
+    "destroyer": 0,
+    "cruiser": 0,
+    "battlecruiser": 2,
+    "battleship": 3
+  }
+}

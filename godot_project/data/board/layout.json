@@ -1,0 +1,217 @@
+{
+  "viewer_faction": 1,
+  "cell_count": 12,
+  "ring_inner": 12.0,
+  "ring_outer": 26.0,
+  "empty_system_scale": 0.62,
+  "systems": [
+    {
+      "id": "soular",
+      "name": "soular",
+      "pos": [
+        0.0,
+        -80.0
+      ],
+      "links": [
+        "star",
+        "das"
+      ],
+      "kind": "station_system"
+    },
+    {
+      "id": "luna",
+      "name": "卢娜",
+      "pos": [
+        0.0,
+        80.0
+      ],
+      "links": [
+        "star",
+        "das"
+      ],
+      "kind": "station_system"
+    },
+    {
+      "id": "star",
+      "name": "star",
+      "pos": [
+        80.0,
+        0.0
+      ],
+      "links": [
+        "soular",
+        "luna",
+        "das"
+      ],
+      "kind": "resource_system"
+    },
+    {
+      "id": "das",
+      "name": "达斯",
+      "pos": [
+        -80.0,
+        0.0
+      ],
+      "links": [
+        "soular",
+        "luna",
+        "star"
+      ],
+      "kind": "resource_system"
+    }
+  ],
+  "opening_stations": {
+    "soular": 1,
+    "luna": 2
+  },
+  "pilots": [
+    {
+      "id": "p1_lind",
+      "name": "林渡",
+      "faction": 1,
+      "home": "soular",
+      "ship": "jdl_haiyan",
+      "cell_kind": "resource"
+    },
+    {
+      "id": "p1_chen",
+      "name": "陈屿",
+      "faction": 1,
+      "home": "soular",
+      "ship": "gila_cc2",
+      "cell_kind": "sov"
+    },
+    {
+      "id": "p1_zhou",
+      "name": "周衡",
+      "faction": 1,
+      "home": "soular",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p1_zhao",
+      "name": "赵朗",
+      "faction": 1,
+      "home": "soular",
+      "ship": "gila_cc2",
+      "cell_kind": "gate",
+      "gate_to": "star"
+    },
+    {
+      "id": "p1_su",
+      "name": "苏晚",
+      "faction": 1,
+      "home": "soular",
+      "ship": "jdl_haiyan",
+      "cell_kind": "gate",
+      "gate_to": "das"
+    },
+    {
+      "id": "p1_gu",
+      "name": "顾承",
+      "faction": 1,
+      "home": "soular",
+      "ship": "gila_cc2",
+      "cell_kind": "resource"
+    },
+    {
+      "id": "p2_yuan",
+      "name": "鸢飞",
+      "faction": 2,
+      "home": "luna",
+      "ship": "jdl_haiyan",
+      "cell_kind": "resource"
+    },
+    {
+      "id": "p2_shen",
+      "name": "沈蛇",
+      "faction": 2,
+      "home": "luna",
+      "ship": "gila_cc2",
+      "cell_kind": "sov"
+    },
+    {
+      "id": "p2_han",
+      "name": "韩朔",
+      "faction": 2,
+      "home": "luna",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p2_pei",
+      "name": "裴昭",
+      "faction": 2,
+      "home": "luna",
+      "ship": "gila_cc2",
+      "cell_kind": "resource"
+    },
+    {
+      "id": "p2_tang",
+      "name": "唐宁",
+      "faction": 2,
+      "home": "luna",
+      "ship": "jdl_haiyan",
+      "cell_kind": "gate",
+      "gate_to": "star"
+    },
+    {
+      "id": "p2_meng",
+      "name": "孟归",
+      "faction": 2,
+      "home": "luna",
+      "ship": "gila_cc2",
+      "cell_kind": "gate",
+      "gate_to": "das"
+    },
+    {
+      "id": "p1_wen",
+      "name": "温乔",
+      "faction": 1,
+      "home": "soular",
+      "ship": "jmh_sitexiusi",
+      "cell_kind": "empty"
+    },
+    {
+      "id": "p1_qi",
+      "name": "齐墨",
+      "faction": 1,
+      "home": "soular",
+      "ship": "ss_youling",
+      "cell_kind": "sov"
+    },
+    {
+      "id": "p1_feng",
+      "name": "冯岚",
+      "faction": 1,
+      "home": "soular",
+      "ship": "mmte_longjuanfeng",
+      "cell_kind": "resource"
+    },
+    {
+      "id": "p2_lu",
+      "name": "陆川",
+      "faction": 2,
+      "home": "luna",
+      "ship": "jmh_sitexiusi",
+      "cell_kind": "empty"
+    },
+    {
+      "id": "p2_bai",
+      "name": "白砚",
+      "faction": 2,
+      "home": "luna",
+      "ship": "ss_youling",
+      "cell_kind": "sov"
+    },
+    {
+      "id": "p2_he",
+      "name": "何霜",
+      "faction": 2,
+      "home": "luna",
+      "ship": "mmte_longjuanfeng",
+      "cell_kind": "resource"
+    }
+  ]
+}

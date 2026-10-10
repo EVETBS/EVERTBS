@@ -3,9 +3,35 @@
 *.translation
 *.import
 
-# Local engine binary (junction; do not commit)
+# Local engine binary (do not commit)
 /tools/godot/
 /tools/godot/**
+
+# Art / binary media — local only (not GitHub)
+godot_project/assets/
+godot_eternal_shell/content_src/assets/
+**/assets/_vendor_*/
+**/*.glb
+**/*.gltf
+**/*.fbx
+**/*.dds
+**/*.ktx
+**/*.ktx2
+**/*.bnk
+**/*.wav
+**/*.mp3
+**/*.ogg
+
+# Asset acquisition / one-off local scripts (not game body)
+tools/vendor_*.ps1
+tools/vendor_*.py
+tools/_*.py
+godot_project/tools/
+godot_eternal_shell/tools/_*.py
+
+# Local editor / agent addons (not game body)
+godot_project/addons/godot_mcp/
+godot_project/addons/godot_mcp/**
 
 # Shell builds / packs / caches
 godot_eternal_shell/builds/**
@@ -29,3 +55,5 @@ Desktop.ini
 _*.txt
 _*.log
 *.tmp
+__pycache__/
+*.pyc
