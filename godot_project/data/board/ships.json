@@ -22,18 +22,47 @@
       "scan_res": 285,
       "resist": 34,
       "work_rate": 17.5,
-      "build_s": 120,
+      "build_s": 300.0,
       "fit": {
-        "slots": [null, null, null, null],
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
         "hidden": [
-          { "kind": "pd", "ref": "pd_medium_thermal", "count": 2 },
-          { "kind": "range_mul", "value": 2.0 },
-          { "kind": "resistance_mul", "value": 2.0 },
-          { "kind": "pd_damage_mul", "value": 2.0 },
-          { "kind": "weapon", "ref": "weapon_medium_laser", "range_cells": 0 },
-          { "kind": "implant", "ref": "implant_focus_crystal" },
-          { "kind": "shield_regen" },
-          { "kind": "cap_regen" }
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 2
+          },
+          {
+            "kind": "range_mul",
+            "value": 2.0
+          },
+          {
+            "kind": "resistance_mul",
+            "value": 2.0
+          },
+          {
+            "kind": "pd_damage_mul",
+            "value": 2.0
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_medium_laser",
+            "range_cells": 0
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_focus_crystal"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
         ]
       }
     },
@@ -59,14 +88,29 @@
       "scan_res": 475,
       "resist": 22,
       "work_rate": 25.0,
-      "build_s": 60,
+      "build_s": 150.0,
       "fit": {
-        "slots": ["bubble", null, null, null],
+        "slots": [
+          "bubble",
+          null,
+          null,
+          null
+        ],
         "hidden": [
-          { "kind": "bubble_immune" },
-          { "kind": "pd", "ref": "pd_small_kinetic", "count": 1 },
-          { "kind": "shield_regen" },
-          { "kind": "cap_regen" }
+          {
+            "kind": "bubble_immune"
+          },
+          {
+            "kind": "pd",
+            "ref": "pd_small_kinetic",
+            "count": 1
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
         ]
       }
     },
@@ -92,15 +136,35 @@
       "scan_res": 275,
       "resist": 34,
       "work_rate": 17.5,
-      "build_s": 120,
+      "build_s": 300.0,
       "fit": {
-        "slots": ["armor_link", "shield_booster_m", "armor_repairer_m", null],
+        "slots": [
+          "armor_link",
+          "shield_booster_m",
+          "armor_repairer_m",
+          null
+        ],
         "hidden": [
-          { "kind": "pd", "ref": "pd_medium_thermal", "count": 1 },
-          { "kind": "weapon", "ref": "weapon_remote_armor_m", "range_cells": 1 },
-          { "kind": "implant", "ref": "implant_armor_support" },
-          { "kind": "shield_regen" },
-          { "kind": "cap_regen" }
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_remote_armor_m",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_armor_support"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
         ]
       }
     },
@@ -126,15 +190,35 @@
       "scan_res": 275,
       "resist": 34,
       "work_rate": 17.5,
-      "build_s": 120,
+      "build_s": 300.0,
       "fit": {
-        "slots": ["shield_field", "shield_booster_m", "armor_repairer_m", null],
+        "slots": [
+          "shield_field",
+          "shield_booster_m",
+          "armor_repairer_m",
+          null
+        ],
         "hidden": [
-          { "kind": "pd", "ref": "pd_medium_thermal", "count": 1 },
-          { "kind": "weapon", "ref": "weapon_medium_laser", "range_cells": 0 },
-          { "kind": "implant", "ref": "implant_focus_crystal" },
-          { "kind": "shield_regen" },
-          { "kind": "cap_regen" }
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_medium_laser",
+            "range_cells": 0
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_focus_crystal"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
         ]
       }
     },
@@ -160,14 +244,152 @@
       "scan_res": 200,
       "resist": 34,
       "work_rate": 12.5,
-      "build_s": 300,
+      "build_s": 750.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_large_cannon_ljf",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_sniper"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen",
+            "recharge_s": 500
+          }
+        ]
+      }
+    },
+    {
+      "id": "sleeper_frigate_a",
+      "name": "冬眠者护卫舰A",
+      "tonnage": "frigate",
+      "model": "tq_sleeper_slf1",
+      "portrait": "res://assets/ui/portraits/tq_sleeper_slf1.png",
+      "type_id": 30216,
+      "mass": 1910000,
+      "inertia": 1.0,
+      "shield": 0,
+      "armor": 2212,
+      "structure": 2020,
+      "cap": 110,
+      "speed": 2880,
+      "signature_radius": 35,
+      "scan_res": 1050,
+      "resist": 0,
+      "work_rate": 8.0,
+      "npc_hull": true,
       "fit": {
         "slots": [null, null, null, null],
         "hidden": [
-          { "kind": "weapon", "ref": "weapon_large_cannon", "range_cells": 2 },
-          { "kind": "implant", "ref": "implant_sniper" },
-          { "kind": "shield_regen" },
-          { "kind": "cap_regen" }
+          { "kind": "pd", "ref": "pd_small_kinetic", "count": 1 },
+          { "kind": "self_rep", "ref": "armor_repairer_s_sleeper" },
+          { "kind": "cap_regen", "recharge_s": 500 },
+          { "kind": "pd_repair_max_loss", "ref": "sleeper_pd_max_restore" }
+        ]
+      }
+    },
+    {
+      "id": "sleeper_frigate_b",
+      "name": "冬眠者护卫舰B",
+      "tonnage": "frigate",
+      "model": "tq_sleeper_slf2",
+      "portrait": "res://assets/ui/portraits/tq_sleeper_slf2.png",
+      "type_id": 30215,
+      "mass": 1910000,
+      "inertia": 1.0,
+      "shield": 0,
+      "armor": 2212,
+      "structure": 2020,
+      "cap": 110,
+      "speed": 2610,
+      "signature_radius": 35,
+      "scan_res": 1000,
+      "resist": 0,
+      "work_rate": 8.0,
+      "npc_hull": true,
+      "fit": {
+        "slots": [null, null, null, null],
+        "hidden": [
+          { "kind": "pd", "ref": "pd_small_kinetic", "count": 1 },
+          { "kind": "self_rep", "ref": "armor_repairer_s_sleeper" },
+          { "kind": "cap_regen", "recharge_s": 500 },
+          { "kind": "pd_repair_max_loss", "ref": "sleeper_pd_max_restore" }
+        ]
+      }
+    },
+    {
+      "id": "sleeper_destroyer",
+      "name": "冬眠者驱逐舰",
+      "tonnage": "destroyer",
+      "model": "tq_sleeper_slde1",
+      "portrait": "res://assets/ui/portraits/tq_sleeper_slde1.png",
+      "type_id": 30208,
+      "mass": 10900000,
+      "inertia": 1.0,
+      "shield": 0,
+      "armor": 4888,
+      "structure": 4888,
+      "cap": 725,
+      "speed": 1485,
+      "signature_radius": 150,
+      "scan_res": 350,
+      "resist": 0,
+      "work_rate": 12.0,
+      "npc_hull": true,
+      "fit": {
+        "slots": [null, null, null, null],
+        "hidden": [
+          { "kind": "pd", "ref": "pd_medium_thermal", "count": 1 },
+          { "kind": "self_rep", "ref": "armor_repairer_s_sleeper" },
+          { "kind": "cap_regen", "recharge_s": 1000 },
+          { "kind": "pd_repair_max_loss", "ref": "sleeper_pd_max_restore" }
+        ]
+      }
+    },
+    {
+      "id": "sleeper_cruiser_a",
+      "name": "冬眠者巡洋舰A",
+      "tonnage": "cruiser",
+      "model": "tq_sleeper_slc1",
+      "portrait": "res://assets/ui/portraits/tq_sleeper_slc1.png",
+      "type_id": 30206,
+      "mass": 10900000,
+      "inertia": 1.0,
+      "shield": 0,
+      "armor": 8606,
+      "structure": 8426,
+      "cap": 725,
+      "speed": 1800,
+      "signature_radius": 150,
+      "scan_res": 340,
+      "resist": 0,
+      "work_rate": 16.0,
+      "npc_hull": true,
+      "fit": {
+        "slots": [null, null, null, null],
+        "hidden": [
+          { "kind": "pd", "ref": "pd_medium_thermal", "count": 2 },
+          { "kind": "self_rep", "ref": "armor_repairer_s_sleeper" },
+          { "kind": "cap_regen", "recharge_s": 1000 },
+          { "kind": "pd_repair_max_loss", "ref": "sleeper_pd_max_restore" }
         ]
       }
     }

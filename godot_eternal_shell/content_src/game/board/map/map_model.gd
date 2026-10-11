@@ -87,7 +87,6 @@ func _generate_cells(sys: Dictionary) -> Array:
 		used[best_i] = true
 		cells[best_i]["kind"] = BoardTypes.CellKind.GATE
 		cells[best_i]["gate_to"] = g["to"]
-		# Keep equal index angles — do NOT snap gate center to bearing (that warps/rotates ring)
 	# 2) rest already EMPTY
 	# 3) pick 2 resource + 1 sov from empties
 	var empties: Array = []
@@ -149,32 +148,159 @@ func find_cell_of_kind(sys_id: String, kind: int, gate_to: String = "") -> int:
 func station_cell(sys_id: String) -> int:
 	return find_cell_of_kind(sys_id, BoardTypes.CellKind.STATION)
 
-func recompute_angles(sys_id: String, _occupants: Dictionary) -> void:
-	## HARD RULE: occupancy / scale must never redistribute arcs or rotate the ring.
-	## Equal sectors in fixed index order; ring_phase locked once at first call.
+func recompute_angles(sys_id: String, _occupants: Dictionary = {}) -> bool:
+	## Arc widths from cell.weight (base 1 + ships); index order fixed; ring_phase rotates whole ring.
 	if not systems.has(sys_id):
-		return
+		return false
 	var cells: Array = systems[sys_id]["cells"]
 	var n = cells.size()
 	if n <= 0:
-		return
+		return false
 	if not systems[sys_id].has("ring_phase"):
 		var start0 = float(cells[0].get("angle_center", 0.0)) - float(cells[0].get("angle_half", PI / float(n)))
 		systems[sys_id]["ring_phase"] = start0
-	var phase = float(systems[sys_id]["ring_phase"])
+	return _apply_weighted_phase(sys_id)
+
+func _compute_spans(cells: Array) -> PackedFloat32Array:
+	var n = cells.size()
+	var raw: PackedFloat32Array = PackedFloat32Array()
+	raw.resize(n)
+	var total := 0.0
+	for i in n:
+		var w = maxf(float(cells[i].get("weight", 1.0)), 0.01)
+		raw[i] = w
+		total += w
+	if total <= 0.0:
+		total = float(n)
+	var min_span = deg_to_rad(8.0)
+	var max_span = deg_to_rad(120.0)
+	var spans: PackedFloat32Array = PackedFloat32Array()
+	spans.resize(n)
+	for i in n:
+		spans[i] = TAU * raw[i] / total
+	for _iter in 10:
+		var locked := 0.0
+		var free_w := 0.0
+		var free_i: Array = []
+		for i in n:
+			if spans[i] <= min_span + 1e-5:
+				spans[i] = min_span
+				locked += min_span
+			elif spans[i] >= max_span - 1e-5:
+				spans[i] = max_span
+				locked += max_span
+			else:
+				free_i.append(i)
+				free_w += raw[i]
+		var remain = TAU - locked
+		if free_i.is_empty() or remain <= 1e-6 or free_w <= 1e-6:
+			break
+		var changed = false
+		for i in free_i:
+			var s = remain * raw[i] / free_w
+			var c = clampf(s, min_span, max_span)
+			if absf(c - spans[i]) > 1e-5:
+				changed = true
+			spans[i] = c
+		var sum_s := 0.0
+		for i in n:
+			sum_s += spans[i]
+		if sum_s > 1e-6:
+			var k = TAU / sum_s
+			for i in n:
+				spans[i] *= k
+		if not changed:
+			break
+	return spans
+
+func _apply_weighted_phase(sys_id: String) -> bool:
+	var cells: Array = systems[sys_id]["cells"]
+	var n = cells.size()
+	var spans = _compute_spans(cells)
+	var phase = float(systems[sys_id].get("ring_phase", 0.0))
+	var changed = false
+	var a = phase
+	for i in n:
+		var span = spans[i]
+		var half = span * 0.5
+		var center = fposmod(a + half, TAU)
+		if absf(float(cells[i].get("angle_half", 0.0)) - half) > 0.0005 \
+			or absf(_angle_delta(float(cells[i].get("angle_center", 0.0)), center)) > 0.0005:
+			changed = true
+		cells[i]["angle_half"] = half
+		cells[i]["angle_center"] = center
+		cells[i]["ring_start_locked"] = true
+		a += span
+	systems[sys_id]["cells"] = cells
+	return changed
+
+func _apply_ring_phase(sys_id: String) -> void:
+	_apply_weighted_phase(sys_id)
+
+func _angle_delta(a: float, b: float) -> float:
+	var d = fposmod(a - b + PI, TAU) - PI
+	return d
+
+func desired_ring_phase(sys_id: String) -> float:
+	## Gate alignment uses EQUAL index spans only — weighted arcs must not spin the ring
+	## (occupancy fattening neighbors was shifting phase by ~60° / 2 cells).
+	if not systems.has(sys_id):
+		return 0.0
+	var sys: Dictionary = systems[sys_id]
+	var cells: Array = sys["cells"]
+	var n = cells.size()
+	if n <= 0:
+		return float(sys.get("ring_phase", 0.0))
 	var step = TAU / float(n)
 	var half = step * 0.5
+	var center: Vector3 = sys["center"]
+	var sx := 0.0
+	var sy := 0.0
+	var count := 0
 	for i in n:
-		cells[i]["angle_center"] = fposmod(phase + float(i) * step + half, TAU)
-		cells[i]["angle_half"] = half
-		cells[i]["ring_start_locked"] = true
-	systems[sys_id]["cells"] = cells
+		var c: Dictionary = cells[i]
+		if int(c["kind"]) != BoardTypes.CellKind.GATE:
+			continue
+		var to_id: String = str(c.get("gate_to", ""))
+		if to_id == "" or not systems.has(to_id):
+			continue
+		var other: Vector3 = systems[to_id]["center"]
+		var dir = other - center
+		var bearing = atan2(dir.x, -dir.z)
+		if bearing < 0.0:
+			bearing += TAU
+		## Equal layout: phase + i*step + half = bearing
+		var ideal = bearing - float(i) * step - half
+		sx += cos(ideal)
+		sy += sin(ideal)
+		count += 1
+	if count <= 0:
+		return float(sys.get("ring_phase", 0.0))
+	return fposmod(atan2(sy, sx), TAU)
+
+func tick_ring_align(delta: float) -> bool:
+	var moved := false
+	var rate := 1.2 ## rad/s
+	for sid in systems.keys():
+		var want := desired_ring_phase(str(sid))
+		var cur := float(systems[sid].get("ring_phase", want))
+		var err := _angle_delta(want, cur)
+		if absf(err) < 0.0005:
+			if absf(err) > 0.00005:
+				systems[sid]["ring_phase"] = want
+				_apply_ring_phase(str(sid))
+				moved = true
+			continue
+		var step = clampf(err, -rate * delta, rate * delta)
+		systems[sid]["ring_phase"] = fposmod(cur + step, TAU)
+		_apply_ring_phase(str(sid))
+		moved = true
+	return moved
 
 func cell_world_pos(sys_id: String, cell_i: int, y: float = 0.0) -> Vector3:
 	var sys: Dictionary = systems[sys_id]
 	var c: Dictionary = sys["cells"][cell_i]
 	var mid_r: float = (float(layout.get("ring_inner", 12)) + float(layout.get("ring_outer", 26))) * 0.5
-	## Prefer smoothed visual_scale (written by starmap) over unsmoothed target scale.
 	var sc: float = float(sys.get("visual_scale", sys.get("scale", 1.0)))
 	mid_r *= sc
 	var a: float = c["angle_center"]

@@ -38,6 +38,32 @@
     "icon": "res://assets/ui/equipment/armor_repairer_m.png",
     "pc_typeid": 3528
   },
+  "armor_repairer_s_sleeper": {
+    "id": "armor_repairer_s_sleeper",
+    "name": "小型装甲维修器·冬眠",
+    "cycle_s": 6.0,
+    "cap_cost": 0,
+    "heal_armor": 69,
+    "icon": "res://assets/ui/equipment/armor_repairer_s_sleeper.png"
+  },
+  "sleeper_hull_lock": {
+    "id": "sleeper_hull_lock",
+    "name": "冬眠者船体锁定",
+    "kind": "no_max_loss",
+    "icon": "res://assets/ui/equipment/sleeper_hull_lock.png"
+  },
+  "sleeper_pd_max_restore": {
+    "id": "sleeper_pd_max_restore",
+    "name": "冬眠者近防上限修复",
+    "kind": "pd_repair_max_loss",
+    "icon": "res://assets/ui/equipment/sleeper_hull_lock.png"
+  },
+  "cap_regen": {
+    "id": "cap_regen",
+    "name": "电容回充",
+    "kind": "cap_regen",
+    "recharge_s": 400
+  },
   "pd_small_kinetic": {
     "id": "pd_small_kinetic",
     "name": "小型动能近防炮",
@@ -98,6 +124,24 @@
     "fx": "cannon",
     "ref_typeid": 498
   },
+  "weapon_large_cannon_ljf": {
+    "id": "weapon_large_cannon_ljf",
+    "name": "大型火炮·龙卷",
+    "kind": "cannon",
+    "range_cells": 2,
+    "cycle_s": 20.0,
+    "cap_cost": 0,
+    "tracking": 0.9,
+    "optimal_m": 40000.0,
+    "falloff_m": 35000.0,
+    "damage_emp": 0,
+    "damage_thermal": 0,
+    "damage_kinetic": 286.974,
+    "damage_explosive": 1434.872,
+    "fx": "cannon",
+    "ref_typeid": 498,
+    "note": "base large cannon DPH x2.25 for mmte_longjuanfeng"
+  },
   "weapon_remote_armor_m": {
     "id": "weapon_remote_armor_m",
     "name": "中型远维甲",
@@ -114,7 +158,8 @@
     "name": "狙击技术",
     "every": 10,
     "mul": 10,
-    "tracking_override": 9999
+    "tracking_override": 9999,
+    "desc": "连续9轮0伤害，第10轮十倍伤害且必中"
   },
   "implant_focus_crystal": {
     "id": "implant_focus_crystal",
@@ -147,11 +192,11 @@
     "battleship": 7.25
   },
   "tonnage_build_s": {
-    "frigate": 30.0,
-    "destroyer": 60.0,
-    "cruiser": 120.0,
-    "battlecruiser": 300.0,
-    "battleship": 600.0
+    "frigate": 75.0,
+    "destroyer": 150.0,
+    "cruiser": 300.0,
+    "battlecruiser": 750.0,
+    "battleship": 1500.0
   },
   "storage_slots_per_tonnage": 2,
   "resource_build_time_reduction_per_point": 0.05,

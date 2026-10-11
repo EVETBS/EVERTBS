@@ -1,6 +1,7 @@
 {
   "factions": [
-    { "id": 1, "name": "默认军团1", "abbrev": "军团1" },
-    { "id": 2, "name": "默认军团2", "abbrev": "军团2" }
+    { "id": 1, "name": "默认军团1", "abbrev": "军团1", "npc": false },
+    { "id": 2, "name": "默认军团2", "abbrev": "军团2", "npc": false },
+    { "id": 3, "name": "冬眠者", "abbrev": "冬眠", "npc": true }
   ]
 }

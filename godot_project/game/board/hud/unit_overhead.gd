@@ -4,11 +4,15 @@ class_name BoardUnitOverhead
 ## EveAC-aligned annulus HP: trail lag, heal green, black=non-regen only, enemy mirror, tonnage overlays.
 
 const REF_DIST := 48.0
-const BADGE_WU := 0.36
+## BoardCamera DIST_MAX=220 → need ≥220/48≈4.58 so far zoom keeps screen size (was clamped 2.6).
+const SC_MIN := 0.55
+const SC_MAX := 5.0
+## EveAC ShipHealthBar ratios (UI_ICONS §6.1): icon 0.36, bg×1.5, tag 0.1104, offset icon×0.5.
+const BADGE_WU := 0.58
 const OVERLAY_BG_WU := BADGE_WU * 1.5
 const OVERLAY_TAG_WU := BADGE_WU * 0.46 * (2.0 / 3.0)
 const OVERLAY_TAG_OFF := BADGE_WU * 0.5
-const TON_PIXEL := 0.024
+const TON_PIXEL_FALLBACK := 0.018125 ## BADGE_WU/32; real size from tex width
 const RING_DIAMETER_SCALE := 1.5
 const RING_BAND_SCALE := 0.75
 const RING_INNER := OVERLAY_BG_WU * 0.78 * RING_DIAMETER_SCALE
@@ -33,10 +37,28 @@ const COL_CAP := Color(0.2, 0.9, 0.85, 0.25)
 const COL_BLACK := Color(0.02, 0.02, 0.03, 0.92)
 const COL_TRAIL := Color(0.35, 0.05, 0.06, 0.85)
 const COL_GREEN := Color(0.15, 0.95, 0.45, 1.0)
+const COL_CD := Color(1.0, 1.0, 1.0, 0.92)
+## Screen px for outer attack-ready bar (TACTICAL_TOPDOWN).
+static var cd_bar_px: float = 20.0
+const CD_PX_WU := 0.005
+const CD_GAP := 0.02
+const SEGS_CD := 36
 const TRAIL_HOLD_S := 0.5
 const TRAIL_RATIO_PER_S := 0.5
 const GREEN_HOLD_S := 0.5
 const GREEN_FADE_S := 1.0
+## Name wraps when wider than HP ring diameter * this factor.
+const NAME_WRAP_MUL := 1.2
+## Tactical nameplate only (战场视角 uses face_camera dist scale — never font_scale).
+const TACTICAL_SC := 7.7
+const TACTICAL_REF_DIST := 560.0
+static var font_scale: float = 7.7
+## Extra world lift = one nameplate height (local, before node scale).
+const NAMEPLATE_LIFT := BADGE_WU * NAME_WRAP_MUL
+## Battle-view (orbit) nameplate Y above ship anchor — baked (TACTICAL_TOPDOWN).
+static var battle_nameplate_y: float = (3.6 + NAMEPLATE_LIFT) * 2.0
+var _compact_icon_only := false
+var _show_faction_badge := true
 
 var name_lab: Label3D
 var ton_spr: Sprite3D
@@ -61,6 +83,11 @@ var _enemy_mirrored := false
 var _alive_view := true
 var _cam: Camera3D
 var _title_col := Color(0.95, 0.95, 1.0, 1.0)
+var _sel_glow: MeshInstance3D
+var _sel_highlight := false
+var _cd_mi: MeshInstance3D
+var _cd_ratio := -1.0
+static var _dbg_oh_frame := -1
 
 func _ready() -> void:
 	name_lab = Label3D.new()
@@ -74,12 +101,14 @@ func _ready() -> void:
 	name_lab.rotation_degrees = Vector3(0, 180, 0)
 	name_lab.no_depth_test = true
 	name_lab.render_priority = 25
+	name_lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lab.autowrap_mode = TextServer.AUTOWRAP_OFF
 	add_child(name_lab)
 
 	overlay_bg = Sprite3D.new()
 	overlay_bg.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	overlay_bg.pixel_size = OVERLAY_BG_WU / 64.0
-	overlay_bg.position = Vector3(0, 0.35, 0.03)
+	overlay_bg.position = Vector3(0, 0, 0.03)
 	overlay_bg.rotation_degrees = Vector3(0, 180, 0)
 	overlay_bg.no_depth_test = true
 	overlay_bg.render_priority = 22
@@ -89,8 +118,8 @@ func _ready() -> void:
 
 	ton_spr = Sprite3D.new()
 	ton_spr.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-	ton_spr.pixel_size = TON_PIXEL
-	ton_spr.position = Vector3(0, 0.35, 0.05)
+	ton_spr.pixel_size = TON_PIXEL_FALLBACK
+	ton_spr.position = Vector3(0, 0, 0.05)
 	ton_spr.rotation_degrees = Vector3(0, 180, 0)
 	ton_spr.no_depth_test = true
 	ton_spr.render_priority = 24
@@ -100,8 +129,9 @@ func _ready() -> void:
 
 	overlay_tag = Sprite3D.new()
 	overlay_tag.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-	overlay_tag.pixel_size = OVERLAY_TAG_WU / 32.0
-	overlay_tag.position = Vector3(OVERLAY_TAG_OFF, 0.35 + OVERLAY_TAG_OFF, 0.06)
+	overlay_tag.pixel_size = OVERLAY_TAG_WU / 16.0
+	## EveAC: (-OFFSET, badge_y - OFFSET). With Y=180 face-camera, -X is viewer-right (was +X = reversed).
+	overlay_tag.position = Vector3(-OVERLAY_TAG_OFF, -OVERLAY_TAG_OFF, 0.06)
 	overlay_tag.rotation_degrees = Vector3(0, 180, 0)
 	overlay_tag.no_depth_test = true
 	overlay_tag.render_priority = 26
@@ -115,6 +145,7 @@ func _ready() -> void:
 		_trails.append(_mk_ring_mi(COL_TRAIL, 10))
 		var col = COL_S if i == 0 else (COL_A if i == 1 else (COL_H if i == 2 else COL_CAP))
 		_fills.append(_mk_ring_mi(col, 12))
+	_cd_mi = _mk_ring_mi(COL_CD, 13)
 
 func _rebuild_sectors(enemy: bool) -> void:
 	_enemy_mirrored = enemy
@@ -189,22 +220,29 @@ func _annulus(r0: float, r1: float, a0: float, a1: float, segs: int) -> ArrayMes
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	return mesh
 
+func _wu_pixel(tex: Texture2D, world: float, fallback: float) -> float:
+	if tex == null:
+		return fallback
+	var longest := float(maxi(tex.get_width(), tex.get_height()))
+	if longest < 1.0:
+		return fallback
+	return world / longest
+
 func set_tonnage_icon(tex: Texture2D) -> void:
 	ton_spr.texture = tex
 	ton_spr.visible = tex != null
-	ton_spr.pixel_size = TON_PIXEL
+	## EveAC: BADGE_WORLD_SIZE / longest side (32px → 0.01125), not fixed 0.024.
+	ton_spr.pixel_size = _wu_pixel(tex, BADGE_WU, TON_PIXEL_FALLBACK)
 
 func set_tonnage_overlays(bg: Texture2D, badge: Texture2D) -> void:
 	overlay_bg.texture = bg
 	overlay_bg.visible = bg != null
-	if bg:
-		var sz = maxf(float(bg.get_width()), 1.0)
-		overlay_bg.pixel_size = OVERLAY_BG_WU / sz
+	overlay_bg.pixel_size = _wu_pixel(bg, OVERLAY_BG_WU, OVERLAY_BG_WU / 40.0)
 	overlay_tag.texture = badge
 	overlay_tag.visible = badge != null
-	if badge:
-		var sz2 = maxf(float(badge.get_width()), 1.0)
-		overlay_tag.pixel_size = OVERLAY_TAG_WU / sz2
+	overlay_tag.pixel_size = _wu_pixel(badge, OVERLAY_TAG_WU, OVERLAY_TAG_WU / 16.0)
+	## Match EveAC bottom-right after face-camera yaw (see _ready).
+	overlay_tag.position = Vector3(-OVERLAY_TAG_OFF, -OVERLAY_TAG_OFF, 0.06)
 
 func set_faction_badge(_col: Color) -> void:
 	# Legacy solid badge unused when overlays present; keep tag tint soft
@@ -217,6 +255,46 @@ func set_faction_badge(_col: Color) -> void:
 		var lum = _title_col.r * 0.3 + _title_col.g * 0.59 + _title_col.b * 0.11
 		name_lab.outline_modulate = Color(0.05, 0.05, 0.08, 1.0) if lum > 0.45 else Color(0.95, 0.95, 0.98, 1.0)
 
+func set_compact_icon_only(on: bool) -> void:
+	_compact_icon_only = on
+	_apply_compact_visibility()
+
+func set_show_faction_badge(on: bool) -> void:
+	_show_faction_badge = on
+	_apply_compact_visibility()
+
+func _apply_compact_visibility() -> void:
+	if name_lab:
+		name_lab.visible = not _compact_icon_only
+	if _compact_icon_only:
+		for mi in _fills:
+			if mi:
+				mi.visible = false
+		for mi2 in _blacks:
+			if mi2:
+				mi2.visible = false
+		for mi3 in _trails:
+			if mi3:
+				mi3.visible = false
+		if overlay_bg:
+			overlay_bg.visible = false
+		if overlay_tag:
+			overlay_tag.visible = false
+		if _cd_mi:
+			_cd_mi.visible = false
+		if _sel_glow:
+			_sel_glow.visible = _sel_highlight
+	else:
+		if overlay_bg:
+			overlay_bg.visible = overlay_bg.texture != null
+		if overlay_tag:
+			overlay_tag.visible = _show_faction_badge and overlay_tag.texture != null
+	if ton_spr:
+		ton_spr.visible = ton_spr.texture != null
+	if not _compact_icon_only:
+		_apply_visuals()
+		_apply_cd_visual()
+
 func set_enemy_mirror(enemy: bool) -> void:
 	if enemy == _enemy_mirrored and _sector_a0.size() == 4:
 		return
@@ -227,18 +305,20 @@ func set_alive_view(on: bool) -> void:
 	_alive_view = on
 	visible = on
 
-func update_view(title: String, s: float, a: float, h: float, max_s: float, max_a: float, max_h: float, pris_s: float, pris_a: float, pris_h: float, cap: float = -1.0, max_cap: float = 1.0) -> void:
+func update_view(title: String, s: float, a: float, h: float, max_s: float, max_a: float, max_h: float, pris_s: float, pris_a: float, pris_h: float, cap: float = -1.0, max_cap: float = 1.0, atk_cd_ratio: float = -1.0) -> void:
 	if not _alive_view:
 		visible = false
 		return
 	visible = true
 	if name_lab.text != title:
 		name_lab.text = title
+	_apply_name_wrap()
 	_sync_layer(0, s, max_s, pris_s)
 	_sync_layer(1, a, max_a, pris_a)
 	_sync_layer(2, h, max_h, pris_h)
 	if cap >= 0.0:
 		_sync_layer(3, cap, max_cap, max_cap)
+	_cd_ratio = atk_cd_ratio
 	_apply_visuals()
 	_layer_inited = true
 
@@ -338,6 +418,9 @@ func _cap_fill_angles(a0: float, a1: float, ratio: float) -> Vector2:
 	return Vector2(a0, tip)
 
 func _apply_visuals() -> void:
+	if _compact_icon_only:
+		_apply_compact_visibility()
+		return
 	for i in 4:
 		var a0 = _sector_a0[i]
 		var a1 = _sector_a1[i]
@@ -394,6 +477,42 @@ func _apply_visuals() -> void:
 			else:
 				_fills[i].visible = true
 				_fills[i].mesh = _annulus(r0, r1, fang.x, fang.y, segs)
+	_apply_cd_visual()
+
+func _cd_thick() -> float:
+	## Keep ~cd_bar_px on screen despite tactical/battle node scale.
+	var sc := maxf(scale.x, 0.001)
+	return (clampf(cd_bar_px, 1.0, 32.0) * CD_PX_WU) / sc
+
+func _apply_cd_visual() -> void:
+	if _compact_icon_only:
+		if _cd_mi:
+			_cd_mi.visible = false
+		return
+	if _cd_mi == null:
+		return
+	if _cd_ratio < 0.0:
+		_cd_mi.visible = false
+		return
+	var a0: float
+	var a1: float
+	if _enemy_mirrored:
+		a0 = minf(ENEMY_HP_A0, ENEMY_CAP_A0)
+		a1 = maxf(ENEMY_HP_A1, ENEMY_CAP_A1)
+	else:
+		a0 = HP_A0
+		a1 = CAP_A1
+	var thick := _cd_thick()
+	var r0 := RING_OUTER + CD_GAP
+	var r1 := r0 + thick
+	var fr := clampf(_cd_ratio, 0.0, 1.0)
+	if fr <= 0.001:
+		_cd_mi.visible = false
+		return
+	var tip := lerpf(a0, a1, fr)
+	_cd_mi.visible = true
+	_cd_mi.mesh = _annulus(r0, r1, a0, tip, SEGS_CD)
+	(_cd_mi.material_override as BaseMaterial3D).albedo_color = COL_CD
 
 func _apply_greens(idx: int, a0_eff: float, a1: float, fill_ang: Vector2) -> void:
 	var batches: Array = _green_batches[idx]
@@ -429,7 +548,113 @@ func _apply_greens(idx: int, a0_eff: float, a1: float, fill_ang: Vector2) -> voi
 		mi.mesh = _annulus(r0, r1, cursor, cursor + w, segs)
 		cursor += w
 
+func _bar_local_diameter() -> float:
+	## Outer HP ring diameter in overhead-local units (Label3D shares this space).
+	return RING_OUTER * 2.0
+
+func _apply_name_wrap() -> void:
+	if name_lab == null:
+		return
+	## Label3D.width is in *pixels* (Godot 4), not world units.
+	## Convert ring diameter to px via Label3D.pixel_size (default 0.005).
+	var px: float = maxf(name_lab.pixel_size, 0.0001)
+	var limit_px: float = (_bar_local_diameter() * NAME_WRAP_MUL) / px
+	name_lab.width = limit_px
+	var font: Font = name_lab.font
+	if font == null:
+		font = ThemeDB.fallback_font
+	var text_px: float = 0.0
+	if font != null and name_lab.text != "":
+		text_px = font.get_string_size(
+			name_lab.text, HORIZONTAL_ALIGNMENT_LEFT, -1, name_lab.font_size
+		).x
+	if text_px > limit_px + 0.5 and limit_px > 1.0:
+		name_lab.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	else:
+		name_lab.autowrap_mode = TextServer.AUTOWRAP_OFF
+		name_lab.width = 0.0
+
+func set_selected_highlight(on: bool) -> void:
+	## Tactical-only yellow halo a=0.05. No ring/line.
+	_sel_highlight = on
+	if not on:
+		if _sel_glow and is_instance_valid(_sel_glow):
+			_sel_glow.visible = false
+		return
+	if _sel_glow == null or not is_instance_valid(_sel_glow):
+		_sel_glow = MeshInstance3D.new()
+		_sel_glow.name = "SelectGlow"
+		var sph := SphereMesh.new()
+		sph.radius = OVERLAY_BG_WU * 1.35
+		sph.height = sph.radius * 2.0
+		_sel_glow.mesh = sph
+		var gmat := StandardMaterial3D.new()
+		gmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		gmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		gmat.albedo_color = Color(1.0, 0.92, 0.35, 0.05)
+		gmat.no_depth_test = true
+		gmat.disable_receive_shadows = true
+		gmat.render_priority = 20
+		_sel_glow.material_override = gmat
+		_sel_glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_sel_glow.position = Vector3(0, 0, -0.02)
+		add_child(_sel_glow)
+	elif _sel_glow.material_override is StandardMaterial3D:
+		(_sel_glow.material_override as StandardMaterial3D).albedo_color = Color(1.0, 0.92, 0.35, 0.05)
+	_sel_glow.visible = true
+
+
+static func icon_circum_radius_world() -> float:
+	## Circumscribed-circle radius of square tonnage icon (TACTICAL_TOPDOWN VFX width).
+	var side := BADGE_WU * maxf(font_scale, 0.01)
+	return side * 0.5 * sqrt(2.0)
+
+func place_tactical(cam: Camera3D, world_pos: Vector3) -> void:
+	## Screen-parallel under nadir (follow cam yaw/roll); fixed world scale.
+	if not _alive_view:
+		return
+	_cam = cam
+	global_position = world_pos
+	if cam and global_position.distance_squared_to(cam.global_position) > 0.0001:
+		var up: Vector3 = cam.global_transform.basis.y
+		if up.length_squared() < 0.0001:
+			up = Vector3(0.0, 0.0, -1.0)
+		look_at(cam.global_position, up)
+	scale = Vector3.ONE * font_scale
+	_apply_name_wrap()
+	_apply_cd_visual()
+	# #region agent log
+	var frt := Engine.get_process_frames()
+	if frt % 60 == 0:
+		var path := "H:/debug-59aff0.log"
+		var f := FileAccess.open(path, FileAccess.READ_WRITE)
+		if f == null:
+			f = FileAccess.open(path, FileAccess.WRITE)
+		if f:
+			f.seek_end()
+			var by: Vector3 = global_transform.basis.y
+			var cy: Vector3 = cam.global_transform.basis.y if cam else Vector3.ZERO
+			f.store_line(JSON.stringify({
+				"sessionId": "59aff0",
+				"hypothesisId": "YAW_OH",
+				"location": "unit_overhead.place_tactical",
+				"message": "screen_parallel",
+				"data": {
+					"sc": font_scale, "sel": _sel_highlight,
+					"oh_up": {"x": by.x, "z": by.z},
+					"cam_up": {"x": cy.x, "z": cy.z},
+					"dot": by.dot(cy),
+					"runId": "yaw-screen"
+				},
+				"timestamp": Time.get_ticks_msec()
+			}))
+			f.close()
+	# #endregion
+
 func face_camera(cam: Camera3D, world_anchor: Vector3) -> void:
+	## 战场视角: distance scale only — never inherit tactical font_scale.
+	## Clear tactical select glow (highlight is tactical-only).
+	set_selected_highlight(false)
 	if cam == null or not _alive_view:
 		return
 	_cam = cam
@@ -438,8 +663,35 @@ func face_camera(cam: Camera3D, world_anchor: Vector3) -> void:
 		toward = Vector3.FORWARD
 	else:
 		toward = toward.normalized()
-	global_position = world_anchor + Vector3.UP * 3.6 + toward * 0.35
+	var bind_y: float = battle_nameplate_y
+	global_position = world_anchor + Vector3.UP * bind_y + toward * 0.35
 	look_at(cam.global_position, Vector3.UP)
 	var dist = cam.global_position.distance_to(global_position)
-	var sc = clampf(dist / REF_DIST, 0.7, 2.6)
+	var sc = clampf(dist / REF_DIST, SC_MIN, SC_MAX)
 	scale = Vector3.ONE * sc
+	_apply_name_wrap()
+	_apply_cd_visual()
+	# #region agent log
+	var fr := Engine.get_process_frames()
+	if fr % 45 == 0 and fr != _dbg_oh_frame:
+		_dbg_oh_frame = fr
+		var path := "H:/debug-59aff0.log"
+		var f := FileAccess.open(path, FileAccess.READ_WRITE)
+		if f == null:
+			f = FileAccess.open(path, FileAccess.WRITE)
+		if f:
+			f.seek_end()
+			f.store_line(JSON.stringify({
+				"sessionId": "59aff0",
+				"hypothesisId": "OH_Y",
+				"location": "unit_overhead.face_camera",
+				"message": "orbit_nameplate",
+				"data": {
+					"dist": dist, "sc": sc, "bind_y": bind_y,
+					"anchor_y": world_anchor.y, "oh_y": global_position.y,
+					"runId": "nameplate-y"
+				},
+				"timestamp": Time.get_ticks_msec()
+			}))
+			f.close()
+	# #endregion

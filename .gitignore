@@ -29,6 +29,9 @@ tools/_*.py
 godot_project/tools/
 godot_eternal_shell/tools/_*.py
 
+# CodeGraph local index (not game body)
+.codegraph/
+
 # Local editor / agent addons (not game body)
 godot_project/addons/godot_mcp/
 godot_project/addons/godot_mcp/**
@@ -57,3 +60,8 @@ _*.log
 *.tmp
 __pycache__/
 *.pyc
+
+# Local ship art module (binaries / PC source notes; not GitHub)
+godot_project/art_modules/
+godot_project/art_modules/**
+

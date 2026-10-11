@@ -29,15 +29,20 @@ func tick(map: BoardMapModel, units: Array, delta: float) -> Array:
 					continue
 				var fac: int = u["faction"]
 				occupants[fac] = float(occupants.get(fac, 0.0)) + float(u.get("work_rate", 0.0))
-			# 2+ factions: pause (keep work). 0: abandoned clear below.
-			if occupants.size() != 1:
-				c["capturing"] = 0
+			# 0 factions: abandoned clear below. 2+: pause (keep work + capturing for rim).
+			if occupants.is_empty():
+				continue
+			if occupants.size() > 1:
+				## Pause — do not wipe capturing or rim will vanish until remesh luck.
 				continue
 			var fac2: int = occupants.keys()[0]
 			if int(c["owner"]) == fac2:
-				c["capturing"] = 0
-				# own cell: top up work if somehow drained
+				if int(c.get("capturing", 0)) != 0:
+					c["capturing"] = 0
+					work_dirty = true
 				continue
+			if int(c.get("capturing", 0)) != fac2:
+				work_dirty = true
 			c["capturing"] = fac2
 			var rate: float = float(occupants[fac2])
 			var before: float = float(c["work"])
@@ -52,6 +57,7 @@ func tick(map: BoardMapModel, units: Array, delta: float) -> Array:
 				if prev_assignee != "":
 					c["last_assignee"] = prev_assignee
 				c["assigned_pilot_id"] = ""
+				c["auto_assigned"] = false
 				c["owner"] = fac2
 				c["capturing"] = 0
 				c["work"] = BoardTypes.WORK_MAX

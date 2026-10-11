@@ -1,8 +1,9 @@
 {
   "viewer_faction": 1,
   "relations": {
-    "1": { "1": "self", "2": "hostile" },
-    "2": { "1": "hostile", "2": "self" }
+    "1": { "1": "self", "2": "hostile", "3": "hostile" },
+    "2": { "1": "hostile", "2": "self", "3": "hostile" },
+    "3": { "1": "hostile", "2": "hostile", "3": "self" }
   },
   "colors": {
     "self": [0.25, 0.85, 0.35, 1.0],
