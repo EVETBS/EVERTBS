@@ -65,3 +65,6 @@ __pycache__/
 godot_project/art_modules/
 godot_project/art_modules/**
 
+# CG work scene stays in cg-director-studio; do not publish it from this repo
+**/evertbs-bigmap/
+
