@@ -32,6 +32,10 @@ func _build_systems() -> void:
 
 func _generate_cells(sys: Dictionary) -> Array:
 	var n: int = int(layout.get("cell_count", 12))
+	var link_n := (sys.get("links", []) as Array).size()
+	## 12 cells keep at most 11 gates plus 1 sovereignty. The system stays on the map.
+	if link_n >= n:
+		push_error("星系 %s 连向 %d 条，%d 格最多 %d 条连线加 1 格主权" % [str(sys.get("id", "")), link_n, n, maxi(n - 1, 0)])
 	# deterministic per system so opening spawn points stay stable
 	var local_rng = RandomNumberGenerator.new()
 	local_rng.seed = hash(str(sys.get("id", "")))
@@ -90,36 +94,61 @@ func _generate_cells(sys: Dictionary) -> Array:
 		cells[best_i]["kind"] = BoardTypes.CellKind.GATE
 		cells[best_i]["gate_to"] = g["to"]
 	# 2) rest already EMPTY
-	# 3) pick 2 resource + 1 sov from empties
+	# 3) 2 resource + 1 sov when the empties can hold them (and a station, on station systems).
+	#    Shorter remainder: sovereignty first, then resource / station / empty.
 	var empties: Array = []
 	for i in n:
 		if cells[i]["kind"] == BoardTypes.CellKind.EMPTY:
 			empties.append(i)
 	_shuffle_det(empties, local_rng)
-	var pick = 0
-	for _k in 2:
-		if pick >= empties.size():
-			break
-		cells[empties[pick]]["kind"] = BoardTypes.CellKind.RESOURCE
-		pick += 1
-	if pick < empties.size():
-		cells[empties[pick]]["kind"] = BoardTypes.CellKind.SOV
-		pick += 1
-	# remaining empties after step 3
-	var remain: Array = []
-	for i in n:
-		if cells[i]["kind"] == BoardTypes.CellKind.EMPTY:
-			remain.append(i)
-	_shuffle_det(remain, local_rng)
 	var kind: String = sys.get("kind", "station_system")
+	var need := 3
 	if kind == "station_system":
-		if not remain.is_empty():
-			cells[remain[0]]["kind"] = BoardTypes.CellKind.STATION
-			remain.remove_at(0)
-	elif kind == "resource_system":
-		for i in remain:
-			cells[i]["kind"] = BoardTypes.CellKind.RESOURCE
-		remain.clear()
+		need = 4
+	if empties.size() >= need:
+		var pick = 0
+		for _k in 2:
+			if pick >= empties.size():
+				break
+			cells[empties[pick]]["kind"] = BoardTypes.CellKind.RESOURCE
+			pick += 1
+		if pick < empties.size():
+			cells[empties[pick]]["kind"] = BoardTypes.CellKind.SOV
+			pick += 1
+		var remain: Array = []
+		for i in n:
+			if cells[i]["kind"] == BoardTypes.CellKind.EMPTY:
+				remain.append(i)
+		_shuffle_det(remain, local_rng)
+		if kind == "station_system":
+			if not remain.is_empty():
+				cells[remain[0]]["kind"] = BoardTypes.CellKind.STATION
+				remain.remove_at(0)
+		elif kind == "resource_system":
+			for i in remain:
+				cells[i]["kind"] = BoardTypes.CellKind.RESOURCE
+			remain.clear()
+	elif not empties.is_empty():
+		cells[empties[0]]["kind"] = BoardTypes.CellKind.SOV
+		var rest: Array = []
+		for ei in range(1, empties.size()):
+			rest.append(empties[ei])
+		_shuffle_det(rest, local_rng)
+		var rp := 0
+		for _rk in 2:
+			if rp >= rest.size():
+				break
+			cells[rest[rp]]["kind"] = BoardTypes.CellKind.RESOURCE
+			rp += 1
+		var tail: Array = []
+		for ti in range(rp, rest.size()):
+			tail.append(rest[ti])
+		if kind == "station_system":
+			if not tail.is_empty():
+				cells[tail[0]]["kind"] = BoardTypes.CellKind.STATION
+		elif kind == "resource_system":
+			for ti in tail:
+				cells[ti]["kind"] = BoardTypes.CellKind.RESOURCE
 	return cells
 
 func _apply_opening_stations() -> void:

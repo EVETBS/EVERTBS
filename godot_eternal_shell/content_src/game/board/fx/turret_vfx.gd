@@ -31,7 +31,7 @@ func play(
 	mid.y += 0.35
 	var thick := DEFAULT_THICK
 	if thick_wu > 0.0:
-		thick = maxf(thick, thick_wu)
+		thick = thick_wu
 	# Core beam strip (always)
 	var beam = MeshInstance3D.new()
 	var box = BoxMesh.new()

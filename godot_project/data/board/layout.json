@@ -15,7 +15,8 @@
       ],
       "links": [
         "star",
-        "das"
+        "das",
+        "apolo"
       ],
       "kind": "station_system"
     },
@@ -28,7 +29,8 @@
       ],
       "links": [
         "star",
-        "das"
+        "das",
+        "muen"
       ],
       "kind": "station_system"
     },
@@ -56,14 +58,52 @@
       "links": [
         "soular",
         "luna",
-        "star"
+        "star",
+        "das_gate"
       ],
       "kind": "resource_system"
+    },
+    {
+      "id": "apolo",
+      "name": "apolo",
+      "pos": [
+        0.0,
+        -160.0
+      ],
+      "links": [
+        "soular"
+      ],
+      "kind": "station_system"
+    },
+    {
+      "id": "muen",
+      "name": "沐恩",
+      "pos": [
+        0.0,
+        160.0
+      ],
+      "links": [
+        "luna"
+      ],
+      "kind": "station_system"
+    },
+    {
+      "id": "das_gate",
+      "name": "das_gate",
+      "pos": [
+        -160.0,
+        0.0
+      ],
+      "links": [
+        "das"
+      ],
+      "kind": "station_system"
     }
   ],
   "opening_stations": {
     "soular": 1,
-    "luna": 2
+    "luna": 2,
+    "das_gate": 3
   },
   "pilots": [
     {
@@ -207,6 +247,294 @@
       "name": "何霜",
       "faction": 2,
       "home": "luna",
+      "ship": "mmte_longjuanfeng",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p1_jiang",
+      "name": "江衡",
+      "faction": 1,
+      "home": "soular",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p1_linshuo",
+      "name": "林朔",
+      "faction": 1,
+      "home": "soular",
+      "ship": "gila_cc2",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p1_zhouwan",
+      "name": "周晚",
+      "faction": 1,
+      "home": "soular",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p1_chencheng",
+      "name": "陈承",
+      "faction": 1,
+      "home": "soular",
+      "ship": "gila_cc2",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p1_zhaoqiao",
+      "name": "赵乔",
+      "faction": 1,
+      "home": "soular",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p1_sumo",
+      "name": "苏墨",
+      "faction": 1,
+      "home": "soular",
+      "ship": "gila_cc2",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p1_gulan",
+      "name": "顾岚",
+      "faction": 1,
+      "home": "soular",
+      "ship": "jmh_sitexiusi",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p1_wendu",
+      "name": "温渡",
+      "faction": 1,
+      "home": "soular",
+      "ship": "ss_youling",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p1_qiyu",
+      "name": "齐屿",
+      "faction": 1,
+      "home": "soular",
+      "ship": "mmte_longjuanfeng",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p2_shenzhao",
+      "name": "沈昭",
+      "faction": 2,
+      "home": "luna",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p2_hanning",
+      "name": "韩宁",
+      "faction": 2,
+      "home": "luna",
+      "ship": "gila_cc2",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p2_peigui",
+      "name": "裴归",
+      "faction": 2,
+      "home": "luna",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p2_tangchuan",
+      "name": "唐川",
+      "faction": 2,
+      "home": "luna",
+      "ship": "gila_cc2",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p2_mengyan",
+      "name": "孟砚",
+      "faction": 2,
+      "home": "luna",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p2_lushuang",
+      "name": "陆霜",
+      "faction": 2,
+      "home": "luna",
+      "ship": "gila_cc2",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p2_baifei",
+      "name": "白飞",
+      "faction": 2,
+      "home": "luna",
+      "ship": "jmh_sitexiusi",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p2_heshe",
+      "name": "何蛇",
+      "faction": 2,
+      "home": "luna",
+      "ship": "ss_youling",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p2_yuanshuo",
+      "name": "鸢朔",
+      "faction": 2,
+      "home": "luna",
+      "ship": "mmte_longjuanfeng",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_jichuan",
+      "name": "纪川",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_fangyue",
+      "name": "方岳",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "gila_cc2",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_shenzhou",
+      "name": "沈舟",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_weilang",
+      "name": "卫朗",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "gila_cc2",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_chengwan",
+      "name": "程晚",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_yecheng",
+      "name": "叶承",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "gila_cc2",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_songqiao",
+      "name": "宋乔",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "jmh_sitexiusi",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_hanmo",
+      "name": "韩墨",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "ss_youling",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_luolan",
+      "name": "罗岚",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "mmte_longjuanfeng",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_qindu",
+      "name": "秦渡",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_weiyu",
+      "name": "魏屿",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "gila_cc2",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_xuheng",
+      "name": "许衡",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_caoshuo",
+      "name": "曹朔",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "gila_cc2",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_xiewan",
+      "name": "谢晚",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "jdl_haiyan",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_pancheng",
+      "name": "潘承",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "gila_cc2",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_dingqiao",
+      "name": "丁乔",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "jmh_sitexiusi",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_fengmo",
+      "name": "冯墨",
+      "faction": 3,
+      "home": "das_gate",
+      "ship": "ss_youling",
+      "cell_kind": "station"
+    },
+    {
+      "id": "p3_cuilan",
+      "name": "崔岚",
+      "faction": 3,
+      "home": "das_gate",
       "ship": "mmte_longjuanfeng",
       "cell_kind": "station"
     }

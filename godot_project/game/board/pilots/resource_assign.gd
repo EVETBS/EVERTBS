@@ -240,3 +240,63 @@ static func auto_assign_new_cell(map: BoardMapModel, flip: Dictionary, pilots: A
 	c["assigned_pilot_id"] = pick["id"]
 	c["last_assignee"] = pick["id"]
 	c["auto_assigned"] = true
+
+static func rebalance_even(map: BoardMapModel, pilot_rows: Array) -> void:
+	## Spread resource cells evenly across pilot_rows (Chuang).
+	var ids: Array = []
+	for row in pilot_rows:
+		var pid := str(row.get("id", ""))
+		if pid != "" and not ids.has(pid):
+			ids.append(pid)
+	if ids.is_empty():
+		return
+	var pool: Array = []
+	for sid in map.systems.keys():
+		for c in map.systems[sid]["cells"]:
+			if int(c["kind"]) != BoardTypes.CellKind.RESOURCE:
+				continue
+			var ap := str(c.get("assigned_pilot_id", ""))
+			if not ids.has(ap):
+				continue
+			pool.append(c)
+			c["assigned_pilot_id"] = ""
+			c["auto_assigned"] = false
+	for i in pool.size():
+		var pid2 := str(ids[i % ids.size()])
+		var c2: Dictionary = pool[i]
+		c2["assigned_pilot_id"] = pid2
+		c2["last_assignee"] = pid2
+		c2["auto_assigned"] = true
+
+static func rebalance_yang(map: BoardMapModel, pilot_rows: Array) -> void:
+	## pilot_rows: [{id, guard}]. Fill one pilot to 3, guards first. Others untouched.
+	var idset: Dictionary = {}
+	for row in pilot_rows:
+		idset[str(row.get("id", ""))] = true
+	if idset.is_empty():
+		return
+	var pool: Array = []
+	for sid in map.systems.keys():
+		for c in map.systems[sid]["cells"]:
+			if int(c["kind"]) != BoardTypes.CellKind.RESOURCE:
+				continue
+			var ap := str(c.get("assigned_pilot_id", ""))
+			if not idset.has(ap):
+				continue
+			pool.append(c)
+			c["assigned_pilot_id"] = ""
+			c["auto_assigned"] = false
+	var rows: Array = pilot_rows.duplicate()
+	rows.sort_custom(func(a, b): return bool(a.get("guard", false)) and not bool(b.get("guard", false)))
+	var counts: Dictionary = {}
+	var idx := 0
+	for c2 in pool:
+		while idx < rows.size() and int(counts.get(str(rows[idx].get("id", "")), 0)) >= 3:
+			idx += 1
+		if idx >= rows.size():
+			break
+		var pid := str(rows[idx].get("id", ""))
+		c2["assigned_pilot_id"] = pid
+		c2["last_assignee"] = pid
+		c2["auto_assigned"] = true
+		counts[pid] = int(counts.get(pid, 0)) + 1

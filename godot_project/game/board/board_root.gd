@@ -19,7 +19,6 @@ var data: BoardData
 var map: BoardMapModel
 var capture: BoardCaptureSystem
 var pilots_sys: BoardPilotSystem
-var ai: BoardAiController
 var admin: BoardAdminProxy
 var br_tracker: BoardBattleReportTracker
 
@@ -33,6 +32,47 @@ var rng = RandomNumberGenerator.new()
 ## Soft-key bar (mobile): sticky Ctrl like Windows OSK.
 var soft_ctrl_sticky := false
 var soft_ctrl_btn: Button
+var hud_layer: Control
+var bottom_bar: Control
+var chat_panel: Control
+var chat_log: RichTextLabel
+var _chat_lines: Array = []
+const CHAT_MAX_LINES := 80
+var deputy_panel: Control
+var deputy_opt: OptionButton
+var deputy_fleet_box: VBoxContainer
+var deputy_group := -1
+var player_deputy: BoardAiController
+var player_deputy_name := "羊"
+var faction_ai: Dictionary = {} ## fac -> BoardAiController
+var faction_deputy_name: Dictionary = {} ## fac -> display name
+var _br_alive_facs: Dictionary = {} ## fac -> true while had living ships
+var _br_surrendered: Dictionary = {} ## fac -> already announced this wipe
+var _deputy_cmd_count := -1
+var _marker_announce: Dictionary = {} ## kind -> last announced place key
+var _prev_deputy_member_ids: Dictionary = {}
+var diplo_btn: Button
+var diplo_panel: Control
+var diplo_offer: Dictionary = {} ## "a>b" -> true while semicircle
+var diplo_ai_wait: Dictionary = {} ## "a>b" -> seconds until the AI accepts
+var menu_btn: Button
+var menu_window: Window
+var menu_pause_lab: Label
+var menu_page: VBoxContainer
+var settings_page: VBoxContainer
+var sim_paused := false
+var deputy_name_lab: Label
+var settings_bgm_vol := 1.0
+var settings_sfx_vol := 1.0
+var settings_battle_full_plates := false
+var settings_deputy_btn: Button
+var settings_deputy_list: VBoxContainer
+var _br_sort_col := ""
+var _br_sort_report := ""
+var map_markers: Dictionary = {} ## kind -> {pos, yaw, a, b}
+var _marker_tex_cache: Dictionary = {}
+var marker_layer: Control
+var marker_btns: Dictionary = {}
 var _digit_last_g := -1
 var _digit_last_ms := 0
 const DIGIT_DBL_MS := 400
@@ -71,6 +111,9 @@ var detail: RichTextLabel
 var starmap_view: BoardStarmapView
 var cam: BoardCamera
 var unit_nodes: Dictionary = {}
+const BATTLE_MODEL_BUDGET := 150
+var _battle_model_ids: Dictionary = {}
+var _battle_model_acc := 0.0
 var rebuild_timer = 0.0
 var match_over = false
 var match_msg = ""
@@ -313,24 +356,22 @@ func _ready() -> void:
 	pilots_sys = PILOTS.new()
 	pilots_sys.admin = admin
 	pilots_sys.data = data
-	ai = AI.new()
 	viewer_faction = int(data.diplomacy.get("viewer_faction", 1))
 	br_tracker = BR_TRACKER.new()
 	br_tracker.viewer_faction = viewer_faction
 	br_tracker.is_npc_faction = Callable(data, "is_npc_faction")
+	br_tracker.is_with_viewer = Callable(self, "_br_with_viewer")
+	br_tracker.faction_label = Callable(self, "_faction_label")
 	_spawn_opening()
 	_apply_opening_npc_owners()
 	_register_opening_garrison_posts()
-	ai.setup_fleets(units)
+	_setup_deputies()
 	_setup_ai_autobuild()
 	_build_scene_nodes()
 	_refresh_occupancy()
-	## Identity equal phase + layout bias (CCW). Mean gate-align was CW ~30–45° vs expected.
-	var bias := deg_to_rad(float(map.layout.get("ring_phase_bias_deg", 37.5)))
+	## Lock phase from equal-arc gate bearings (STARMAP §2.0). No fixed clockwise bias.
 	for sid0 in map.systems.keys():
-		var n0: int = map.systems[sid0]["cells"].size()
-		var ident := -PI / float(maxi(n0, 1))
-		map.systems[sid0]["ring_phase"] = fposmod(ident + bias, TAU)
+		map.systems[sid0]["ring_phase"] = map.desired_ring_phase(str(sid0))
 		map._apply_ring_phase(str(sid0))
 	starmap_view.setup(map, data.diplomacy, viewer_faction)
 	starmap_view.npc_faction_ids.clear()
@@ -361,11 +402,156 @@ func _deferred_ready_labels() -> void:
 
 func _setup_ai_autobuild() -> void:
 	for p in pilots:
-		if int(p["faction"]) != 2:
+		if int(p["faction"]) == viewer_faction or data.is_npc_faction(int(p["faction"])):
 			continue
-		var def: Dictionary = data.ship_def(p["default_ship"])
+		var ship_id := str(p["default_ship"])
+		## Chuang (legion 2): prefer higher tonnage / PD-leaning defaults when available.
+		if int(p["faction"]) == 2:
+			ship_id = _chuang_preferred_ship(p, ship_id)
+		var def: Dictionary = data.ship_def(ship_id)
 		var ton: String = def.get("tonnage", "destroyer")
-		pilots_sys.set_auto(p, ton, p["default_ship"])
+		pilots_sys.set_auto(p, ton, ship_id)
+
+func _chuang_preferred_ship(_p: Dictionary, fallback: String) -> String:
+	## Prefer high tonnage + PD (+ armor_link) among player hulls for Chuang autobuild.
+	if data == null:
+		return fallback
+	var best := fallback
+	var best_score := -1.0
+	for sid in data.ships.keys():
+		var def: Dictionary = data.ship_def(str(sid))
+		if def.is_empty() or bool(def.get("npc", false)):
+			continue
+		var score := float(BoardTypes.tonnage_weight(def.get("tonnage", "destroyer")))
+		var has_pd := false
+		for h in def.get("fit", {}).get("hidden", []):
+			if str(h.get("kind", "")) == "pd":
+				has_pd = true
+				break
+		if has_pd:
+			score += 20.0
+		for slot in def.get("fit", {}).get("slots", []):
+			if str(slot) == "armor_link":
+				score += 5.0
+		if score > best_score or (score == best_score and str(sid) == fallback):
+			best_score = score
+			best = str(sid)
+	return best if best != "" else fallback
+
+func _setup_deputies() -> void:
+	faction_ai.clear()
+	faction_deputy_name.clear()
+	player_deputy = AI.new()
+	player_deputy.faction = viewer_faction
+	player_deputy.deputy_id = "yang"
+	player_deputy_name = "羊"
+	for f in data.factions.get("factions", []):
+		var fid := int(f.get("id", -1))
+		if bool(f.get("npc", false)) or fid == viewer_faction:
+			continue
+		var ctrl := AI.new()
+		ctrl.faction = fid
+		## Legion 2 loads Chuang; others Yang (指挥接口).
+		if fid == 2:
+			ctrl.deputy_id = "chuang"
+			faction_deputy_name[fid] = "创"
+		else:
+			ctrl.deputy_id = "yang"
+			faction_deputy_name[fid] = "羊"
+		ctrl.setup_fleets(_roster_entries(_faction_pilots(fid)))
+		faction_ai[fid] = ctrl
+		_rebalance_faction_resources(fid)
+	_rebuild_player_deputy()
+	_chat_deputy_cmd_count(true)
+
+func _faction_pilots(fid: int) -> Array:
+	var out: Array = []
+	for p in pilots:
+		if int(p.get("faction", -1)) != fid:
+			continue
+		out.append(p)
+	return out
+
+func _commanded_pilots(group_n: int) -> Array:
+	var out: Array = []
+	if group_n < 0:
+		return out
+	for p in pilots:
+		if int(p.get("faction", -1)) != viewer_faction:
+			continue
+		if int(p.get("ctrl_group", -1)) == group_n:
+			out.append(p)
+	return out
+
+func _roster_entries(plist: Array) -> Array:
+	## One row per commanded pilot. Alive ship keeps its unit dict so fleet_id writes through.
+	## A pilot with no ship still counts toward N; weight uses last or default hull.
+	var out: Array = []
+	for p in plist:
+		var u = _unit_by_id(str(p.get("unit_id", "")))
+		if not u.is_empty() and u.get("alive", false) and not bool(u.get("garrison", false)):
+			out.append(u)
+			continue
+		var sid := str(p.get("last_ship_id", ""))
+		if sid == "":
+			sid = str(p.get("default_ship", ""))
+		var def: Dictionary = data.ship_def(sid) if data else {}
+		out.append({
+			"id": "",
+			"faction": int(p.get("faction", 0)),
+			"alive": true,
+			"garrison": false,
+			"tonnage": str(def.get("tonnage", "destroyer")),
+			"pd": [],
+			"guard": {},
+		})
+	return out
+
+func _commanded_id_set(group_n: int) -> Dictionary:
+	var out: Dictionary = {}
+	if group_n < 0:
+		return out
+	for u in units:
+		if not u.get("alive", false):
+			continue
+		if int(u.get("faction", -1)) != viewer_faction:
+			continue
+		if int(u.get("ctrl_group", -1)) == group_n:
+			out[str(u.get("id", ""))] = true
+	return out
+
+func _rebuild_player_deputy() -> void:
+	if player_deputy == null:
+		return
+	var cmd_pilots := _commanded_pilots(deputy_group)
+	var ids := _commanded_id_set(deputy_group)
+	## Empty pilot roster must not mean "all faction ships" (AI full-faction path).
+	var releasing: bool = deputy_group < 0 or cmd_pilots.is_empty()
+	if releasing:
+		_halt_deputy_scheduled_moves(_prev_deputy_member_ids)
+		player_deputy.fleets.clear()
+		_prev_deputy_member_ids.clear()
+	else:
+		player_deputy.setup_fleets(_roster_entries(cmd_pilots))
+		_prev_deputy_member_ids = ids.duplicate()
+	_refresh_deputy_fleet_ui()
+	_chat_deputy_cmd_count(false)
+
+func _halt_deputy_scheduled_moves(member_ids: Dictionary) -> void:
+	## Drop non-player-hold paths left by deputy station/marker orders.
+	for uid in member_ids.keys():
+		var u = _unit_by_id(str(uid))
+		if u.is_empty() or not u.get("alive", false):
+			continue
+		if bool(u.get("player_hold", false)):
+			continue
+		u["path"] = []
+		u["phase"] = BoardTypes.MovePhase.IDLE
+		u["phase_t"] = 0.0
+		u.erase("order_dest_sys")
+		u.erase("order_dest_cell")
+		u.erase("sync_gid")
+		_clear_move_line(str(u.get("id", "")))
 
 func _spawn_opening() -> void:
 	var used: Dictionary = {}  # "sys:cell" -> true
@@ -431,7 +617,7 @@ func _garrison_composition_for_kind(kind: int) -> Array:
 func _apply_opening_npc_owners() -> void:
 	## Capturable cells (except opening stations) belong to NPC; rim paints unowned.
 	var npc_fac := data.primary_npc_faction()
-	if npc_fac == 0 or map == null:
+	if map == null or not data.is_npc_faction(npc_fac):
 		return
 	var station_owners: Dictionary = map.layout.get("opening_stations", {})
 	for sid in map.systems.keys():
@@ -454,7 +640,7 @@ func _apply_opening_npc_owners() -> void:
 func _register_opening_garrison_posts() -> void:
 	## Register latent posts only — no units until system reveal (CAPTURE §6).
 	var npc_fac := data.primary_npc_faction()
-	if npc_fac == 0:
+	if not data.is_npc_faction(npc_fac):
 		return
 	var n_posts := 0
 	for sid in map.systems.keys():
@@ -548,6 +734,8 @@ func _spawn_garrison_unit(ship_id: String, sys: String, cell: int, faction: int,
 		"phase_t": 0.0,
 		"path": [],
 		"from_cell": cell,
+		"post_sys": sys,
+		"post_cell": cell,
 		"to_cell": cell,
 		"to_sys": sys,
 		"work_rate": float(def.get("work_rate", 8)),
@@ -634,6 +822,42 @@ func _note_garrison_death(u: Dictionary) -> void:
 	post["faction"] = int(u.get("faction", post.get("faction", 0)))
 	post["pledged"] = bool(u.get("garrison_pledged", post.get("pledged", false)))
 
+func _pair_attack_forbidden(att: Dictionary, tgt: Dictionary) -> bool:
+	var rel := _rel_between(int(att.get("faction", -1)), int(tgt.get("faction", -1)))
+	if rel == "self" or rel == "ally":
+		return true
+	if not bool(tgt.get("garrison", false)) or not bool(tgt.get("garrison_pledged", false)):
+		return false
+	var sid := str(tgt.get("sys", ""))
+	var ci := int(tgt.get("cell", -1))
+	if not map.systems.has(sid) or ci < 0:
+		return false
+	var cell_owner := int(map.systems[sid]["cells"][ci].get("owner", 0))
+	var orel := _rel_between(int(att.get("faction", -1)), cell_owner)
+	return orel == "ally" or orel == "self"
+
+func _attack_forbidden_on(tgt: Dictionary) -> bool:
+	return _pair_attack_forbidden({"faction": viewer_faction}, tgt)
+
+func _br_with_viewer(fac: int) -> bool:
+	var rel := _rel_between(viewer_faction, int(fac))
+	return rel == "self" or rel == "ally"
+
+func _faction_label(fac: int) -> String:
+	for f in data.factions.get("factions", []):
+		if int(f.get("id", -1)) == int(fac):
+			return str(f.get("name", fac))
+	return "势力%d" % int(fac)
+
+func _join_fac_names(names) -> String:
+	var parts := PackedStringArray()
+	if names is Array:
+		for n in names:
+			var s := str(n)
+			if s != "":
+				parts.append(s)
+	return "、".join(parts)
+
 func _rel_between(fac_a: int, fac_b: int) -> String:
 	if int(fac_a) == int(fac_b):
 		return "self"
@@ -672,6 +896,8 @@ func _ensure_cloak_fx(u: Dictionary) -> void:
 	if not unit_nodes.has(uid):
 		return
 	var n: Node3D = unit_nodes[uid]
+	if not _battle_fx_allowed(uid):
+		return
 	if n.get_node_or_null("CloakFx") != null:
 		return
 	var spr := Sprite3D.new()
@@ -977,10 +1203,16 @@ func _spawn_unit(pilot: Dictionary, inst: Dictionary, sys: String, cell: int) ->
 		"dealt_timer": 0.0,
 		"took_damage": false,
 		"focus_id": "",
+		"player_hold": false,
 	}
+	if not pilot.has("ctrl_group"):
+		pilot["ctrl_group"] = 0 if int(pilot.get("faction", 0)) != viewer_faction else -1
+	u["ctrl_group"] = int(pilot.get("ctrl_group", -1))
 	_init_unit_combat(u)
 	_mark_cell_enter(u, sys, cell)
 	units.append(u)
+	if int(u.get("faction", -1)) == viewer_faction:
+		_rebuild_group_dict()
 	return u
 
 func _has_bubble_immune(def: Dictionary) -> bool:
@@ -1042,14 +1274,19 @@ func _build_weapons(def: Dictionary) -> Array:
 			continue
 		var rc = int(ceil(float(h.get("range_cells", eq.get("range_cells", 0))) * range_mul))
 		var wkind = str(eq.get("kind", "weapon"))
+		var cycle0 := float(eq.get("cycle_s", 4.0))
+		var track0 := float(eq.get("tracking", 1))
 		out.append({
 			"ref": ref,
 			"kind": wkind,
-			"cycle": float(eq.get("cycle_s", 4.0)),
+			"cycle": cycle0,
+			"cycle_base": cycle0,
 			"cd": rng.randf() * 0.5,
 			"cap": float(eq.get("cap_cost", 0)),
 			"fx": str(eq.get("fx", "laser")),
-			"tracking": float(eq.get("tracking", 1)),
+			"tracking": track0,
+			"tracking_base": track0,
+			"shot_n": 0,
 			"sig_res": float(eq.get("signature_resolution", 40)),
 			"falloff": float(eq.get("falloff_m", 4000)),
 			"optimal": float(eq.get("optimal_m", 0)),
@@ -1153,12 +1390,14 @@ func _init_unit_guard_implant(u: Dictionary, def: Dictionary) -> void:
 		u["guard"]["field_on"] = float(u["inst"]["shield"]) >= float(u["inst"]["max_s"]) * 0.2
 	if link_fit:
 		u["guard"]["link_on"] = float(u["inst"]["armor"]) >= float(u["inst"]["max_a"]) * 0.2
-	u["implant"] = {"ref": "", "auto_on": false, "stacks": 0, "shots": 0, "shield_heal_cd": 0.0}
+	u["implant"] = {"ref": "", "auto_on": false, "armed": false, "stacks": 0, "shots": 0, "shield_heal_cd": 0.0}
 	for h in def.get("fit", {}).get("hidden", []):
 		if str(h.get("kind")) == "implant":
 			u["implant"]["ref"] = str(h.get("ref", ""))
 			u["implant"]["auto_on"] = true ## 有植入体则默认开
+			u["implant"]["armed"] = true
 			break
+	_init_sniper_weapons(u)
 
 func _guard_force_off(u: Dictionary) -> void:
 	if not u.has("guard"):
@@ -1190,7 +1429,15 @@ func _tick_guard_reopen(u: Dictionary) -> void:
 		elif not link_auto:
 			g["link_on"] = false
 
+func _unit_between_cells(u: Dictionary) -> bool:
+	## Cross-cell INVULN: no cell membership, not an attack target (TACTICAL_TOPDOWN §9).
+	if u.is_empty():
+		return false
+	return int(u.get("phase", 0)) == BoardTypes.MovePhase.INVULN
+
 func _weapon_in_range(a: Dictionary, b: Dictionary, w: Dictionary) -> bool:
+	if _unit_between_cells(a) or _unit_between_cells(b):
+		return false
 	if a["sys"] != b["sys"]:
 		return false
 	var n: int = map.systems[a["sys"]]["cells"].size()
@@ -1198,6 +1445,8 @@ func _weapon_in_range(a: Dictionary, b: Dictionary, w: Dictionary) -> bool:
 	return steps <= int(w["range_cells"])
 
 func _pd_tracking_distance_m(a: Dictionary, b: Dictionary) -> float:
+	if _unit_between_cells(a) or _unit_between_cells(b):
+		return 999999.0
 	if a["sys"] != b["sys"]:
 		return 999999.0
 	var n: int = map.systems[a["sys"]]["cells"].size()
@@ -1220,22 +1469,56 @@ func _implant_data(u: Dictionary) -> Dictionary:
 		return {}
 	return data.equipment.get(ref, {})
 
-func _apply_sniper_mod(u: Dictionary, tracking: float, raw: float) -> Dictionary:
-	## 连续 every-1 轮 0 伤；第 every 轮 mul 倍且必中（tracking_override）。
+func _sniper_implant(u: Dictionary) -> Dictionary:
 	var imp: Dictionary = _implant_data(u)
 	if imp.is_empty() or str(imp.get("id", "")) != "implant_sniper":
-		return {"tracking": tracking, "raw": raw, "force_hit": false}
-	if not u.get("implant", {}).get("auto_on", true):
-		return {"tracking": tracking, "raw": raw, "force_hit": false}
-	u["implant"]["shots"] = int(u["implant"].get("shots", 0)) + 1
-	var every: int = int(imp.get("every", 10))
-	if int(u["implant"]["shots"]) % every == 0:
-		return {
-			"tracking": float(imp.get("tracking_override", 9999)),
-			"raw": raw * float(imp.get("mul", 10)),
-			"force_hit": true,
-		}
-	return {"tracking": tracking, "raw": 0.0, "force_hit": false}
+		return {}
+	return imp
+
+func _weapon_is_damage(w: Dictionary) -> bool:
+	var kind := str(w.get("kind", ""))
+	return kind != "remote_armor" and kind != "remote_shield"
+
+func _write_sniper_weapon(w: Dictionary, armed: bool, every: float, tracking_mul: float) -> void:
+	var base_c := float(w.get("cycle_base", w.get("cycle", 4.0)))
+	var base_t := float(w.get("tracking_base", w.get("tracking", 1.0)))
+	w["cycle_base"] = base_c
+	w["tracking_base"] = base_t
+	if armed:
+		w["cycle"] = base_c * every
+		w["tracking"] = base_t * tracking_mul
+	else:
+		w["cycle"] = base_c
+		w["tracking"] = base_t
+
+func _init_sniper_weapons(u: Dictionary) -> void:
+	var imp := _sniper_implant(u)
+	if imp.is_empty():
+		return
+	var armed := bool(u.get("implant", {}).get("armed", false))
+	var every := float(imp.get("every", 10))
+	var tmul := float(imp.get("tracking_mul", 1000))
+	for w in u.get("weapons", []):
+		if not _weapon_is_damage(w):
+			continue
+		_write_sniper_weapon(w, armed, every, tmul)
+
+func _sample_sniper_on_cd(u: Dictionary, w: Dictionary) -> void:
+	## Latch: sample implant.auto_on only when this weapon's CD has finished.
+	if float(w.get("cd", 0.0)) > 0.0:
+		w["sniper_sampled"] = false
+		return
+	if not _weapon_is_damage(w):
+		return
+	var imp := _sniper_implant(u)
+	if imp.is_empty():
+		return
+	if bool(w.get("sniper_sampled", false)):
+		return
+	var armed := bool(u.get("implant", {}).get("auto_on", false))
+	u["implant"]["armed"] = armed
+	_write_sniper_weapon(w, armed, float(imp.get("every", 10)), float(imp.get("tracking_mul", 1000)))
+	w["sniper_sampled"] = true
 
 func _focus_on_hit(u: Dictionary, hit: bool, raw: float) -> float:
 	var imp: Dictionary = _implant_data(u)
@@ -1269,7 +1552,7 @@ func _focus_spend_stacks(u: Dictionary) -> void:
 	var heal: float = float(stacks) * (float(imp.get("stack_pct", 1)) / 100.0) * float(inst["max_s"])
 	inst["shield"] = minf(float(inst["max_s"]), float(inst["shield"]) + heal)
 	u["implant"]["shield_heal_cd"] = float(imp.get("shield_cd", 20))
-	if _fx_ok() and float_text and heal > 0.05:
+	if _fx_ok() and _battle_fx_allowed(str(u.get("id", ""))) and float_text and heal > 0.05:
 		float_text.add_heal(u["pos"], heal, hash(str(u["id"]) + "fc"))
 
 func _tick_implant_passive(u: Dictionary, delta: float) -> void:
@@ -1306,7 +1589,7 @@ func _apply_shield_only_redirect(bearer: Dictionary, raw: float) -> float:
 	bearer["hit_shake_t"] = 0.2
 	if float(inst["shield"]) <= 0.01 and bearer.has("guard"):
 		bearer["guard"]["field_on"] = false
-	if _fx_ok() and float_text and absorb > 0.05:
+	if _fx_ok() and _battle_fx_allowed(str(bearer.get("id", ""))) and float_text and absorb > 0.05:
 		float_text.add_damage(bearer["pos"], absorb, hash(str(bearer["id"])))
 	if taken <= 0.0001:
 		return 0.0
@@ -1329,7 +1612,7 @@ func _apply_armor_only_redirect(bearer: Dictionary, armor_raw: float) -> float:
 	bearer["hit_shake_t"] = 0.2
 	if float(inst["armor"]) <= 0.01 and bearer.has("guard"):
 		bearer["guard"]["link_on"] = false
-	if _fx_ok() and float_text and absorb > 0.05:
+	if _fx_ok() and _battle_fx_allowed(str(bearer.get("id", ""))) and float_text and absorb > 0.05:
 		float_text.add_damage(bearer["pos"], absorb, hash(str(bearer["id"])))
 	if taken <= 0.0001:
 		return 0.0
@@ -1359,6 +1642,9 @@ func _apply_damage_to_unit(
 			"raw": raw, "runId": "no-cap-dmg"
 		})
 		# #endregion
+	## Sleepers dealing damage never chip target max HP (SHIPS §1).
+	if attacker and not attacker.is_empty() and _unit_is_sleeper(attacker):
+		skip_max_loss = true
 	var portion = raw
 	if not skip_redirect and attacker and not attacker.is_empty():
 		var same_cell = str(attacker.get("sys", "")) == str(target.get("sys", "")) \
@@ -1432,7 +1718,7 @@ func _apply_damage_to_unit(
 		target["guard"]["field_on"] = false
 	if float(inst["armor"]) <= 0.01 and target.has("guard"):
 		target["guard"]["link_on"] = false
-	if _fx_ok() and float_text and dealt_hp > 0.05:
+	if _fx_ok() and _battle_fx_allowed(str(target.get("id", ""))) and float_text and dealt_hp > 0.05:
 		float_text.add_damage(target["pos"], dealt_hp, hash(str(target["id"])))
 	if attacker and not attacker.is_empty():
 		attacker["dealt_timer"] = 1.2
@@ -1443,7 +1729,10 @@ func _apply_damage_to_unit(
 	if res["killed"]:
 		if br_tracker:
 			br_tracker.note_kill(attacker if attacker else {}, target)
+		_note_kill_chat(attacker if attacker else {}, target)
+		_note_deputy_fleet_wipe_before_kill(target)
 		_kill_unit(target)
+		_tick_faction_surrender_announce()
 		_refresh_br_list()
 	elif attacker and not attacker.is_empty():
 		admin.request("combat.damage", {"from": attacker["id"], "to": target["id"], "raw": portion})
@@ -1492,7 +1781,7 @@ func _tick_self_repair(u: Dictionary, delta: float) -> void:
 			var hs = minf(float(r["heal_shield"]), float(inst["max_s"]) - float(inst["shield"]))
 			inst["shield"] = float(inst["shield"]) + hs
 			r["cd"] = float(r["cycle"])
-			if _fx_ok() and float_text and hs > 0.05:
+			if _fx_ok() and _battle_fx_allowed(str(u.get("id", ""))) and float_text and hs > 0.05:
 				float_text.add_heal(u["pos"], hs, hash(str(u["id"]) + "sr"))
 		elif float(r.get("heal_armor", 0)) > 0.0:
 			if float(inst["armor"]) >= float(inst["max_a"]):
@@ -1503,7 +1792,7 @@ func _tick_self_repair(u: Dictionary, delta: float) -> void:
 			var ha = minf(float(r["heal_armor"]), float(inst["max_a"]) - float(inst["armor"]))
 			inst["armor"] = float(inst["armor"]) + ha
 			r["cd"] = float(r["cycle"])
-			if _fx_ok() and float_text and ha > 0.05:
+			if _fx_ok() and _battle_fx_allowed(str(u.get("id", ""))) and float_text and ha > 0.05:
 				float_text.add_heal(u["pos"], ha, hash(str(u["id"]) + "ar"))
 
 func _tick_shield_regen(u: Dictionary, delta: float) -> void:
@@ -1521,7 +1810,7 @@ func _tick_shield_regen(u: Dictionary, delta: float) -> void:
 	heal = minf(heal, float(inst["max_s"]) - float(inst["shield"]))
 	inst["shield"] = float(inst["shield"]) + heal
 	u["shield_regen_cd"] = 30.0
-	if _fx_ok() and float_text and heal > 0.05:
+	if _fx_ok() and _battle_fx_allowed(str(u.get("id", ""))) and float_text and heal > 0.05:
 		float_text.add_heal(u["pos"], heal, hash(str(u["id"]) + "sregen"))
 
 func _tick_cap_regen(u: Dictionary, delta: float) -> void:
@@ -1597,6 +1886,11 @@ func _tick_weapon_locks(delta: float) -> void:
 				w["retarget_t"] = 10.0 if not tgt.is_empty() else 0.5
 			if tgt.is_empty():
 				continue
+			if _unit_between_cells(tgt):
+				w["lock_id"] = ""
+				w["lock_t"] = 0.0
+				w["retarget_t"] = 0.0
+				continue
 			var is_rep_lock := str(w.get("kind", "")) == "remote_armor" or str(w.get("kind", "")) == "remote_shield"
 			if is_rep_lock and _remote_heal_room(tgt, w) <= 0.5:
 				## Target topped up — drop lock so remote does not stay "enabled".
@@ -1641,10 +1935,14 @@ func _pick_weapon_target(u: Dictionary, w: Dictionary) -> Dictionary:
 	if not is_rep:
 		var focus = _unit_by_id(str(u.get("focus_id", "")))
 		if focus and focus.get("alive", false) and int(focus["faction"]) != int(u["faction"]) \
+				and not _pair_attack_forbidden(u, focus) \
+				and not _unit_between_cells(u) and not _unit_between_cells(focus) \
 				and str(u["sys"]) == str(focus["sys"]):
 			return focus
 	for o in units:
 		if not o.get("alive", false):
+			continue
+		if _unit_between_cells(u) or _unit_between_cells(o):
 			continue
 		if is_rep:
 			if int(o["faction"]) != int(u["faction"]) or o["id"] == u["id"]:
@@ -1654,6 +1952,8 @@ func _pick_weapon_target(u: Dictionary, w: Dictionary) -> Dictionary:
 				continue
 		else:
 			if int(o["faction"]) == int(u["faction"]):
+				continue
+			if _pair_attack_forbidden(u, o):
 				continue
 			## Auto-attack skips non-same-cell NPC units (SHIPS §13).
 			if bool(o.get("npc", false)) and int(o.get("cell", -2)) != int(u.get("cell", -1)):
@@ -1713,6 +2013,8 @@ func _fire_weapon(u: Dictionary, w: Dictionary, tgt: Dictionary) -> void:
 		# #endregion
 		return
 	var inst: Dictionary = u["inst"]
+	if _weapon_is_damage(w) and _unit_between_cells(tgt):
+		return
 	if float(inst["cap"]) < float(w.get("cap", 0)):
 		return
 	inst["cap"] -= float(w.get("cap", 0))
@@ -1731,8 +2033,8 @@ func _fire_weapon(u: Dictionary, w: Dictionary, tgt: Dictionary) -> void:
 			if not tgt.get("armor_support_buff", false):
 				tgt["armor_support_buff"] = true
 				tinst["resist"] = int(tinst.get("resist", 0)) + int(imp.get("res_pct", 10))
-		_play_turret_vfx(str(w.get("fx", "repair")), _vfx_endpoint(u), _vfx_endpoint(tgt))
-		if _fx_ok() and float_text and heal > 0.05:
+		_play_turret_vfx(str(w.get("fx", "repair")), _vfx_endpoint(u), _vfx_endpoint(tgt), str(u.get("id", "")))
+		if _fx_ok() and _battle_fx_allowed(str(tgt.get("id", ""))) and float_text and heal > 0.05:
 			float_text.add_heal(tgt["pos"], heal, hash(str(tgt["id"]) + "rr"))
 		# #region agent log
 		_agent_dbg("RR1", "board_root._fire_weapon", "remote_heal", {
@@ -1745,17 +2047,17 @@ func _fire_weapon(u: Dictionary, w: Dictionary, tgt: Dictionary) -> void:
 	var dist_m = _pd_tracking_distance_m(u, tgt)
 	var tracking = float(w.get("tracking", 1))
 	var raw = _weapon_raw(eq, w)
-	var sn = _apply_sniper_mod(u, tracking, raw)
-	tracking = float(sn["tracking"])
-	raw = float(sn["raw"])
-	var force_hit := bool(sn.get("force_hit", false))
+	var sniper := _sniper_implant(u)
+	if not sniper.is_empty() and bool(u.get("implant", {}).get("armed", false)):
+		raw *= float(sniper.get("mul", 10))
 	var p_hit = BoardCombatFormulas.turret_hit_chance(
 		tracking, float(w.get("sig_res", 40)), float(w.get("falloff", 4000)),
 		float(w.get("optimal", 0)), float(tgt["speed"]), float(tgt["signature_radius"]), dist_m
 	)
-	var hit = force_hit or rng.randf() <= p_hit
+	var hit = rng.randf() <= p_hit
 	raw = _focus_on_hit(u, hit, raw)
 	if not hit or raw <= 0.0:
+		_play_weapon_vfx(u, w, tgt, false)
 		return
 	raw *= BoardCombatFormulas.roll_quality(rng)
 	# #region agent log
@@ -1764,14 +2066,14 @@ func _fire_weapon(u: Dictionary, w: Dictionary, tgt: Dictionary) -> void:
 	if ship_id_fire == "mmte_longjuanfeng" or wref.begins_with("weapon_large_cannon"):
 		_dbg59("DMG", "board_root._fire_weapon", "cannon_fire", {
 			"ship": ship_id_fire, "name": str(u.get("ship_name", u.get("name", ""))),
-			"ref": wref, "raw": raw, "p_hit": p_hit, "hit": hit, "force_hit": force_hit,
+			"ref": wref, "raw": raw, "p_hit": p_hit, "hit": hit,
 			"from": str(u.get("id", "")), "to": str(tgt.get("id", "")),
 			"tgt_ship": str(tgt.get("ship_id", "")),
 			"runId": "tornado-cannon"
 		})
 	# #endregion
 	_apply_damage_to_unit(u, tgt, raw, int(tgt["inst"]["resist"]))
-	_play_turret_vfx(str(w.get("fx", "laser")), _vfx_endpoint(u), _vfx_endpoint(tgt))
+	_play_weapon_vfx(u, w, tgt, true)
 
 func _vfx_endpoint(u: Dictionary) -> Vector3:
 	## Tactical top-down: plate↔plate (same or cross callout); battle view: ship pos.
@@ -1790,6 +2092,48 @@ func _vfx_endpoint(u: Dictionary) -> Vector3:
 					# #endregion
 					return gp
 	return u.get("pos", Vector3.ZERO) as Vector3
+
+func _vfx_miss_endpoint(att: Dictionary, tgt: Dictionary, shot_n: int) -> Vector3:
+	## Graze beside the hull / tonnage icon, then past the target into open air.
+	var aim_from: Vector3 = _vfx_endpoint(att)
+	var anchor: Vector3 = _vfx_endpoint(tgt)
+	var dir := anchor - aim_from
+	dir.y = 0.0
+	if dir.length_squared() < 0.0001:
+		dir = tgt.get("face_dir", Vector3.ZERO)
+		dir.y = 0.0
+	if dir.length_squared() < 0.0001:
+		dir = Vector3(0.0, 0.0, -1.0)
+	var dir_n := dir.normalized()
+	var lat := Vector3(-dir_n.z, 0.0, dir_n.x)
+	if lat.length_squared() < 0.0001:
+		lat = Vector3.RIGHT
+	var lat_n := lat.normalized()
+	var side := 1.0
+	var key := "%s|%s|%d" % [str(att.get("id", "")), str(tgt.get("id", "")), shot_n]
+	if absi(hash(key)) % 2 != 0:
+		side = -1.0
+	var graze_r := 0.55
+	if cam != null and cam.tactical_mode and not cam.starmap_mode:
+		graze_r = BoardUnitOverhead.icon_circum_radius_world() * 1.25
+	else:
+		var ton_w := float(BoardTypes.tonnage_weight(str(tgt.get("tonnage", "destroyer"))))
+		graze_r = maxf(0.55, 0.55 * ton_w)
+	var miss := anchor + lat_n * side * graze_r + dir_n * (graze_r * 0.8)
+	miss.y += 0.25
+	return miss
+
+func _play_weapon_vfx(u: Dictionary, w: Dictionary, tgt: Dictionary, hit: bool) -> void:
+	var shot_n := int(w.get("shot_n", 0))
+	w["shot_n"] = shot_n + 1
+	var dest := _vfx_endpoint(tgt) if hit else _vfx_miss_endpoint(u, tgt, shot_n)
+	_play_turret_vfx(str(w.get("fx", "laser")), _vfx_endpoint(u), dest, str(u.get("id", "")))
+
+func _play_pd_vfx(u: Dictionary, g: Dictionary, tgt: Dictionary, hit: bool) -> void:
+	var shot_n := int(g.get("shot_n", 0))
+	g["shot_n"] = shot_n + 1
+	var dest := _vfx_endpoint(tgt) if hit else _vfx_miss_endpoint(u, tgt, shot_n)
+	_play_turret_vfx(str(g.get("fx", "rail")), _vfx_endpoint(u), dest, str(u.get("id", "")))
 
 func _build_scene_nodes() -> void:
 	# sky (panorama; race plate still better than broken UV dome)
@@ -1855,7 +2199,8 @@ func _build_scene_nodes() -> void:
 	if cam.has_signal("starmap_changed") and not cam.starmap_changed.is_connected(_on_starmap_changed):
 		cam.starmap_changed.connect(_on_starmap_changed)
 	cam.block_input_fn = func() -> bool:
-		return _mouse_over_blocking_hud(get_viewport().get_mouse_position())
+		var mp := get_viewport().get_mouse_position()
+		return _hover_is_hud_control() or _mouse_over_blocking_hud(mp)
 	tactical_callouts = CALLOUT_SCR.new()
 	tactical_callouts.name = "TacticalCallouts"
 	tactical_callouts.setup(map, starmap_view)
@@ -1940,25 +2285,8 @@ func _ensure_unit_node(u: Dictionary) -> void:
 	var mat = StandardMaterial3D.new()
 	mat.albedo_color = BoardTypes.relation_color(_rel_for(u["faction"]))
 	mesh.material_override = mat
+	mesh.visible = false
 	n.add_child(mesh)
-	## Art module spawn — unshaded fixed look, immune to board lights/env (no white film).
-	var def: Dictionary = data.ship_def(u["ship_id"])
-	var model_key = str(def.get("model", u["ship_id"]))
-	if SHIP_ART.has_model(model_key):
-		var inst: Node3D = SHIP_ART.spawn_model(n, model_key, target_d)
-		if inst:
-			mesh.visible = false
-			call_deferred("_reapply_art_model", inst, model_key)
-			# #region agent log
-			var yaw_art: float = SHIP_ART.bow_yaw_deg(model_key)
-			var yaw_legacy: float = _model_bow_yaw_deg(model_key)
-			_agent_dbg("BOW", "board_root.spawn_model", "yaw_check", {
-				"ship": str(u.get("ship_id", "")), "model": model_key,
-				"yaw_art": yaw_art, "yaw_legacy": yaw_legacy,
-				"match": is_equal_approx(yaw_art, yaw_legacy),
-				"applied_deg": yaw_art, "runId": "post-fix"
-			})
-			# #endregion
 	# pick disk fixed — never inherit broken AABB (BH-04 / BH-08)
 	shape.radius = clampf(target_r * 0.85, 1.2, 3.5)
 	shape.height = 0.35
@@ -2012,6 +2340,107 @@ func _ensure_unit_node(u: Dictionary) -> void:
 	n.add_child(oh)
 	oh.set_tonnage_icon(_tonnage_icon(str(u.get("tonnage", "destroyer"))))
 	unit_nodes[u["id"]] = n
+	_battle_model_acc = 1.0
+
+
+func _is_battle_view() -> bool:
+	return cam != null and not cam.tactical_mode and not cam.starmap_mode
+
+func _battle_fx_allowed(uid: String) -> bool:
+	if not _is_battle_view():
+		return true
+	return _battle_model_ids.has(uid)
+
+func _tick_battle_model_budget(delta: float) -> void:
+	## Battlefield only: keep the 150 ship models nearest the camera, plus their FX.
+	_battle_model_acc += delta
+	if _battle_model_acc < 0.2 and not _battle_model_ids.is_empty() and _is_battle_view():
+		return
+	_battle_model_acc = 0.0
+	var want: Dictionary = {}
+	if not _is_battle_view():
+		for u in units:
+			if u.get("alive", false) and unit_nodes.has(u["id"]):
+				want[str(u["id"])] = true
+	else:
+		var cam_pos := Vector3.ZERO
+		if cam.cam != null:
+			cam_pos = cam.cam.global_position
+		var ranked: Array = []
+		for u in units:
+			if not u.get("alive", false) or not unit_nodes.has(u["id"]):
+				continue
+			var p: Vector3 = u["pos"]
+			ranked.append({"id": str(u["id"]), "d": p.distance_squared_to(cam_pos)})
+		ranked.sort_custom(func(a, b):
+			if float(a["d"]) == float(b["d"]):
+				return str(a["id"]) < str(b["id"])
+			return float(a["d"]) < float(b["d"])
+		)
+		var n_keep := mini(BATTLE_MODEL_BUDGET, ranked.size())
+		for i in n_keep:
+			want[str(ranked[i]["id"])] = true
+	var drop: Array = []
+	for uid in _battle_model_ids.keys():
+		if not want.has(uid):
+			drop.append(uid)
+	for uid in drop:
+		var u = _unit_by_id(str(uid))
+		if not u.is_empty():
+			_unload_ship_model(u)
+		_battle_model_ids.erase(uid)
+	for uid in want.keys():
+		if _battle_model_ids.has(uid):
+			continue
+		var u2 = _unit_by_id(str(uid))
+		if u2.is_empty():
+			continue
+		_load_ship_model(u2)
+		_battle_model_ids[uid] = true
+		if absf(float(u2.get("cloak_dir", 0.0))) > 0.01 or float(u2.get("cloak_t", 1.0)) < 0.999:
+			_ensure_cloak_fx(u2)
+
+func _load_ship_model(u: Dictionary) -> void:
+	if not unit_nodes.has(u["id"]):
+		return
+	var n: Node3D = unit_nodes[u["id"]]
+	var existing := n.get_node_or_null("Model") as Node3D
+	if existing != null and not existing.is_queued_for_deletion():
+		return
+	var target_d = (TAU * 26.0 / 24.0) * 0.55 * 1.5
+	var def: Dictionary = data.ship_def(str(u.get("ship_id", "")))
+	var model_key := str(def.get("model", u.get("ship_id", "")))
+	if not SHIP_ART.has_model(model_key):
+		var proxy := n.get_node_or_null("Proxy") as MeshInstance3D
+		if proxy:
+			proxy.visible = true
+		return
+	var inst: Node3D = SHIP_ART.spawn_model(n, model_key, target_d)
+	if inst == null:
+		return
+	var proxy2 := n.get_node_or_null("Proxy") as MeshInstance3D
+	if proxy2:
+		proxy2.visible = false
+	call_deferred("_reapply_art_model", inst, model_key)
+
+func _unload_ship_model(u: Dictionary) -> void:
+	if not unit_nodes.has(u["id"]):
+		return
+	var n: Node3D = unit_nodes[u["id"]]
+	var model := n.get_node_or_null("Model") as Node3D
+	if model != null and not model.is_queued_for_deletion():
+		model.queue_free()
+	var proxy := n.get_node_or_null("Proxy") as MeshInstance3D
+	if proxy:
+		proxy.visible = false
+	var trail := n.get_node_or_null("Trail") as MeshInstance3D
+	if trail:
+		trail.visible = false
+		trail.mesh = null
+	u["trail_pts"] = []
+	var cloak := n.get_node_or_null("CloakFx")
+	if cloak != null and not cloak.is_queued_for_deletion():
+		cloak.queue_free()
 
 
 func _mesh_aabb_size(node: Node3D) -> float:
@@ -2220,8 +2649,13 @@ func _build_hud() -> void:
 	sync_move_btn.toggled.connect(_on_sync_move_toggled)
 	_apply_ui_font(sync_move_btn)
 	left_col.add_child(sync_move_btn)
-	_build_soft_key_bar(left_col)
 	layer.add_child(left_col)
+	hud_layer = layer
+	_build_bottom_bar(layer)
+	_build_deputy_panel(layer)
+	_build_diplomacy(layer)
+	_build_game_menu(layer)
+	_build_marker_layer(layer)
 	_layout_left_col()
 	_apply_baked_view_tune()
 	BoardUnitOverhead.cd_bar_px = 20.0
@@ -2390,11 +2824,314 @@ func _pin_selected_left_rows() -> void:
 	for i in range(rows.size()):
 		left_rows.move_child(rows[i], i)
 
+func _build_bottom_bar(parent: Control) -> void:
+	## ScrollContainer so soft-key min-width cannot stretch under side columns.
+	bottom_bar = ScrollContainer.new()
+	bottom_bar.name = "BottomBar"
+	bottom_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	bottom_bar.z_index = 50
+	bottom_bar.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	bottom_bar.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var row := HBoxContainer.new()
+	row.name = "BottomRow"
+	row.add_theme_constant_override("separation", 6)
+	row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_build_soft_key_bar(row)
+	for spec in [["trench", "战壕"], ["target", "目标"], ["arrow", "箭头"]]:
+		var b := Button.new()
+		b.text = spec[1]
+		b.custom_minimum_size = Vector2(64, 36)
+		b.mouse_filter = Control.MOUSE_FILTER_STOP
+		b.pressed.connect(_on_marker_button.bind(spec[0]))
+		_apply_ui_font(b)
+		row.add_child(b)
+		marker_btns[spec[0]] = b
+	bottom_bar.add_child(row)
+	parent.add_child(bottom_bar)
+	_build_chat_panel(parent)
+	_layout_bottom_bar()
+
+func _build_chat_panel(parent: Control) -> void:
+	chat_panel = PanelContainer.new()
+	chat_panel.name = "ChatPanel"
+	chat_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	chat_panel.z_index = 45
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 6)
+	margin.add_theme_constant_override("margin_right", 6)
+	margin.add_theme_constant_override("margin_top", 4)
+	margin.add_theme_constant_override("margin_bottom", 4)
+	chat_panel.add_child(margin)
+	var scroll := ScrollContainer.new()
+	scroll.name = "ChatScroll"
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.mouse_filter = Control.MOUSE_FILTER_STOP
+	margin.add_child(scroll)
+	chat_log = RichTextLabel.new()
+	chat_log.name = "ChatLog"
+	chat_log.bbcode_enabled = false
+	chat_log.fit_content = true
+	chat_log.scroll_following = true
+	chat_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chat_log.mouse_filter = Control.MOUSE_FILTER_STOP
+	_apply_ui_font(chat_log)
+	chat_log.add_theme_font_size_override("normal_font_size", 13)
+	scroll.add_child(chat_log)
+	parent.add_child(chat_panel)
+	if not _chat_lines.is_empty():
+		chat_log.text = "\n".join(PackedStringArray(_chat_lines))
+	_layout_chat_panel()
+
+func _layout_bottom_bar() -> void:
+	if bottom_bar == null or not is_instance_valid(bottom_bar):
+		return
+	var vr := get_viewport().get_visible_rect().size
+	## Between LeftCol (360+8) and RightCol (vr.x-316); do not underlap side columns.
+	var left_x := 376.0
+	var right_x := vr.x - 324.0
+	var w := maxf(right_x - left_x, 280.0)
+	bottom_bar.position = Vector2(left_x, vr.y - 52)
+	bottom_bar.size = Vector2(w, 44)
+	_layout_chat_panel()
+
+func _layout_chat_panel() -> void:
+	if chat_panel == null or not is_instance_valid(chat_panel):
+		return
+	var vr := get_viewport().get_visible_rect().size
+	var left_x := 376.0
+	var h := 180.0
+	var w := 420.0
+	chat_panel.position = Vector2(left_x, vr.y - 52.0 - 8.0 - h)
+	chat_panel.size = Vector2(w, h)
+
+func _unit_is_sleeper(u: Dictionary) -> bool:
+	if u.is_empty():
+		return false
+	if bool(u.get("garrison", false)):
+		return true
+	return data != null and data.is_npc_faction(int(u.get("faction", -1)))
+
+func _chat_append(line: String) -> void:
+	if line == "":
+		return
+	_chat_lines.append(line)
+	while _chat_lines.size() > CHAT_MAX_LINES:
+		_chat_lines.remove_at(0)
+	if chat_log == null:
+		return
+	chat_log.text = "\n".join(PackedStringArray(_chat_lines))
+
+func _chat_deputy(line_body: String) -> void:
+	_chat_append("%s：%s" % [player_deputy_name, line_body])
+
+func _pilot_display_name_of_unit(u: Dictionary) -> String:
+	if u.is_empty():
+		return "未知"
+	var p = _pilot_by_id(str(u.get("pilot_id", "")))
+	if not p.is_empty():
+		return str(p.get("name", p.get("id", "未知")))
+	return str(u.get("pilot_name", u.get("name", "未知")))
+
+func _ship_name_of_unit(u: Dictionary) -> String:
+	if u.is_empty():
+		return "?"
+	var nm := str(u.get("ship_name", ""))
+	if nm != "":
+		return nm
+	var def: Dictionary = data.ship_def(str(u.get("ship_id", ""))) if data else {}
+	return str(def.get("name", u.get("ship_id", "?")))
+
+func _note_kill_chat(attacker: Dictionary, target: Dictionary) -> void:
+	## Viewer-faction pilot kill / death only; never for sleeper victims or sleeper killers.
+	if target.is_empty() or _unit_is_sleeper(target):
+		return
+	if not attacker.is_empty() and _unit_is_sleeper(attacker):
+		return
+	var att_mine: bool = not attacker.is_empty() and int(attacker.get("faction", -1)) == viewer_faction \
+			and bool(attacker.get("commandable", true)) and not bool(attacker.get("garrison", false))
+	var tgt_mine: bool = int(target.get("faction", -1)) == viewer_faction \
+			and bool(target.get("commandable", true)) and not bool(target.get("garrison", false))
+	if not att_mine and not tgt_mine:
+		return
+	## Friendly fire: one line only.
+	if att_mine and tgt_mine:
+		_chat_append("%s：击毁%s[%s]" % [
+			_pilot_display_name_of_unit(attacker),
+			_pilot_display_name_of_unit(target),
+			_ship_name_of_unit(target)
+		])
+		return
+	if att_mine:
+		_chat_append("%s：击毁%s[%s]" % [
+			_pilot_display_name_of_unit(attacker),
+			_pilot_display_name_of_unit(target),
+			_ship_name_of_unit(target)
+		])
+		return
+	## Viewer pilot destroyed by non-sleeper.
+	var killer := _pilot_display_name_of_unit(attacker) if not attacker.is_empty() else "未知"
+	_chat_append("%s：击毁%s[%s]" % [
+		killer,
+		_pilot_display_name_of_unit(target),
+		_ship_name_of_unit(target)
+	])
+
+func _cell_kind_zh(kind: int) -> String:
+	match kind:
+		BoardTypes.CellKind.GATE:
+			return "星门"
+		BoardTypes.CellKind.RESOURCE:
+			return "资源"
+		BoardTypes.CellKind.STATION:
+			return "空间站"
+		BoardTypes.CellKind.SOV:
+			return "主权"
+		_:
+			return "地点"
+
+func _sys_display_name(sid: String) -> String:
+	if map == null or not map.systems.has(sid):
+		return sid
+	return str(map.systems[sid].get("name", sid))
+
+func _chat_deputy_cmd_count(force: bool) -> void:
+	var n := 0
+	if deputy_group >= 0:
+		n = _commanded_pilots(deputy_group).size()
+	if not force and n == _deputy_cmd_count:
+		return
+	_deputy_cmd_count = n
+	if n > 0:
+		_chat_deputy("已确认对%d人的指挥权，正在调度" % n)
+	else:
+		_chat_deputy("已确认对0人的指挥权，我将实时替您关注战场")
+
+func _note_deputy_fleet_wipe_before_kill(target: Dictionary) -> void:
+	if player_deputy == null or deputy_group < 0 or target.is_empty():
+		return
+	if int(target.get("faction", -1)) != viewer_faction:
+		return
+	var tid := str(target.get("id", ""))
+	var role_n: Dictionary = {}
+	var role_i: Dictionary = {}
+	for f0 in player_deputy.fleets:
+		var r0 := str(f0.get("role", "main"))
+		role_n[r0] = int(role_n.get(r0, 0)) + 1
+	for f in player_deputy.fleets:
+		var role := str(f.get("role", "main"))
+		var ix := int(role_i.get(role, 0))
+		role_i[role] = ix + 1
+		var members: Array = f.get("members", [])
+		var has := false
+		for m in members:
+			if str(m) == tid:
+				has = true
+				break
+		if not has:
+			continue
+		var alive_left := 0
+		var last_sys := str(target.get("sys", ""))
+		for m2 in members:
+			var ou = _unit_by_id(str(m2))
+			if ou.is_empty() or not ou.get("alive", false):
+				continue
+			if str(ou.get("id", "")) == tid:
+				continue
+			alive_left += 1
+			last_sys = str(ou.get("sys", last_sys))
+		if alive_left > 0:
+			continue
+		var fname := _fleet_role_label(role, ix, int(role_n.get(role, 1)))
+		_chat_deputy("%s 在%s处被全歼，正在组织新舰队。" % [fname, _sys_display_name(last_sys)])
+		return
+
+func _tick_faction_surrender_announce() -> void:
+	var living: Dictionary = {}
+	for u in units:
+		if not u.get("alive", false):
+			continue
+		var fac := int(u.get("faction", -1))
+		if data.is_npc_faction(fac):
+			continue
+		living[fac] = true
+	for fac2 in _br_alive_facs.keys():
+		if living.has(fac2):
+			_br_surrendered.erase(fac2)
+			continue
+		if bool(_br_surrendered.get(fac2, false)):
+			continue
+		_br_surrendered[fac2] = true
+		_chat_deputy("%s势力已投降" % _faction_label(int(fac2)))
+	for fac3 in living.keys():
+		_br_alive_facs[fac3] = true
+
+func _announce_marker_confirm(kind: String) -> void:
+	var key := ""
+	var body := ""
+	match kind:
+		"trench":
+			var sys := _trench_defense_system()
+			if sys == "":
+				return
+			key = "trench:" + sys
+			body = "指令收到，确认在%s构筑防线" % _sys_display_name(sys)
+		"target":
+			if not map_markers.has("target"):
+				return
+			var tsys := _nearest_system(map_markers["target"]["pos"])
+			if tsys == "":
+				return
+			key = "target:" + tsys
+			body = "指令收到，确认%s为进攻目标" % _sys_display_name(tsys)
+		"arrow":
+			if not map_markers.has("arrow"):
+				return
+			var names := _arrow_corridor_sys_names()
+			if names.is_empty():
+				return
+			key = "arrow:" + ",".join(names)
+			body = "指令收到，设%s，为优先导航途经点" % "，".join(names)
+		_:
+			return
+	if str(_marker_announce.get(kind, "")) == key:
+		return
+	_marker_announce[kind] = key
+	_chat_deputy(body)
+
+func _arrow_corridor_sys_names() -> PackedStringArray:
+	var out := PackedStringArray()
+	if not map_markers.has("arrow"):
+		return out
+	var m: Dictionary = map_markers["arrow"]
+	var a: Vector3 = m.get("a", Vector3.ZERO)
+	var b: Vector3 = m.get("b", Vector3.ZERO)
+	var ab := b - a
+	var ab_len2 := ab.length_squared()
+	var hits: Array = []
+	for sid in map.systems.keys():
+		var c: Vector3 = map.systems[sid]["center"]
+		var t := 0.5
+		if ab_len2 > 0.001:
+			t = clampf((c - a).dot(ab) / ab_len2, -0.2, 1.2)
+		var foot := a + ab * t
+		var dist := Vector3(c.x - foot.x, 0.0, c.z - foot.z).length()
+		if dist <= 40.0 and t >= -0.05 and t <= 1.05:
+			hits.append({"sid": str(sid), "t": t})
+	hits.sort_custom(func(x, y): return float(x["t"]) < float(y["t"]))
+	for h in hits:
+		out.append(_sys_display_name(str(h["sid"])))
+	if out.is_empty():
+		var nearest := _nearest_system(m.get("pos", a))
+		if nearest != "":
+			out.append(_sys_display_name(nearest))
+	return out
+
 func _build_soft_key_bar(parent: Control) -> void:
 	var bar = HBoxContainer.new()
 	bar.name = "SoftKeyBar"
 	bar.add_theme_constant_override("separation", 4)
-	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	soft_ctrl_btn = Button.new()
 	soft_ctrl_btn.name = "SoftCtrl"
 	soft_ctrl_btn.text = "Ctrl"
@@ -2435,6 +3172,830 @@ func _on_soft_digit(g: int) -> void:
 		_clear_soft_ctrl_sticky()
 		return
 	_select_control_group(g, true)
+
+func _build_deputy_panel(parent: Control) -> void:
+	deputy_panel = PanelContainer.new()
+	deputy_panel.name = "DeputyPanel"
+	deputy_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	deputy_panel.custom_minimum_size = Vector2(210, 72)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 4)
+	deputy_panel.add_child(box)
+	var head := HBoxContainer.new()
+	box.add_child(head)
+	var ph := ColorRect.new()
+	ph.custom_minimum_size = Vector2(40, 40)
+	ph.color = Color(0.35, 0.38, 0.42, 1)
+	head.add_child(ph)
+	deputy_name_lab = Label.new()
+	deputy_name_lab.text = player_deputy_name
+	_apply_ui_font(deputy_name_lab)
+	head.add_child(deputy_name_lab)
+	deputy_opt = OptionButton.new()
+	deputy_opt.custom_minimum_size = Vector2(190, 28)
+	_apply_ui_font(deputy_opt)
+	## id -1 auto-assigns to 0 and collides with group 0 — use -2 for wait.
+	deputy_opt.add_item("等待分配", -2)
+	for g in [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]:
+		deputy_opt.add_item("代为指挥编队 %d" % g, g)
+	deputy_opt.item_selected.connect(_on_deputy_group_picked)
+	box.add_child(deputy_opt)
+	deputy_fleet_box = VBoxContainer.new()
+	box.add_child(deputy_fleet_box)
+	parent.add_child(deputy_panel)
+	_layout_deputy_panel()
+
+func _layout_deputy_panel() -> void:
+	if deputy_panel == null or not is_instance_valid(deputy_panel):
+		return
+	deputy_panel.position = Vector2(376, 8)
+
+func _on_deputy_group_picked(idx: int) -> void:
+	if deputy_opt == null:
+		return
+	var gid := int(deputy_opt.get_item_id(idx))
+	## -2 (wait) or any negative → release command.
+	deputy_group = gid if gid >= 0 else -1
+	_rebuild_player_deputy()
+	_rebalance_deputy_resources()
+
+func _pilot_is_guard(p: Dictionary) -> bool:
+	var sid := _pilot_display_ship_id(p)
+	var def: Dictionary = data.ship_def(sid)
+	var fit: Dictionary = def.get("fit", {})
+	for slot in fit.get("slots", []):
+		if typeof(slot) != TYPE_STRING:
+			continue
+		if slot == "armor_link" or slot == "shield_field":
+			return true
+	for h in fit.get("hidden", []):
+		var k := str(h.get("kind", ""))
+		if k.begins_with("guard"):
+			return true
+		var ref := str(h.get("ref", ""))
+		if ref == "armor_link" or ref == "shield_field":
+			return true
+	return false
+
+func _rebalance_faction_resources(fid: int) -> void:
+	var rows: Array = []
+	for p in pilots:
+		if int(p.get("faction", -1)) != fid:
+			continue
+		rows.append({"id": str(p["id"]), "guard": _pilot_is_guard(p)})
+	var ctrl: BoardAiController = faction_ai.get(fid)
+	if ctrl != null and str(ctrl.deputy_id) == "chuang":
+		BoardResourceAssign.rebalance_even(map, rows)
+	else:
+		BoardResourceAssign.rebalance_yang(map, rows)
+
+func _rebalance_deputy_resources() -> void:
+	if deputy_group < 0:
+		return
+	var rows: Array = []
+	for p in _commanded_pilots(deputy_group):
+		rows.append({"id": str(p["id"]), "guard": _pilot_is_guard(p)})
+	if rows.is_empty():
+		return
+	if player_deputy != null and str(player_deputy.deputy_id) == "chuang":
+		BoardResourceAssign.rebalance_even(map, rows)
+	else:
+		BoardResourceAssign.rebalance_yang(map, rows)
+
+func _fleet_role_label(role: String, index_among_role: int, role_count: int) -> String:
+	var base := "主力舰队"
+	match role:
+		"mid":
+			base = "中型舰队"
+		"small":
+			base = "小型舰队"
+		"attrition":
+			base = "战术换损舰队"
+		"main":
+			base = "主力舰队"
+		_:
+			base = role if role != "" else "舰队"
+	if role_count > 1:
+		return "%s%d" % [base, index_among_role + 1]
+	return base
+
+func _refresh_deputy_fleet_ui() -> void:
+	if deputy_fleet_box == null:
+		return
+	for c in deputy_fleet_box.get_children():
+		c.queue_free()
+	if player_deputy == null:
+		return
+	var role_n: Dictionary = {}
+	var role_i: Dictionary = {}
+	for f0 in player_deputy.fleets:
+		var r0 := str(f0.get("role", "main"))
+		role_n[r0] = int(role_n.get(r0, 0)) + 1
+	for f in player_deputy.fleets:
+		var b := Button.new()
+		var role := str(f.get("role", "main"))
+		var ix := int(role_i.get(role, 0))
+		role_i[role] = ix + 1
+		var label := _fleet_role_label(role, ix, int(role_n.get(role, 1)))
+		var mark := str(f.get("marker", ""))
+		if mark != "":
+			label += "·" + mark
+		b.text = "%s %d" % [label, _fleet_display_weight(f)]
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.mouse_filter = Control.MOUSE_FILTER_STOP
+		_apply_ui_font(b)
+		var fid := int(f.get("id", 0))
+		b.pressed.connect(_select_deputy_fleet.bind(fid))
+		b.gui_input.connect(_on_deputy_fleet_gui.bind(fid))
+		deputy_fleet_box.add_child(b)
+
+func _fleet_display_weight(f: Dictionary) -> int:
+	return int(f.get("weight", 0))
+
+func _select_deputy_fleet(fid: int) -> void:
+	if player_deputy == null:
+		return
+	for f in player_deputy.fleets:
+		if int(f.get("id", -1)) != fid:
+			continue
+		selection = (f.get("members", []) as Array).duplicate()
+		_update_detail()
+		_pin_selected_left_rows()
+		return
+
+func _on_deputy_fleet_gui(ev: InputEvent, fid: int) -> void:
+	if not (ev is InputEventMouseButton):
+		return
+	var mb := ev as InputEventMouseButton
+	if not mb.pressed or mb.button_index != MOUSE_BUTTON_RIGHT:
+		return
+	if player_deputy == null:
+		return
+	var lines: PackedStringArray = PackedStringArray()
+	var total := 0
+	for f in player_deputy.fleets:
+		if int(f.get("id", -1)) != fid:
+			continue
+		total = _fleet_display_weight(f)
+		for uid in f.get("members", []):
+			var u = _unit_by_id(str(uid))
+			if u.is_empty():
+				continue
+			var uw := BoardTypes.tonnage_weight(u.get("tonnage", "destroyer"))
+			lines.append("%s  %d" % [str(u.get("pilot_name", uid)), uw])
+	if lines.is_empty() and total <= 0:
+		return
+	var pop := PopupMenu.new()
+	add_child(pop)
+	pop.add_item("权重合计  %d" % total)
+	pop.set_item_disabled(0, true)
+	for line in lines:
+		pop.add_item(line)
+	pop.popup_hide.connect(pop.queue_free)
+	pop.position = Vector2i(mb.global_position)
+	pop.popup()
+
+func _build_diplomacy(parent: Control) -> void:
+	diplo_btn = Button.new()
+	diplo_btn.name = "DiploBtn"
+	diplo_btn.text = "外交"
+	diplo_btn.custom_minimum_size = Vector2(72, 32)
+	diplo_btn.size = Vector2(72, 32)
+	diplo_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	diplo_btn.z_index = 50
+	_apply_ui_font(diplo_btn)
+	diplo_btn.pressed.connect(_toggle_diplomacy)
+	parent.add_child(diplo_btn)
+	diplo_panel = PanelContainer.new()
+	diplo_panel.name = "DiploPanel"
+	diplo_panel.visible = false
+	diplo_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	diplo_panel.z_index = 80
+	parent.add_child(diplo_panel)
+	_layout_diplomacy()
+	_rebuild_diplomacy_rows()
+
+func _layout_diplomacy() -> void:
+	if diplo_btn == null:
+		return
+	var vr := get_viewport().get_visible_rect().size
+	diplo_btn.position = Vector2(vr.x - 88, 8)
+	if diplo_panel:
+		## Left of RightCol (vr.x - 316) so the column cannot eat clicks.
+		var pw := maxf(diplo_panel.size.x, 220.0)
+		diplo_panel.position = Vector2(vr.x - 316.0 - 12.0 - pw, 44.0)
+	_layout_game_menu()
+
+func _toggle_diplomacy() -> void:
+	if diplo_panel == null:
+		return
+	diplo_panel.visible = not diplo_panel.visible
+	if diplo_panel.visible:
+		_close_game_menu()
+		_rebuild_diplomacy_rows()
+
+func _build_game_menu(parent: Control) -> void:
+	menu_btn = Button.new()
+	menu_btn.name = "MenuBtn"
+	menu_btn.text = "菜单"
+	menu_btn.custom_minimum_size = Vector2(72, 32)
+	menu_btn.size = Vector2(72, 32)
+	menu_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	menu_btn.z_index = 50
+	_apply_ui_font(menu_btn)
+	menu_btn.pressed.connect(_toggle_game_menu)
+	parent.add_child(menu_btn)
+	menu_window = Window.new()
+	menu_window.name = "GameMenuWindow"
+	menu_window.title = "菜单"
+	menu_window.transient = true
+	## Not exclusive: the deputy OptionButton popup must receive the click.
+	menu_window.exclusive = false
+	menu_window.unresizable = true
+	menu_window.transparent = false
+	menu_window.borderless = true
+	menu_window.always_on_top = true
+	menu_window.visible = false
+	menu_window.min_size = Vector2i(300, 280)
+	menu_window.size = Vector2i(320, 440)
+	menu_window.close_requested.connect(_close_game_menu)
+	add_child(menu_window)
+	var root := PanelContainer.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.10, 0.11, 0.14, 1.0)
+	sb.set_content_margin_all(12)
+	root.add_theme_stylebox_override("panel", sb)
+	menu_window.add_child(root)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	root.add_child(box)
+	menu_pause_lab = Label.new()
+	menu_pause_lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_apply_ui_font(menu_pause_lab)
+	box.add_child(menu_pause_lab)
+	menu_page = VBoxContainer.new()
+	menu_page.add_theme_constant_override("separation", 4)
+	box.add_child(menu_page)
+	for item in [
+		{"t": "继续游戏", "id": "continue"},
+		{"t": "读取存档", "id": "load"},
+		{"t": "保存存档", "id": "save"},
+		{"t": "回到主菜单", "id": "main"},
+		{"t": "设置", "id": "settings"},
+	]:
+		var b := Button.new()
+		b.text = str(item["t"])
+		b.custom_minimum_size = Vector2(260, 32)
+		b.mouse_filter = Control.MOUSE_FILTER_STOP
+		_apply_ui_font(b)
+		b.pressed.connect(_on_game_menu_item.bind(str(item["id"])))
+		menu_page.add_child(b)
+	settings_page = VBoxContainer.new()
+	settings_page.visible = false
+	settings_page.add_theme_constant_override("separation", 8)
+	box.add_child(settings_page)
+	_rebuild_settings_panel()
+	_layout_game_menu()
+	_apply_audio_volumes()
+
+func _layout_game_menu() -> void:
+	if menu_btn == null:
+		return
+	var vr := get_viewport().get_visible_rect().size
+	menu_btn.position = Vector2(vr.x - 168, 8)
+
+func _close_game_menu() -> void:
+	sim_paused = false
+	if menu_window and is_instance_valid(menu_window):
+		menu_window.hide()
+	if menu_page:
+		menu_page.visible = true
+	if settings_page:
+		settings_page.visible = false
+
+func _toggle_game_menu() -> void:
+	if menu_window == null:
+		return
+	if menu_window.visible:
+		_close_game_menu()
+		return
+	if diplo_panel:
+		diplo_panel.visible = false
+	sim_paused = true
+	if menu_pause_lab:
+		menu_pause_lab.text = "%s发起了暂停" % _faction_label(viewer_faction)
+	if menu_page:
+		menu_page.visible = true
+	if settings_page:
+		settings_page.visible = false
+	menu_window.popup_centered()
+
+func _on_game_menu_item(item_id: String) -> void:
+	match item_id:
+		"continue":
+			_close_game_menu()
+		"load", "save", "main":
+			var stub := item_id
+			if item_id == "load":
+				stub = "读取存档"
+			elif item_id == "save":
+				stub = "保存存档"
+			elif item_id == "main":
+				stub = "回到主菜单"
+			_chat_append("（占位）%s暂未实现" % stub)
+		"settings":
+			if menu_page:
+				menu_page.visible = false
+			if settings_page:
+				settings_page.visible = true
+				_rebuild_settings_panel()
+
+func _rebuild_settings_panel() -> void:
+	if settings_page == null:
+		return
+	for c in settings_page.get_children():
+		c.queue_free()
+	var title := Label.new()
+	title.text = "设置"
+	_apply_ui_font(title)
+	settings_page.add_child(title)
+	_add_settings_volume_row(settings_page, "背景音乐大小", settings_bgm_vol, "_on_settings_bgm")
+	_add_settings_volume_row(settings_page, "音效大小", settings_sfx_vol, "_on_settings_sfx")
+	var plate_row := HBoxContainer.new()
+	settings_page.add_child(plate_row)
+	var plate_lab := Label.new()
+	plate_lab.text = "战场视角下时刻展示完整铭牌"
+	plate_lab.custom_minimum_size = Vector2(200, 28)
+	_apply_ui_font(plate_lab)
+	plate_row.add_child(plate_lab)
+	var plate_chk := CheckButton.new()
+	plate_chk.button_pressed = settings_battle_full_plates
+	plate_chk.text = "开" if settings_battle_full_plates else "关"
+	_apply_ui_font(plate_chk)
+	plate_chk.toggled.connect(_on_settings_full_plates)
+	plate_row.add_child(plate_chk)
+	var dep_row := HBoxContainer.new()
+	dep_row.add_theme_constant_override("separation", 8)
+	settings_page.add_child(dep_row)
+	var dep_lab := Label.new()
+	dep_lab.text = "切换副指挥官"
+	dep_lab.custom_minimum_size = Vector2(120, 28)
+	_apply_ui_font(dep_lab)
+	dep_row.add_child(dep_lab)
+	## Unfold inside the pause window. A PopupMenu is clipped by this sub-window.
+	var cur := "yang"
+	var cur_name := "羊"
+	if player_deputy != null and str(player_deputy.deputy_id) == "chuang":
+		cur = "chuang"
+		cur_name = "创"
+	settings_deputy_btn = Button.new()
+	settings_deputy_btn.custom_minimum_size = Vector2(120, 28)
+	settings_deputy_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_deputy_btn.focus_mode = Control.FOCUS_NONE
+	settings_deputy_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	settings_deputy_btn.text = "%s ▼" % cur_name
+	_apply_ui_font(settings_deputy_btn)
+	settings_deputy_btn.pressed.connect(_toggle_settings_deputy_list)
+	dep_row.add_child(settings_deputy_btn)
+	settings_deputy_list = VBoxContainer.new()
+	settings_deputy_list.visible = false
+	settings_deputy_list.add_theme_constant_override("separation", 2)
+	settings_page.add_child(settings_deputy_list)
+	for spec in [{"id": "yang", "name": "羊"}, {"id": "chuang", "name": "创"}]:
+		var choice := Button.new()
+		var mark := "（当前）" if str(spec["id"]) == cur else ""
+		choice.text = "%s%s" % [str(spec["name"]), mark]
+		choice.custom_minimum_size = Vector2(120, 28)
+		choice.mouse_filter = Control.MOUSE_FILTER_STOP
+		choice.focus_mode = Control.FOCUS_NONE
+		_apply_ui_font(choice)
+		choice.pressed.connect(_on_settings_deputy_picked.bind(str(spec["id"]), str(spec["name"])))
+		settings_deputy_list.add_child(choice)
+	var back := Button.new()
+	back.text = "返回"
+	back.custom_minimum_size = Vector2(80, 28)
+	_apply_ui_font(back)
+	back.pressed.connect(func():
+		if settings_page:
+			settings_page.visible = false
+		if menu_page:
+			menu_page.visible = true
+	)
+	settings_page.add_child(back)
+
+func _add_settings_volume_row(box: VBoxContainer, label_text: String, value: float, method_name: String) -> void:
+	var row := HBoxContainer.new()
+	box.add_child(row)
+	var lab := Label.new()
+	lab.text = label_text
+	lab.custom_minimum_size = Vector2(140, 28)
+	_apply_ui_font(lab)
+	row.add_child(lab)
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = 0.01
+	slider.value = value
+	slider.custom_minimum_size = Vector2(160, 28)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.value_changed.connect(Callable(self, method_name))
+	row.add_child(slider)
+
+func _on_settings_bgm(v: float) -> void:
+	settings_bgm_vol = clampf(v, 0.0, 1.0)
+	_apply_audio_volumes()
+
+func _on_settings_sfx(v: float) -> void:
+	settings_sfx_vol = clampf(v, 0.0, 1.0)
+	_apply_audio_volumes()
+
+func _on_settings_full_plates(on: bool) -> void:
+	settings_battle_full_plates = on
+	if settings_page:
+		for c in settings_page.find_children("*", "CheckButton", true, false):
+			var chk := c as CheckButton
+			if chk:
+				chk.text = "开" if on else "关"
+
+func _ensure_named_bus(bus_name: String) -> int:
+	var idx := AudioServer.get_bus_index(bus_name)
+	if idx >= 0:
+		return idx
+	AudioServer.add_bus()
+	idx = AudioServer.bus_count - 1
+	AudioServer.set_bus_name(idx, bus_name)
+	AudioServer.set_bus_send(idx, "Master")
+	return idx
+
+func _apply_audio_volumes() -> void:
+	var music_i := _ensure_named_bus("Music")
+	var sfx_i := _ensure_named_bus("SFX")
+	AudioServer.set_bus_volume_db(music_i, linear_to_db(maxf(settings_bgm_vol, 0.0001)) if settings_bgm_vol > 0.001 else -80.0)
+	AudioServer.set_bus_volume_db(sfx_i, linear_to_db(maxf(settings_sfx_vol, 0.0001)) if settings_sfx_vol > 0.001 else -80.0)
+
+func _toggle_settings_deputy_list() -> void:
+	if settings_deputy_list == null:
+		return
+	settings_deputy_list.visible = not settings_deputy_list.visible
+	if settings_deputy_btn:
+		var shown := "羊"
+		if player_deputy != null and str(player_deputy.deputy_id) == "chuang":
+			shown = "创"
+		settings_deputy_btn.text = "%s %s" % [shown, "▲" if settings_deputy_list.visible else "▼"]
+
+func _on_settings_deputy_picked(did: String, dname: String) -> void:
+	if player_deputy == null:
+		return
+	if did != "yang" and did != "chuang":
+		return
+	if str(player_deputy.deputy_id) != did:
+		player_deputy.deputy_id = did
+		player_deputy_name = dname
+		if deputy_name_lab:
+			deputy_name_lab.text = dname
+		_rebuild_player_deputy()
+		_rebalance_deputy_resources()
+		_chat_deputy("换人为%s" % dname)
+	if settings_page:
+		_rebuild_settings_panel.call_deferred()
+
+func _rebuild_diplomacy_rows() -> void:
+	if diplo_panel == null:
+		return
+	for c in diplo_panel.get_children():
+		c.queue_free()
+	var box := VBoxContainer.new()
+	diplo_panel.add_child(box)
+	for f in data.factions.get("factions", []):
+		if bool(f.get("npc", false)):
+			continue
+		var fid := int(f.get("id", -1))
+		var row := HBoxContainer.new()
+		box.add_child(row)
+		var lab := Label.new()
+		lab.text = str(f.get("name", fid))
+		lab.custom_minimum_size = Vector2(140, 28)
+		lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_apply_ui_font(lab)
+		row.add_child(lab)
+		if fid == viewer_faction:
+			continue
+		var mark := Button.new()
+		mark.name = "DiploMark"
+		mark.flat = true
+		mark.focus_mode = Control.FOCUS_NONE
+		mark.custom_minimum_size = Vector2(32, 32)
+		mark.size = Vector2(32, 32)
+		mark.mouse_filter = Control.MOUSE_FILTER_STOP
+		var empty := StyleBoxEmpty.new()
+		mark.add_theme_stylebox_override("normal", empty)
+		mark.add_theme_stylebox_override("hover", empty)
+		mark.add_theme_stylebox_override("pressed", empty)
+		mark.add_theme_stylebox_override("focus", empty)
+		var glyph := Control.new()
+		glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		glyph.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var rel := _rel_between(viewer_faction, fid)
+		var offer := bool(diplo_offer.get("%d>%d" % [viewer_faction, fid], false))
+		glyph.draw.connect(_draw_diplo_mark.bind(glyph, rel == "ally", offer and rel != "ally"))
+		mark.add_child(glyph)
+		mark.pressed.connect(_offer_alliance.bind(viewer_faction, fid))
+		row.add_child(mark)
+	call_deferred("_fit_diplo_panel")
+
+func _fit_diplo_panel() -> void:
+	if diplo_panel == null or not is_instance_valid(diplo_panel):
+		return
+	var ms := diplo_panel.get_combined_minimum_size()
+	diplo_panel.size = Vector2(maxf(ms.x, 200.0), maxf(ms.y, 88.0))
+
+func _draw_diplo_mark(mark: Control, full: bool, half: bool) -> void:
+	var c := mark.size * 0.5
+	var r := 8.0
+	var col := Color(0.3, 0.55, 1, 1)
+	if full:
+		mark.draw_arc(c, r, 0.0, TAU, 24, col, 2.0, true)
+	elif half:
+		mark.draw_arc(c, r, PI, TAU, 16, col, 2.0, true)
+	else:
+		mark.draw_arc(c, r, 0.0, TAU, 24, Color(0.6, 0.6, 0.6, 0.8), 1.0, true)
+
+func _offer_alliance(from_fac: int, to_fac: int) -> void:
+	if from_fac == to_fac or data.is_npc_faction(to_fac):
+		return
+	var to_player := false
+	for f in data.factions.get("factions", []):
+		if int(f.get("id", -1)) == to_fac and not bool(f.get("npc", false)):
+			to_player = true
+	if not to_player:
+		return
+	var key := "%d>%d" % [from_fac, to_fac]
+	var back := "%d>%d" % [to_fac, from_fac]
+	if _rel_between(from_fac, to_fac) == "ally":
+		_set_alliance(from_fac, to_fac, false)
+		diplo_offer.erase(key)
+		diplo_offer.erase(back)
+		diplo_ai_wait.erase(key)
+		diplo_ai_wait.erase(back)
+		_rebuild_diplomacy_rows()
+		if map:
+			map.capture_dirty = true
+		return
+	## AI still accepts, but the semicircle stays up for one second.
+	var target_is_ai: bool = int(to_fac) != int(viewer_faction)
+	if target_is_ai:
+		if diplo_ai_wait.has(key):
+			return
+		diplo_offer[key] = true
+		diplo_ai_wait[key] = 1.0
+		_rebuild_diplomacy_rows()
+		return
+	diplo_offer[key] = true
+	if bool(diplo_offer.get(back, false)):
+		_set_alliance(from_fac, to_fac, true)
+		diplo_offer.erase(key)
+		diplo_offer.erase(back)
+	_rebuild_diplomacy_rows()
+	if map:
+		map.capture_dirty = true
+
+func _tick_diplo_offers(delta: float) -> void:
+	if diplo_ai_wait.is_empty():
+		return
+	var done: Array = []
+	for k in diplo_ai_wait.keys():
+		diplo_ai_wait[k] = float(diplo_ai_wait[k]) - delta
+		if float(diplo_ai_wait[k]) <= 0.0:
+			done.append(k)
+	if done.is_empty():
+		return
+	for k2 in done:
+		diplo_ai_wait.erase(k2)
+		diplo_offer.erase(k2)
+		var bits: PackedStringArray = str(k2).split(">")
+		if bits.size() == 2:
+			_set_alliance(int(bits[0]), int(bits[1]), true)
+	_rebuild_diplomacy_rows()
+	if map:
+		map.capture_dirty = true
+
+func _set_alliance(a: int, b: int, on: bool) -> void:
+	var rels: Dictionary = data.diplomacy.get("relations", {})
+	var ra: Dictionary = rels.get(str(a), {})
+	var rb: Dictionary = rels.get(str(b), {})
+	ra[str(b)] = "ally" if on else "hostile"
+	rb[str(a)] = "ally" if on else "hostile"
+	ra[str(a)] = "self"
+	rb[str(b)] = "self"
+	rels[str(a)] = ra
+	rels[str(b)] = rb
+	data.diplomacy["relations"] = rels
+
+func _build_marker_layer(parent: Control) -> void:
+	marker_layer = Control.new()
+	marker_layer.name = "MarkerLayer"
+	marker_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	marker_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	parent.add_child(marker_layer)
+
+func _on_marker_button(kind: String) -> void:
+	if map_markers.has(kind):
+		map_markers.erase(kind)
+		_marker_announce.erase(kind)
+		_sync_nav_arrow()
+		_refresh_marker_widgets()
+		return
+	var pos := _screen_to_ground(get_viewport().get_visible_rect().size * 0.5)
+	map_markers[kind] = {"pos": pos, "yaw": 0.0}
+	_sync_marker_segment(kind)
+	_sync_nav_arrow()
+	_refresh_marker_widgets()
+	_announce_marker_confirm(str(kind))
+
+func _sync_marker_segment(kind: String) -> void:
+	if not map_markers.has(kind):
+		return
+	var m: Dictionary = map_markers[kind]
+	var pos: Vector3 = m["pos"]
+	var yaw: float = float(m.get("yaw", 0.0))
+	var axis := Vector3(cos(yaw), 0.0, sin(yaw))
+	var half := 80.0
+	m["a"] = pos - axis * half
+	m["b"] = pos + axis * half
+	map_markers[kind] = m
+
+func _sync_nav_arrow() -> void:
+	if map_markers.has("arrow"):
+		var m: Dictionary = map_markers["arrow"]
+		BoardPlayerNav.corridor_on = true
+		BoardPlayerNav.corridor_a = m.get("a", Vector3.ZERO)
+		BoardPlayerNav.corridor_b = m.get("b", Vector3.ZERO)
+	else:
+		BoardPlayerNav.corridor_on = false
+
+func _refresh_marker_widgets() -> void:
+	if marker_layer == null:
+		return
+	for c in marker_layer.get_children():
+		c.queue_free()
+	for kind in map_markers.keys():
+		var w := Control.new()
+		w.name = "Mk_" + str(kind)
+		w.mouse_filter = Control.MOUSE_FILTER_STOP
+		w.custom_minimum_size = Vector2(96, 48)
+		w.size = Vector2(96, 48)
+		w.set_meta("kind", str(kind))
+		w.gui_input.connect(_on_marker_gui.bind(str(kind)))
+		var handle := Button.new()
+		handle.text = "↻"
+		handle.custom_minimum_size = Vector2(22, 22)
+		handle.position = Vector2(74, -18)
+		handle.mouse_filter = Control.MOUSE_FILTER_STOP
+		handle.gui_input.connect(_on_marker_rotate.bind(str(kind)))
+		w.add_child(handle)
+		marker_layer.add_child(w)
+		w.draw.connect(_draw_marker.bind(w, str(kind)))
+
+func _marker_tex(kind: String) -> Texture2D:
+	if _marker_tex_cache.has(kind):
+		return _marker_tex_cache[kind]
+	var tex_path := ""
+	match kind:
+		"arrow":
+			tex_path = "res://assets/ui/markers/arrow.svg"
+		"target":
+			tex_path = "res://assets/ui/markers/target.svg"
+		"trench":
+			tex_path = "res://assets/ui/markers/fortified_arc.svg"
+	var tex: Texture2D = null
+	if tex_path != "" and FileAccess.file_exists(tex_path):
+		var img := Image.new()
+		var err := img.load_svg_from_buffer(FileAccess.get_file_as_bytes(tex_path), 2.0)
+		if err == OK and _ink_marker_image(img):
+			tex = ImageTexture.create_from_image(img)
+	if tex == null and ResourceLoader.exists(tex_path):
+		tex = load(tex_path) as Texture2D
+	_marker_tex_cache[kind] = tex
+	return tex
+
+func _ink_marker_image(img: Image) -> bool:
+	## SVG ink is #1a1a1a on transparency. A white plate or a white silhouette both read as a blank white glyph.
+	img.convert(Image.FORMAT_RGBA8)
+	var ink := Color(0.102, 0.102, 0.102, 1.0)
+	var any := false
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if c.a < 0.04:
+				continue
+			if c.r > 0.82 and c.g > 0.82 and c.b > 0.82:
+				if c.a > 0.92:
+					img.set_pixel(x, y, Color(0, 0, 0, 0))
+					continue
+				c = Color(ink.r, ink.g, ink.b, c.a)
+				img.set_pixel(x, y, c)
+			if c.a >= 0.04:
+				any = true
+	return any
+
+func _draw_marker(w: Control, kind: String) -> void:
+	var tex := _marker_tex(kind)
+	if tex:
+		var tw := float(tex.get_width())
+		var th := float(tex.get_height())
+		var sc := minf(w.size.x / maxf(tw, 1.0), w.size.y / maxf(th, 1.0))
+		var sz := Vector2(tw, th) * sc
+		var origin := (w.size - sz) * 0.5
+		w.draw_texture_rect(tex, Rect2(origin, sz), false, Color(1, 1, 1, 1))
+		return
+	var ink := Color(0.102, 0.102, 0.102, 1.0)
+	match kind:
+		"arrow":
+			w.draw_line(Vector2(8, w.size.y * 0.5), Vector2(w.size.x - 8, w.size.y * 0.5), ink, 3.0)
+		"target":
+			w.draw_arc(w.size * 0.5, 16.0, 0.0, TAU, 24, ink, 2.0, true)
+		"trench":
+			w.draw_line(Vector2(8, w.size.y * 0.7), Vector2(w.size.x - 8, w.size.y * 0.7), ink, 3.0)
+
+func _markers_visible() -> bool:
+	## Battlefield, tactical, and starmap all draw placed icons.
+	return cam != null and cam.cam != null
+
+func _tick_marker_widgets() -> void:
+	if marker_layer == null:
+		return
+	var markers_on := _markers_visible()
+	marker_layer.visible = markers_on
+	if not markers_on:
+		return
+	if cam == null or cam.cam == null:
+		return
+	for w in marker_layer.get_children():
+		var kind := str(w.get_meta("kind", ""))
+		if not map_markers.has(kind):
+			continue
+		var m: Dictionary = map_markers[kind]
+		if cam.cam.is_position_behind(m["pos"]):
+			w.visible = false
+			continue
+		w.visible = true
+		var screen := cam.cam.unproject_position(m["pos"])
+		w.position = screen - w.size * 0.5
+		w.rotation = float(m.get("yaw", 0.0))
+		w.pivot_offset = w.size * 0.5
+		w.queue_redraw()
+	## Confirm place after drag/rotate (LMB up); dedupe inside _announce_marker_confirm.
+	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		for kind2 in map_markers.keys():
+			_announce_marker_confirm(str(kind2))
+
+func _on_marker_gui(ev: InputEvent, kind: String) -> void:
+	if not (ev is InputEventMouseMotion):
+		return
+	var mm := ev as InputEventMouseMotion
+	if not (mm.button_mask & MOUSE_BUTTON_MASK_LEFT):
+		return
+	if not map_markers.has(kind):
+		return
+	var m: Dictionary = map_markers[kind]
+	var now := _screen_to_ground(mm.global_position)
+	var prev := _screen_to_ground(mm.global_position - mm.relative)
+	m["pos"] = (m["pos"] as Vector3) + (now - prev)
+	map_markers[kind] = m
+	_sync_marker_segment(kind)
+	_sync_nav_arrow()
+
+func _on_marker_rotate(ev: InputEvent, kind: String) -> void:
+	if not (ev is InputEventMouseMotion):
+		return
+	var mm := ev as InputEventMouseMotion
+	if not (mm.button_mask & MOUSE_BUTTON_MASK_LEFT):
+		return
+	if not map_markers.has(kind) or cam == null or cam.cam == null:
+		return
+	var m: Dictionary = map_markers[kind]
+	var center := cam.cam.unproject_position(m["pos"])
+	var dir := mm.global_position - center
+	if dir.length() < 4.0:
+		return
+	## Screen +X is yaw 0 (SVG arrow axis). Screen up is -Y, which is yaw -90° in this atan2.
+	m["yaw"] = atan2(dir.y, dir.x)
+	map_markers[kind] = m
+	_sync_marker_segment(kind)
+	_sync_nav_arrow()
+
+func _screen_to_ground(screen: Vector2) -> Vector3:
+	if cam == null or cam.cam == null:
+		return Vector3.ZERO
+	var origin := cam.cam.project_ray_origin(screen)
+	var dir := cam.cam.project_ray_normal(screen)
+	if absf(dir.y) < 0.0001:
+		return Vector3(origin.x, 0.0, origin.z)
+	var t := -origin.y / dir.y
+	var hit := origin + dir * t
+	return Vector3(hit.x, 0.0, hit.z)
 
 func _make_pilot_row(p: Dictionary) -> Control:
 	var row = PanelContainer.new()
@@ -2571,6 +4132,34 @@ func _make_pilot_row(p: Dictionary) -> Control:
 		portrait.texture = null
 		portrait.visible = false
 	frame.add_child(portrait)
+	## Group number: single-digit corner badge on ship portrait (not a text line).
+	var grp_badge = Label.new()
+	grp_badge.name = "GroupBadge"
+	grp_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	grp_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	grp_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	grp_badge.custom_minimum_size = Vector2(16, 16)
+	grp_badge.size = Vector2(16, 16)
+	grp_badge.position = Vector2(52 - 17, 1.0 - 6.0) ## half a glyph above the yellow box
+	grp_badge.add_theme_font_size_override("font_size", 12)
+	grp_badge.add_theme_color_override("font_color", Color(0.08, 0.08, 0.1, 1))
+	grp_badge.add_theme_color_override("font_outline_color", Color(0.98, 0.88, 0.35, 1))
+	grp_badge.add_theme_constant_override("outline_size", 4)
+	_apply_ui_font(grp_badge)
+	var grp_bg = Panel.new()
+	grp_bg.name = "GroupBadgeBg"
+	grp_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	grp_bg.custom_minimum_size = Vector2(16, 16)
+	grp_bg.size = Vector2(16, 16)
+	grp_bg.position = Vector2(52 - 17, 1)
+	var grp_sb = StyleBoxFlat.new()
+	grp_sb.bg_color = Color(0.95, 0.82, 0.28, 0.95)
+	grp_sb.set_corner_radius_all(3)
+	grp_sb.set_border_width_all(1)
+	grp_sb.border_color = Color(0.15, 0.12, 0.05, 0.9)
+	grp_bg.add_theme_stylebox_override("panel", grp_sb)
+	frame.add_child(grp_bg)
+	frame.add_child(grp_badge)
 	frame.set_meta("ship_id", ship_id)
 	hb.add_child(frame)
 	var vb = VBoxContainer.new()
@@ -2591,13 +4180,6 @@ func _make_pilot_row(p: Dictionary) -> Control:
 			"runId": "ui-fix"
 		})
 	# #endregion
-	var grp_lab = Label.new()
-	grp_lab.name = "GroupBadge"
-	grp_lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	grp_lab.add_theme_font_size_override("font_size", 14)
-	grp_lab.add_theme_color_override("font_color", Color(0.95, 0.85, 0.35, 1))
-	_apply_ui_font(grp_lab)
-	vb.add_child(grp_lab)
 	_refresh_pilot_row_group_badge(row, p)
 	# build progress (one bar per active tonnage job)
 	var bars_wrap = VBoxContainer.new()
@@ -2737,11 +4319,153 @@ func _refresh_auto_launch_btn() -> void:
 	if auto_launch_btn.toggle_mode:
 		auto_launch_btn.set_pressed_no_signal(auto_launch_enabled)
 
+func _pilot_commanded_by_player_deputy(p: Dictionary) -> bool:
+	if deputy_group < 0 or player_deputy == null:
+		return false
+	if int(p.get("faction", -1)) != viewer_faction:
+		return false
+	return int(p.get("ctrl_group", -1)) == deputy_group
+
+func _pilot_current_ship_id(p: Dictionary) -> String:
+	var u = _unit_by_id(str(p.get("unit_id", "")))
+	if not u.is_empty() and u.get("alive", false):
+		var sid := str(u.get("ship_id", ""))
+		if sid != "":
+			return sid
+	var last := str(p.get("last_ship_id", ""))
+	if last != "":
+		return last
+	return str(p.get("default_ship", ""))
+
+func _yang_build_ship(p: Dictionary) -> String:
+	## Largest hull whose bar can move. Keep the current hull when it is already that tonnage.
+	var current := _pilot_current_ship_id(p)
+	var held := BoardResourceAssign.pilot_held_count(map, str(p.get("id", "")))
+	var best := ""
+	var best_w := -1
+	if data == null:
+		return current
+	for sid in data.ships.keys():
+		var def: Dictionary = data.ship_def(str(sid))
+		if def.is_empty() or bool(def.get("npc", false)):
+			continue
+		var ton := str(def.get("tonnage", ""))
+		if ton == "" or held < BoardResourceAssign.unlock_need(data, ton):
+			continue
+		var w := BoardTypes.tonnage_weight(ton)
+		if w > best_w:
+			best_w = w
+			best = str(sid)
+		elif w == best_w and str(sid) == current:
+			best = current
+	if current != "" and best_w >= 0:
+		var cdef: Dictionary = data.ship_def(current)
+		var cton := str(cdef.get("tonnage", ""))
+		if cton != "" and not bool(cdef.get("npc", false)) and held >= BoardResourceAssign.unlock_need(data, cton):
+			if BoardTypes.tonnage_weight(cton) == best_w:
+				return current
+	if best != "":
+		return best
+	return current
+
+func _deputy_set_build(p: Dictionary, ship_id: String) -> void:
+	if ship_id == "" or data == null:
+		return
+	var def: Dictionary = data.ship_def(ship_id)
+	var ton := str(def.get("tonnage", ""))
+	if ton == "":
+		return
+	for ton2 in p["auto_build"].keys():
+		var want := ship_id if str(ton2) == ton else ""
+		if str(p["auto_build"].get(ton2, "")) != want:
+			pilots_sys.set_auto(p, str(ton2), want)
+
+func _deputy_pick_launch_ship(p: Dictionary, target: String) -> String:
+	var counts: Dictionary = pilots_sys.storage_count_by_model(p)
+	if counts.is_empty():
+		return ""
+	if target != "" and int(counts.get(target, 0)) > 0:
+		return target
+	var best := ""
+	var best_w := -1
+	for sid in counts.keys():
+		var w := BoardTypes.tonnage_weight(data.ship_def(str(sid)).get("tonnage", "destroyer"))
+		if w > best_w:
+			best_w = w
+			best = str(sid)
+	return best
+
+func _deputy_arm_pilot(ctrl: BoardAiController, p: Dictionary) -> bool:
+	var ship_id := ""
+	if str(ctrl.deputy_id) == "chuang":
+		ship_id = _chuang_preferred_ship(p, _pilot_current_ship_id(p))
+	else:
+		ship_id = _yang_build_ship(p)
+	_deputy_set_build(p, ship_id)
+	if str(p.get("unit_id", "")) != "":
+		return false
+	var launch_id := _deputy_pick_launch_ship(p, ship_id)
+	if launch_id == "":
+		return false
+	_launch_pilot(p, launch_id)
+	return str(p.get("unit_id", "")) != ""
+
+func _release_ship_from_deputy_fleets(u: Dictionary) -> void:
+	if u.is_empty() or bool(u.get("garrison", false)):
+		return
+	var uid := str(u.get("id", ""))
+	var w := BoardTypes.tonnage_weight(u.get("tonnage", "destroyer"))
+	var touched := false
+	if player_deputy != null and int(u.get("faction", -1)) == viewer_faction:
+		if player_deputy.remove_member(uid, w):
+			touched = true
+	var fac := int(u.get("faction", -1))
+	if faction_ai.has(fac):
+		var ctrl: BoardAiController = faction_ai[fac]
+		if ctrl.remove_member(uid, w):
+			touched = true
+	if touched and fac == viewer_faction:
+		_refresh_deputy_fleet_ui()
+
+func _slot_launched_ship(u: Dictionary) -> void:
+	if u.is_empty() or bool(u.get("garrison", false)):
+		return
+	var fac := int(u.get("faction", -1))
+	if fac == viewer_faction:
+		if player_deputy == null or deputy_group < 0:
+			return
+		if int(u.get("ctrl_group", -1)) != deputy_group:
+			return
+		if player_deputy.fleets.is_empty():
+			_rebuild_player_deputy()
+			return
+		player_deputy.accept_ship(u)
+		_refresh_deputy_fleet_ui()
+	elif faction_ai.has(fac):
+		var ctrl: BoardAiController = faction_ai[fac]
+		if ctrl.fleets.is_empty():
+			ctrl.setup_fleets(_roster_entries(_faction_pilots(fac)))
+			return
+		ctrl.accept_ship(u)
+
+func _tick_deputy_industry() -> void:
+	if deputy_group >= 0 and player_deputy != null:
+		for p in _commanded_pilots(deputy_group):
+			_deputy_arm_pilot(player_deputy, p)
+	for fid in faction_ai.keys():
+		var ctrl: BoardAiController = faction_ai[fid]
+		for p in pilots:
+			if int(p.get("faction", -1)) != int(fid):
+				continue
+			_deputy_arm_pilot(ctrl, p)
+
 func _tick_auto_launch() -> void:
 	if not auto_launch_enabled:
 		return
 	for p in pilots:
 		if int(p.get("faction", 0)) != viewer_faction:
+			continue
+		if _pilot_commanded_by_player_deputy(p):
 			continue
 		if str(p.get("unit_id", "")) != "":
 			continue
@@ -2844,7 +4568,10 @@ func _layout_left_col() -> void:
 	## Top–bottom docked; at 1920×1280 baseline ~15 pilot rows fit in the scroll area.
 	var vh = get_viewport().get_visible_rect().size.y
 	left_col.position = Vector2(8, 8)
-	left_col.size = Vector2(360, maxf(vh - 16.0, 200.0))
+	left_col.size = Vector2(360, maxf(vh - 72.0, 200.0))
+	_layout_bottom_bar()
+	_layout_deputy_panel()
+	_layout_diplomacy()
 	if left_scroll:
 		left_scroll.custom_minimum_size = Vector2(360, 120)
 		left_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -2859,8 +4586,10 @@ func _layout_right_col() -> void:
 	if right_col == null:
 		return
 	var vr = get_viewport().get_visible_rect().size
-	right_col.position = Vector2(vr.x - 316.0, 8.0)
-	right_col.size = Vector2(300.0, maxf(vr.y - 16.0, 200.0))
+	## Stay clear of the diplomacy button (top) and the bottom key bar.
+	right_col.position = Vector2(vr.x - 316.0, 48.0)
+	right_col.size = Vector2(300.0, maxf(vr.y - 48.0 - 60.0, 200.0))
+	_layout_bottom_bar()
 
 func _ensure_br_window() -> void:
 	if br_window != null and is_instance_valid(br_window):
@@ -2875,7 +4604,9 @@ func _ensure_br_window() -> void:
 	)
 	## Window must live under CanvasLayer/Control tree — parenting to Node3D
 	## then popup_centered can free/invalid the window and crash on reopen.
-	var host: Node = hud if hud != null and is_instance_valid(hud) else self
+	var host: Node = self
+	if hud != null and is_instance_valid(hud):
+		host = hud
 	host.add_child(br_window)
 	var margin = MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -2909,6 +4640,76 @@ func _br_clear_body(vbox: VBoxContainer) -> void:
 	for c in kids:
 		vbox.remove_child(c)
 		c.free()
+
+func _br_compact_rows(rows: Array) -> Array:
+	## Collapse per-tick duplicate rows (blank pilot id) so opening the window does not build thousands of controls.
+	var by_uid: Dictionary = {}
+	var order: Array = []
+	for row in rows:
+		if not (row is Dictionary):
+			continue
+		var src: Dictionary = row
+		var uid := str(src.get("unit_id", ""))
+		if uid == "":
+			uid = str(src.get("pilot_id", ""))
+		if uid == "":
+			continue
+		if not by_uid.has(uid):
+			by_uid[uid] = src.duplicate(true)
+			order.append(uid)
+			continue
+		var acc: Dictionary = by_uid[uid]
+		acc["max_loss_dealt"] = float(acc.get("max_loss_dealt", 0.0)) + float(src.get("max_loss_dealt", 0.0))
+		acc["max_loss_taken"] = float(acc.get("max_loss_taken", 0.0)) + float(src.get("max_loss_taken", 0.0))
+		acc["kills"] = int(acc.get("kills", 0)) + int(src.get("kills", 0))
+		acc["stay_s"] = maxf(float(acc.get("stay_s", 0.0)), float(src.get("stay_s", 0.0)))
+		if bool(src.get("destroyed", false)):
+			acc["destroyed"] = true
+	var out: Array = []
+	for uid2 in order:
+		out.append(by_uid[uid2])
+	return out
+
+func _on_br_sort_header(col: String, report_id: String) -> void:
+	_br_sort_col = col
+	_br_sort_report = report_id
+	call_deferred("_open_br_report", report_id)
+
+func _br_sort_rows(rows: Array, col: String) -> Array:
+	if col == "":
+		return rows
+	var out := rows.duplicate()
+	out.sort_custom(func(a, b):
+		return _br_row_rank_before(a, b, col)
+	)
+	return out
+
+func _br_row_rank_before(a: Dictionary, b: Dictionary, col: String) -> bool:
+	var av := _br_col_number(a, col)
+	var bv := _br_col_number(b, col)
+	if col == "pilot" or col == "ship":
+		var as_ := str(a.get("pilot_name" if col == "pilot" else "ship_name", ""))
+		var bs_ := str(b.get("pilot_name" if col == "pilot" else "ship_name", ""))
+		if as_ != bs_:
+			return as_ > bs_
+	elif av != bv:
+		return av > bv
+	return str(a.get("pilot_name", "")) < str(b.get("pilot_name", ""))
+
+func _br_col_number(row: Dictionary, col: String) -> float:
+	match col:
+		"ton":
+			return float(BoardTypes.tonnage_weight(str(row.get("tonnage", "destroyer"))))
+		"dealt":
+			return float(row.get("max_loss_dealt", 0.0))
+		"taken":
+			return float(row.get("max_loss_taken", 0.0))
+		"kills":
+			return float(int(row.get("kills", 0)))
+		"stay":
+			return float(row.get("stay_s", 0.0))
+		_:
+			return 0.0
 
 func _refresh_br_list() -> void:
 	if br_list == null or br_tracker == null:
@@ -2979,6 +4780,9 @@ func _br_tonnage_badge_cell(ton: String, fac: int) -> Control:
 	return cell_ui
 
 func _open_br_report(report_id: String) -> void:
+	if _br_sort_report != report_id:
+		_br_sort_col = ""
+	_br_sort_report = report_id
 	_ensure_br_window()
 	var rep: Dictionary = {}
 	for r in br_tracker.closed:
@@ -2996,10 +4800,14 @@ func _open_br_report(report_id: String) -> void:
 	var head_row = HBoxContainer.new()
 	head_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	head_row.add_theme_constant_override("separation", 10)
+	var mine_who := _join_fac_names(rep.get("mine_names", []))
+	var foe_who := _join_fac_names(rep.get("foe_names", []))
 	var left_h = Label.new()
-	left_h.text = "我方 %d舰 · 损失 %d舰 · 吨位%d" % [
+	left_h.text = "我方 %s\n%d舰 · 损失 %d舰 · 吨位%d" % [
+		mine_who,
 		int(rep.get("mine_ships", 0)), int(rep.get("mine_lost", 0)), int(rep.get("mine_ton", 0))
 	]
+	left_h.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	left_h.add_theme_font_size_override("font_size", 16)
 	_apply_ui_font(left_h)
 	var vs_h = Label.new()
@@ -3008,9 +4816,11 @@ func _open_br_report(report_id: String) -> void:
 	vs_h.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35, 1.0))
 	_apply_ui_font(vs_h)
 	var right_h = Label.new()
-	right_h.text = "敌方 %d舰 · 损失 %d舰 · 吨位%d" % [
+	right_h.text = "敌方 %s\n%d舰 · 损失 %d舰 · 吨位%d" % [
+		foe_who,
 		int(rep.get("foe_ships", 0)), int(rep.get("foe_lost", 0)), int(rep.get("foe_ton", 0))
 	]
+	right_h.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	right_h.add_theme_font_size_override("font_size", 16)
 	_apply_ui_font(right_h)
 	head_row.add_child(left_h)
@@ -3029,14 +4839,33 @@ func _open_br_report(report_id: String) -> void:
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.custom_minimum_size = Vector2(920, 0)
 	vbox.add_child(grid)
-	for h in ["参战驾驶员", "吨位", "驾驶舰船", "造成上限降低", "受到上限降低", "击毁舰船数", "星系内停留时长"]:
-		var hl = Label.new()
-		hl.text = h
+	var headers := [
+		{"t": "参战驾驶员", "k": "pilot"},
+		{"t": "吨位", "k": "ton"},
+		{"t": "驾驶舰船", "k": "ship"},
+		{"t": "造成上限降低", "k": "dealt"},
+		{"t": "受到上限降低", "k": "taken"},
+		{"t": "击毁舰船数", "k": "kills"},
+		{"t": "星系内停留时长", "k": "stay"},
+	]
+	for hspec in headers:
+		var spec: Dictionary = hspec
+		var hl := Button.new()
+		var title := str(spec["t"])
+		if _br_sort_col == str(spec["k"]):
+			title += " ↓"
+		hl.text = title
+		hl.flat = true
+		hl.focus_mode = Control.FOCUS_NONE
+		hl.mouse_filter = Control.MOUSE_FILTER_STOP
+		hl.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		hl.add_theme_font_size_override("font_size", 13)
 		_apply_ui_font(hl)
+		hl.pressed.connect(_on_br_sort_header.bind(str(spec["k"]), report_id))
 		grid.add_child(hl)
 	var row_n := 0
-	for row in rep.get("rows", []):
+	var rows: Array = _br_sort_rows(_br_compact_rows(rep.get("rows", [])), _br_sort_col)
+	for row in rows:
 		row_n += 1
 		var name_l = Label.new()
 		name_l.text = str(row.get("pilot_name", "?"))
@@ -3373,6 +5202,14 @@ func _pilot_by_id(id: String) -> Dictionary:
 	return {}
 
 func _process(delta: float) -> void:
+	if sim_paused:
+		_lmb_press_latch = false
+		_lmb_release_latch = false
+		_rmb_held = false
+		if cam:
+			cam.rotating = false
+			cam.panning = false
+		return
 	_tick_mouse_hint(delta)
 	_tick_touch_long_press()
 	_consume_lmb_gesture()
@@ -3401,6 +5238,7 @@ func _process(delta: float) -> void:
 	if match_over:
 		return
 	pilots_sys.tick_build(pilots, delta, map)
+	_tick_deputy_industry()
 	_tick_auto_launch()
 	_drain_order_queue(2)
 	_tick_movement(delta)
@@ -3412,7 +5250,8 @@ func _process(delta: float) -> void:
 	_tick_weapon_locks(delta)
 	_tick_combat(delta)
 	_tick_ai(delta)
-	_tick_ai_respawn()
+	_tick_marker_widgets()
+	_tick_diplo_offers(delta)
 	_tick_nav_resume(delta)
 	if br_tracker:
 		br_tracker.tick(delta)
@@ -3503,6 +5342,7 @@ func _process(delta: float) -> void:
 				"runId": "curtain-fix"
 			})
 			# #endregion
+	_tick_battle_model_budget(delta)
 	_update_unit_visuals(delta)
 	if cam and cam.tactical_mode and not cam.starmap_mode and tactical_callouts:
 		var callout_units: Array = []
@@ -3553,6 +5393,12 @@ func _refresh_occupancy() -> Dictionary:
 		sys_ships[sid] = 0.0
 	for u in units:
 		if not u.get("alive", false):
+			continue
+		if bool(u.get("garrison", false)):
+			## Sleepers stay on the ring for system presence, but do not widen cell arcs.
+			var gsid := str(u.get("sys", ""))
+			if sys_ships.has(gsid):
+				sys_ships[gsid] = float(sys_ships[gsid]) + 1.0
 			continue
 		_update_reserve_weight(u)
 		## Quantize soft reserve (0.25 steps) — prevents remesh/reanchor storm on land.
@@ -3623,10 +5469,44 @@ func _update_reserve_weight(u: Dictionary) -> void:
 	elif ph == BoardTypes.MovePhase.LANDING or ph == BoardTypes.MovePhase.IDLE:
 		u["reserve_weight"] = 0.0
 
+func _abort_garrison_travel(u: Dictionary) -> void:
+	## Garrison never accepts a path. Pull a unit that already left back to its post.
+	if not bool(u.get("garrison", false)):
+		return
+	var ph := int(u.get("phase", 0))
+	var has_path := not (u.get("path", []) as Array).is_empty()
+	if ph == BoardTypes.MovePhase.IDLE and not has_path and not u.has("order_dest_sys"):
+		return
+	u["path"] = []
+	u.erase("order_dest_sys")
+	u.erase("order_dest_cell")
+	u.erase("nav_standby_on_sys_enter")
+	var sys := str(u.get("post_sys", u.get("from_sys", u.get("sys", ""))))
+	var cell := int(u.get("post_cell", u.get("from_cell", u.get("cell", -1))))
+	if sys == "":
+		sys = str(u.get("sys", ""))
+	u["sys"] = sys
+	u["cell"] = cell
+	u["from_cell"] = cell
+	u["to_cell"] = cell
+	u["from_sys"] = sys
+	u["to_sys"] = sys
+	u["phase"] = BoardTypes.MovePhase.IDLE
+	u["phase_t"] = 0.0
+	u["player_hold"] = false
+	_clear_reserve(u)
+	if map != null and map.systems.has(sys) and cell >= 0:
+		var home := _clamp_pos_to_cell(sys, cell, _cell_pos_visual(sys, cell, BoardTypes.UNIT_Y))
+		u["pos"] = home
+		u["rest_pos"] = home
+		_mark_cell_enter(u, sys, cell)
+
 func _tick_movement(delta: float) -> void:
 	for u in units:
 		if not u.get("alive", false):
 			continue
+		if bool(u.get("garrison", false)):
+			_abort_garrison_travel(u)
 		match int(u["phase"]):
 			BoardTypes.MovePhase.IDLE:
 				u["float_t"] = float(u["float_t"]) + delta
@@ -3693,15 +5573,7 @@ func _tick_movement(delta: float) -> void:
 					u["pos"] = Vector3(u["pos"].x + step.x, BoardTypes.UNIT_Y, u["pos"].z + step.z)
 					if remain.length_squared() > 0.0001:
 						u["face_dir"] = remain.normalized()
-					var seen := _cell_index_at(str(u["sys"]), u["pos"])
-					if seen >= 0 and seen != int(u["cell"]):
-						# #region agent log
-						_agent_dbg("B2", "board_root.move", "cell_visual", {
-							"unit": u["id"], "from": int(u["cell"]), "seen": seen, "want": int(u["to_cell"]), "runId": "post-fix"
-						})
-						# #endregion
-						u["cell"] = seen
-						_mark_cell_enter(u, str(u["sys"]), seen)
+					## INVULN belongs to no cell. Keep departure index until landing.
 				if u["phase_t"] <= 0.0:
 					if u.get("step_kind") == "jump":
 						u["sys"] = u["to_sys"]
@@ -3728,11 +5600,15 @@ func _tick_movement(delta: float) -> void:
 					u["phase_t"] = float(u["landing_s"])
 					u["alpha"] = 1.0
 					_guard_force_off(u)
-					## Land at arrival clamp — soft separate spreads peers (BH-38).
-					var land = _clamp_pos_to_cell(str(u["sys"]), int(u["cell"]), u["pos"])
-					u["land_pos"] = land
-					u["rest_pos"] = land
-					u["pos"] = land
+					## Jump arrivals share one mouth point. One-shot inner-biased slots, then soft separate.
+					if str(u.get("step_kind", "")) == "jump":
+						u["jump_wave"] = "%s:%d" % [str(u["sys"]), int(u["cell"])]
+						_spread_jump_wave(str(u["sys"]), int(u["cell"]))
+					else:
+						var land = _clamp_pos_to_cell(str(u["sys"]), int(u["cell"]), u["pos"])
+						u["land_pos"] = land
+						u["rest_pos"] = land
+						u["pos"] = land
 					# #region agent log
 					_dbg59("LAND", "board_root.land", "land_clamp", {
 						"unit": u["id"], "sys": u["sys"], "cell": int(u["cell"]),
@@ -3912,6 +5788,11 @@ func _cell_slot_offset(sys: String, cell: int) -> Vector3:
 	return Vector3(sin(ang) * rad, 0, -cos(ang) * rad)
 
 func _start_step(u: Dictionary) -> void:
+	if bool(u.get("garrison", false)):
+		u["path"] = []
+		u.erase("order_dest_sys")
+		u.erase("order_dest_cell")
+		return
 	var step: Dictionary = u["path"].pop_front()
 	u["from_cell"] = int(u["cell"])
 	u["to_cell"] = int(step["to"])
@@ -3999,12 +5880,23 @@ func _tick_capture(delta: float) -> void:
 		if int(f.get("kind", -1)) == BoardTypes.CellKind.RESOURCE:
 			BoardResourceAssign.auto_assign_new_cell(map, f, pilots, rng)
 			need_ai_res = true
-		if int(f["owner"]) != 2:
-			ai.on_capture_stolen(f["sys"], f["cell"])
+		for fid in faction_ai.keys():
+			if int(f["owner"]) != int(fid):
+				(faction_ai[fid] as BoardAiController).on_capture_stolen(f["sys"], f["cell"])
+		if player_deputy != null and deputy_group >= 0 and not _commanded_id_set(deputy_group).is_empty() \
+				and int(f["owner"]) != viewer_faction:
+			player_deputy.on_capture_stolen(f["sys"], f["cell"])
+		if int(f.get("prev_owner", -1)) == viewer_faction and int(f.get("owner", -1)) != viewer_faction:
+			_chat_deputy("%s地点的%s丢失" % [
+				_sys_display_name(str(f.get("sys", ""))),
+				_cell_kind_zh(int(f.get("kind", -1)))
+			])
 		_update_home_stations_on_flip(f)
 		_on_capture_flip_garrison(f)
 	if need_ai_res:
-		ai.redistribute_resources(map, pilots, rng)
+		for fid2 in faction_ai.keys():
+			_rebalance_faction_resources(int(fid2))
+		_rebalance_deputy_resources()
 
 func _update_home_stations_on_flip(f: Dictionary) -> void:
 	var sys: String = f["sys"]
@@ -4113,9 +6005,9 @@ func _tick_combat(delta: float) -> void:
 			var tgt = _pick_pd_target(u, g, pd_claimed)
 			if tgt.is_empty():
 				continue
-			if int(tgt["phase"]) == BoardTypes.MovePhase.INVULN:
-				g["cd"] = float(g["cycle"])
-				continue # miss
+			if _unit_between_cells(tgt):
+				g["target"] = ""
+				continue
 			pd_claimed[str(tgt["id"])] = true
 			var dist_m = _pd_tracking_distance_m(u, tgt)
 			var p_hit = BoardCombatFormulas.turret_hit_chance(
@@ -4128,6 +6020,7 @@ func _tick_combat(delta: float) -> void:
 			var raw = float(g["damage"])
 			raw = _focus_on_hit(u, hit, raw)
 			if not hit or raw <= 0.0:
+				_play_pd_vfx(u, g, tgt, false)
 				continue
 			raw *= BoardCombatFormulas.roll_quality(rng)
 			var dealt_pd := _apply_damage_to_unit(u, tgt, raw, int(tgt["inst"]["resist"]))
@@ -4140,9 +6033,10 @@ func _tick_combat(delta: float) -> void:
 					"dealt": dealt_pd, "restored": restored, "runId": "pd-max-restore"
 				})
 				# #endregion
-			_play_turret_vfx(str(g.get("fx", "rail")), _vfx_endpoint(u), _vfx_endpoint(tgt))
+			_play_pd_vfx(u, g, tgt, true)
 		for w in u.get("weapons", []):
 			w["cd"] = float(w["cd"]) - delta
+			_sample_sniper_on_cd(u, w)
 			if float(w["cd"]) > 0.0:
 				continue
 			if float(w.get("lock_t", 0.0)) < float(w.get("lock_need", 1.0)):
@@ -4173,18 +6067,26 @@ func _combat_distance_m(a: Dictionary, b: Dictionary) -> float:
 func _pick_pd_target(u: Dictionary, g: Dictionary, claimed: Dictionary = {}) -> Dictionary:
 	var focus = _unit_by_id(str(u.get("focus_id", "")))
 	if focus and focus.get("alive", false) and int(focus["faction"]) != int(u["faction"]) \
+			and not _pair_attack_forbidden(u, focus) \
+			and not _unit_between_cells(u) and not _unit_between_cells(focus) \
 			and _pd_in_range(u, focus, g) and not claimed.has(str(focus["id"])):
 		return focus
 	var cur = _unit_by_id(str(g.get("target", "")))
-	if cur and cur.get("alive", false) and _pd_in_range(u, cur, g):
+	if cur and cur.get("alive", false) and not _unit_between_cells(cur) and _pd_in_range(u, cur, g):
 		if not claimed.has(str(cur["id"])):
 			return cur
+	if cur and _unit_between_cells(cur):
+		g["target"] = ""
 	var best = {}
 	var best_d = INF
 	for o in units:
 		if not o.get("alive", false):
 			continue
+		if _unit_between_cells(u) or _unit_between_cells(o):
+			continue
 		if int(o["faction"]) == int(u["faction"]):
+			continue
+		if _pair_attack_forbidden(u, o):
 			continue
 		if bool(o.get("npc", false)) and int(o.get("cell", -2)) != int(u.get("cell", -1)):
 			continue
@@ -4199,6 +6101,8 @@ func _pick_pd_target(u: Dictionary, g: Dictionary, claimed: Dictionary = {}) -> 
 	return best
 
 func _pd_in_range(a: Dictionary, b: Dictionary, g: Dictionary) -> bool:
+	if _unit_between_cells(a) or _unit_between_cells(b):
+		return false
 	if a["sys"] != b["sys"]:
 		return false
 	var n: int = map.systems[a["sys"]]["cells"].size()
@@ -4212,6 +6116,8 @@ func _channel_has_in_range_hostile(u: Dictionary, range_cells: int) -> bool:
 		if not o.get("alive", false):
 			continue
 		if int(o["faction"]) == int(u["faction"]):
+			continue
+		if _unit_between_cells(u) or _unit_between_cells(o):
 			continue
 		if str(u["sys"]) != str(o["sys"]):
 			continue
@@ -4285,6 +6191,9 @@ func _kill_unit(u: Dictionary) -> void:
 		p["current_station"] = home
 		if home == "":
 			p["current_station"] = ""
+		if int(p.get("faction", -1)) == viewer_faction:
+			_rebuild_group_dict()
+			_refresh_all_group_badges()
 	if cam.follow_unit_id == u["id"]:
 		cam.clear_follow_keep_look()
 	if unit_nodes.has(u["id"]):
@@ -4296,6 +6205,7 @@ func _kill_unit(u: Dictionary) -> void:
 		if body:
 			body.collision_layer = 0
 	selection.erase(u["id"])
+	_release_ship_from_deputy_fleets(u)
 	_rebuild_hud_list()
 	# #region agent log
 	_dbg59("SEP", "board_root._kill_unit", "clear_reserve", {
@@ -4355,67 +6265,212 @@ func _refresh_pilot_row_tonnage(row: Control, p: Dictionary) -> void:
 
 func _tick_ai(delta: float) -> void:
 	for u in units:
-		if int(u.get("faction", 0)) != 2 or not u.get("alive", false):
+		if bool(u.get("player_hold", false)) and (u.get("path", []) as Array).is_empty() \
+				and int(u.get("phase", 0)) == BoardTypes.MovePhase.IDLE:
+			u["player_hold"] = false
+		var fac := int(u.get("faction", 0))
+		if fac == viewer_faction or data.is_npc_faction(fac) or not u.get("alive", false):
 			continue
 		u["dealt_timer"] = float(u.get("dealt_timer", 0.0)) + delta
-	var orders = ai.tick_orders(map, units, data.diplomacy)
-	for o in orders:
-		var u = _unit_by_id(o["unit_id"])
-		if u.is_empty():
+	_sync_nav_arrow()
+	for fid in faction_ai.keys():
+		var ctrl: BoardAiController = faction_ai[fid]
+		_apply_marker_tasks(ctrl)
+		var orders = ctrl.tick_orders(map, units, data.diplomacy)
+		for o in orders:
+			var u = _unit_by_id(o["unit_id"])
+			if u.is_empty() or int(u.get("faction", 0)) != int(fid):
+				continue
+			if bool(u.get("player_hold", false)):
+				continue
+			_order_move_ai(u, o["sys"], o["cell"])
+			admin.request("ai.order", o)
+	if player_deputy != null and deputy_group >= 0 and not _commanded_id_set(deputy_group).is_empty():
+		_apply_marker_tasks(player_deputy)
+		var porders = player_deputy.tick_orders(map, units, data.diplomacy)
+		for o2 in porders:
+			var pu = _unit_by_id(o2["unit_id"])
+			if pu.is_empty() or int(pu.get("faction", 0)) != viewer_faction:
+				continue
+			if bool(pu.get("player_hold", false)):
+				continue
+			_order_move_ai(pu, o2["sys"], o2["cell"])
+
+func _unit_alpha_damage(u: Dictionary) -> float:
+	var def: Dictionary = data.ship_def(str(u.get("ship_id", "")))
+	var total := 0.0
+	for h in def.get("fit", {}).get("hidden", []):
+		if str(h.get("kind", "")) != "weapon":
 			continue
-		if int(u.get("faction", 0)) != 2:
-			continue  # never steer player ships
-		_order_move_ai(u, o["sys"], o["cell"])
-		admin.request("ai.order", o)
+		var eq: Dictionary = data.equipment.get(str(h.get("ref", "")), {})
+		var n := maxi(int(h.get("count", 1)), 1)
+		total += (float(eq.get("damage_emp", 0)) + float(eq.get("damage_thermal", 0)) + float(eq.get("damage_kinetic", 0)) + float(eq.get("damage_explosive", 0))) * float(n)
+	return total
+
+func _unit_hull_hp(u: Dictionary) -> float:
+	var inst: Dictionary = u.get("inst", {})
+	if inst.has("max_s"):
+		return float(inst.get("max_s", 0)) + float(inst.get("max_a", 0)) + float(inst.get("max_h", 0))
+	var def: Dictionary = data.ship_def(str(u.get("ship_id", "")))
+	return float(def.get("shield", 0)) + float(def.get("armor", 0)) + float(def.get("structure", 0))
+
+func _pick_marker_fleet(ctrl: BoardAiController, mode: String, used: Dictionary) -> int:
+	var best := -1
+	var best_s := -1.0
+	for f in ctrl.fleets:
+		var fid := int(f.get("id", -1))
+		if used.has(fid):
+			continue
+		if str(f.get("marker", "")) != "" and str(f.get("marker", "")) != mode:
+			continue
+		var score := 0.0
+		for uid in f.get("members", []):
+			var u = _unit_by_id(str(uid))
+			if u.is_empty() or not u.get("alive", false):
+				continue
+			score += _unit_alpha_damage(u) if mode == "alpha" else _unit_hull_hp(u)
+		if score > best_s:
+			best_s = score
+			best = fid
+	return best
+
+func _marker_fleet(ctrl: BoardAiController, fid: int) -> Dictionary:
+	for f in ctrl.fleets:
+		if int(f.get("id", -1)) == fid:
+			return f
+	return {}
+
+func _trench_defense_system() -> String:
+	if not map_markers.has("trench"):
+		return ""
+	var m: Dictionary = map_markers["trench"]
+	var yaw: float = float(m.get("yaw", 0.0))
+	var teeth := Vector3(sin(yaw), 0.0, -cos(yaw))
+	var back := -teeth
+	var origin: Vector3 = m["pos"]
+	var best := ""
+	var best_d := INF
+	for sid in map.systems.keys():
+		var center: Vector3 = map.systems[sid]["center"]
+		var d := center - origin
+		if d.dot(back) <= 1.0:
+			continue
+		var dist := d.length()
+		if dist < best_d:
+			best_d = dist
+			best = str(sid)
+	if best == "":
+		best_d = INF
+		for sid2 in map.systems.keys():
+			var dist2: float = (map.systems[sid2]["center"] as Vector3).distance_to(origin)
+			if dist2 < best_d:
+				best_d = dist2
+				best = str(sid2)
+	return best
+
+func _nearest_system(pos: Vector3) -> String:
+	var best := ""
+	var best_d := INF
+	for sid in map.systems.keys():
+		var dist: float = (map.systems[sid]["center"] as Vector3).distance_to(pos)
+		if dist < best_d:
+			best_d = dist
+			best = str(sid)
+	return best
+
+func _apply_marker_tasks(ctrl: BoardAiController) -> void:
+	var used: Dictionary = {}
+	var trench_id := -1
+	var target_id := -1
+	if map_markers.has("trench"):
+		trench_id = _pick_marker_fleet(ctrl, "alpha", used)
+		if trench_id >= 0:
+			used[trench_id] = true
+	if map_markers.has("target"):
+		target_id = _pick_marker_fleet(ctrl, "hp", used)
+	for f in ctrl.fleets:
+		var fid := int(f.get("id", -1))
+		if fid != trench_id and fid != target_id and str(f.get("state", "")) == "marker":
+			f["state"] = "station"
+			f["marker"] = ""
+	if trench_id >= 0:
+		var tf := _marker_fleet(ctrl, trench_id)
+		tf["state"] = "marker"
+		tf["marker"] = "trench"
+		var sys := _trench_defense_system()
+		var cell := map.find_cell_of_kind(sys, BoardTypes.CellKind.GATE) if sys != "" else -1
+		if cell >= 0:
+			_order_fleet_idle(tf, sys, cell, false)
+	if target_id >= 0:
+		var gf := _marker_fleet(ctrl, target_id)
+		gf["state"] = "marker"
+		gf["marker"] = "target"
+		var tpos: Vector3 = map_markers["target"]["pos"]
+		var tsys := _nearest_system(tpos)
+		var cells: Array = []
+		if tsys != "" and map.systems.has(tsys):
+			for c in map.systems[tsys]["cells"]:
+				if int(c.get("kind", -1)) != BoardTypes.CellKind.EMPTY:
+					cells.append(int(c["index"]))
+		_order_fleet_spread(gf, tsys, cells)
+
+func _order_fleet_idle(f: Dictionary, sys: String, cell: int, sync_on: bool) -> void:
+	var gid := 8000 + int(f.get("id", 0))
+	for uid in f.get("members", []):
+		var u = _unit_by_id(str(uid))
+		if u.is_empty() or not u.get("alive", false) or bool(u.get("player_hold", false)) \
+				or bool(u.get("garrison", false)):
+			continue
+		if sync_on:
+			u["sync_gid"] = gid
+		if not (u.get("path", []) as Array).is_empty():
+			continue
+		if int(u.get("phase", 0)) != BoardTypes.MovePhase.IDLE:
+			continue
+		if str(u.get("sys", "")) == sys and int(u.get("cell", -1)) == cell:
+			continue
+		_order_move_ai(u, sys, cell)
+
+func _order_fleet_spread(f: Dictionary, sys: String, cells: Array) -> void:
+	if sys == "" or cells.is_empty():
+		return
+	var gid := 8100 + int(f.get("id", 0))
+	var i := 0
+	for uid in f.get("members", []):
+		var u = _unit_by_id(str(uid))
+		if u.is_empty() or not u.get("alive", false) or bool(u.get("player_hold", false)) \
+				or bool(u.get("garrison", false)):
+			continue
+		u["sync_gid"] = gid
+		var cell := int(cells[i % cells.size()])
+		i += 1
+		if not (u.get("path", []) as Array).is_empty():
+			continue
+		if int(u.get("phase", 0)) != BoardTypes.MovePhase.IDLE:
+			continue
+		if str(u.get("sys", "")) == sys and int(u.get("cell", -1)) == cell:
+			continue
+		_order_move_ai(u, sys, cell)
 
 func _order_move_ai(u: Dictionary, to_sys: String, to_cell: int) -> void:
-	# AI may path with capture stops 鈥?simplified: use player nav but allow detour skip
+	## Garrison holds its post. Deputy fleets must not path it.
+	if bool(u.get("garrison", false)):
+		u["path"] = []
+		u.erase("order_dest_sys")
+		u.erase("order_dest_cell")
+		return
+	## Remember the strategic cell. A blocked gate only walks to the door; resume repaths after capture.
 	var prep = BoardTypes.align_prep_s(u["inertia"], u["mass"])
-	var path = BoardPlayerNav.find_path(
+	u["order_dest_sys"] = to_sys
+	u["order_dest_cell"] = to_cell
+	u["path"] = BoardPlayerNav.find_path(
 		map, data.diplomacy, u["faction"],
 		u["sys"], u["cell"], to_sys, to_cell,
 		prep, u["move_s"], u["landing_s"], u["jump_s"]
 	)
-	# insert capture waits by not skipping 鈥?movement already stops? We enqueue path; capture happens while idle on cells
-	u["path"] = path
-
-func _tick_ai_respawn() -> void:
-	for p in pilots:
-		if int(p["faction"]) != 2:
-			continue
-		if str(p.get("unit_id", "")) != "":
-			continue
-		var cs: String = str(p.get("current_station", ""))
-		if cs == "" or not map.systems.has(cs):
-			continue
-		var counts = pilots_sys.storage_count_by_model(p)
-		if counts.is_empty():
-			continue
-		var ship_id: String = counts.keys()[0]
-		var inst = pilots_sys.take_one(p, ship_id)
-		if inst.is_empty():
-			continue
-		var sc = map.station_cell(cs)
-		if sc < 0:
-			continue
-		var u = _spawn_unit(p, inst, cs, sc)
-		p["unit_id"] = u["id"]
-		p["in_station"] = false
-		_ensure_unit_node(u)
-		if br_tracker:
-			br_tracker.note_unit_enter_sys(u, cs)
-		# chase fleet
-		var _fid = -1
-		for x in units:
-			if x.get("pilot_id") != p["id"] and int(x.get("faction", 0)) == 2 and x.get("alive", false) and int(x.get("fleet_id", -1)) >= 0:
-				# find original fleet by scanning fleets members for this pilot's old 鈥?use default join lowest
-				pass
-		# assign to existing fleet of default ship peers 鈥?simplified: join fleet 0
-		if not ai.fleets.is_empty():
-			u["fleet_id"] = 0
-			ai.fleets[0]["members"].append(u["id"])
 
 func _update_unit_visuals(delta: float) -> void:
+	var viewer_fight := _viewer_combat_plate_ids()
 	for u in units:
 		if float(u.get("dealt_timer", 0.0)) > 0.0:
 			u["dealt_timer"] = maxf(0.0, float(u["dealt_timer"]) - delta)
@@ -4512,8 +6567,13 @@ func _update_unit_visuals(delta: float) -> void:
 		if model_n:
 			model_n.visible = not tac
 		var trail = n.get_node_or_null("Trail") as MeshInstance3D
+		var fx_on := _battle_fx_allowed(str(u.get("id", "")))
 		if trail:
-			if tac:
+			if not fx_on:
+				u["trail_pts"] = []
+				trail.visible = false
+				trail.mesh = null
+			elif tac:
 				trail.visible = false
 			elif moving:
 				_stamp_unit_trail(u, delta)
@@ -4540,8 +6600,17 @@ func _update_unit_visuals(delta: float) -> void:
 			var title = "[%s]%s %s" % [fac_name, pname, u["name"]]
 			var inst: Dictionary = u["inst"]
 			var atk_r := _atk_ready_ratio(u)
-			## Sleeper compact until expand. Tactical unexpanded → no callout/slot → oh hidden in sync.
-			var compact := bool(u.get("garrison", false)) and not _sleeper_plate_expanded(u)
+			## Battlefield: full plate if selected, viewer non-sleeper fight, or settings always-full.
+			## Tactical: sleeper compact until same-cell / lock expand (SHIPS §13).
+			var battle_view := not tac and not star
+			var compact := false
+			if battle_view:
+				if settings_battle_full_plates:
+					compact = false
+				else:
+					compact = not sel_on and not viewer_fight.has(str(u.get("id", "")))
+			elif bool(u.get("garrison", false)):
+				compact = not _sleeper_plate_expanded(u)
 			var show_badge := not data.is_npc_faction(int(u.get("faction", 0)))
 			if oh.has_method("set_compact_icon_only"):
 				oh.set_compact_icon_only(compact)
@@ -4607,6 +6676,35 @@ func _update_unit_visuals(delta: float) -> void:
 					"runId": "post-fix"
 				})
 			# #endregion
+
+func _spread_jump_wave(sys: String, cell: int) -> void:
+	## One layout when a jump lands. Not a per-frame slot chase (BH-38).
+	var wave := "%s:%d" % [sys, cell]
+	var group: Array = []
+	for uu in units:
+		if not uu.get("alive", false):
+			continue
+		if str(uu.get("sys", "")) != sys or int(uu.get("cell", -1)) != cell:
+			continue
+		if str(uu.get("jump_wave", "")) != wave:
+			continue
+		var ph := int(uu.get("phase", 0))
+		if ph != BoardTypes.MovePhase.IDLE and ph != BoardTypes.MovePhase.LANDING:
+			continue
+		group.append(uu)
+	if group.is_empty():
+		return
+	group.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return str(a.get("id", "")) < str(b.get("id", ""))
+	)
+	var n := group.size()
+	for i in n:
+		var p: Vector3 = _cell_slot_pos(sys, cell, i, n)
+		var ship: Dictionary = group[i]
+		ship["pos"] = p
+		ship["rest_pos"] = p
+		ship["land_pos"] = p
+
 
 func _fan_cell_slots_xz(sys: String, cell: int) -> void:
 	## Spawn / one-shot spread only; no continuous follow (BH-38).
@@ -4802,7 +6900,7 @@ func _callout_claimant_ids(sys: String, cell: int) -> Array:
 	return ids
 
 func _cell_claimant_ids(sys: String, cell: int) -> Array:
-	## Dest claim only after INVULN/LANDING — prep reserve must not crowd the target cell.
+	## Dest claim only on LANDING. INVULN belongs to no cell (not a target, not a slot occupant).
 	## Order = enter-cell time (callout slots stable; TACTICAL_TOPDOWN §8).
 	var ids: Array = []
 	for u in units:
@@ -4815,7 +6913,7 @@ func _cell_claimant_ids(sys: String, cell: int) -> Array:
 				and str(u["sys"]) == sys and int(u["cell"]) == cell:
 			if not ids.has(uid):
 				ids.append(uid)
-		elif ph == BoardTypes.MovePhase.INVULN or ph == BoardTypes.MovePhase.LANDING:
+		elif ph == BoardTypes.MovePhase.LANDING:
 			if str(u.get("reserve_sys", u.get("to_sys", ""))) == sys \
 					and int(u.get("reserve_cell", u.get("to_cell", -999))) == cell:
 				if not ids.has(uid):
@@ -5130,6 +7228,9 @@ func _check_defeat() -> void:
 
 # --- Input ---
 func _input(event: InputEvent) -> void:
+	## Menu window is its own viewport. Do not swallow clicks while paused.
+	if sim_paused:
+		return
 	if _handle_touch_input(event):
 		return
 	## LMB: latch press/release only. UI hit-test gates the press, never the release
@@ -5141,14 +7242,16 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT:
+			var on_ui := _pointer_blocks_gesture_start(mb.position)
 			if mb.pressed:
 				_lmb_press_latch = true
 				_lmb_press_pos = mb.position
-				_lmb_press_on_ui = _pointer_blocks_gesture_start(mb.position)
+				_lmb_press_on_ui = on_ui
 			else:
 				_lmb_release_latch = true
 				_lmb_release_pos = mb.position
-			if not _pointer_blocks_gesture_start(mb.position):
+			## Diplomacy / bottom bar must receive the click. Swallow only board clicks.
+			if not on_ui:
 				get_viewport().set_input_as_handled()
 			return
 		if mb.button_index == MOUSE_BUTTON_RIGHT:
@@ -5183,6 +7286,8 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if sim_paused:
+		return
 	if event is InputEventKey and event.pressed:
 		_handle_key(event as InputEventKey)
 
@@ -5310,6 +7415,8 @@ func _pointer_blocks_gesture_start(pos: Vector2) -> bool:
 	## Start-only. Release must not call this to abort an in-flight box.
 	if popup and popup.visible:
 		return true
+	if _hover_is_hud_control():
+		return true
 	if _mouse_over_blocking_hud(pos):
 		return true
 	var vp := get_viewport()
@@ -5409,6 +7516,26 @@ func _finish_lmb_gesture(pos: Vector2) -> void:
 	else:
 		_left_click(pos)
 
+func _hover_is_hud_control() -> bool:
+	## Pick target, not the layout rect. A zero-size rect used to let _input swallow the click.
+	var vp := get_viewport()
+	if vp == null:
+		return false
+	var hovered: Control = vp.gui_get_hovered_control()
+	while hovered != null:
+		if _box_overlay and hovered == _box_overlay:
+			return false
+		var nm := str(hovered.name)
+		if nm == "BottomBar" or nm == "SoftKeyBar" or nm == "DiploBtn" or nm == "DiploPanel" \
+				or nm == "MenuBtn" or nm == "GameMenuWindow" \
+				or nm == "DeputyPanel" or nm == "ChatPanel" or nm == "LeftCol" or nm == "RightCol" \
+				or nm == "Detail":
+			return true
+		if hovered is Button and hovered.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+			return true
+		hovered = hovered.get_parent() as Control
+	return false
+
 func _mouse_over_blocking_hud(pos: Vector2) -> bool:
 	# Whole left column (prod btn + list + sync toggle) must not be stolen by board _input
 	if left_col:
@@ -5441,6 +7568,10 @@ func _mouse_over_blocking_hud(pos: Vector2) -> bool:
 		var dr = Rect2(detail.global_position, detail.size)
 		if dr.has_point(pos):
 			return true
+	for extra in [bottom_bar, chat_panel, deputy_panel, diplo_btn, diplo_panel, menu_btn]:
+		if extra and is_instance_valid(extra) and extra.visible:
+			if extra.get_global_rect().grow(2.0).has_point(pos):
+				return true
 	return false
 
 func _handle_key(e: InputEventKey) -> void:
@@ -5457,14 +7588,66 @@ func _handle_key(e: InputEventKey) -> void:
 		return
 
 func _assign_control_group(g: int) -> void:
-	control_groups[g] = selection.filter(func(id): return _unit_by_id(id).get("faction", 0) == viewer_faction)
+	var sel: Array = []
+	for id in selection:
+		var u = _unit_by_id(str(id))
+		if u.is_empty() or int(u.get("faction", 0)) != viewer_faction:
+			continue
+		sel.append(str(id))
+	if sel.is_empty():
+		return
+	var all_this := true
+	var any_num := false
+	var any_plain := false
+	for id in sel:
+		var u2 = _unit_by_id(str(id))
+		var cg := int(u2.get("ctrl_group", -1))
+		if cg != g:
+			all_this = false
+		if cg < 0:
+			any_plain = true
+		else:
+			any_num = true
+	## All already this number: cancel. Mixed or other: write this number onto everyone.
+	var clear := all_this and not (any_num and any_plain and false)
+	if any_num and any_plain:
+		clear = false
+	if all_this:
+		clear = true
+	for id in sel:
+		_set_unit_ctrl_group(str(id), -1 if clear else g)
+	_rebuild_group_dict()
 	_refresh_all_group_badges()
 	_rebuild_hud_list()
+	if deputy_group >= 0:
+		_rebuild_player_deputy()
+		_rebalance_deputy_resources()
 	# #region agent log
 	_dbg59("GRP", "board_root._assign_control_group", "set_group", {
 		"g": g, "n": (control_groups[g] as Array).size(), "runId": "ctrl-group"
 	})
 	# #endregion
+
+func _set_unit_ctrl_group(uid: String, g: int) -> void:
+	var u = _unit_by_id(uid)
+	if u.is_empty():
+		return
+	u["ctrl_group"] = g
+	var p = _pilot_by_id(str(u.get("pilot_id", "")))
+	if not p.is_empty():
+		p["ctrl_group"] = g
+
+func _rebuild_group_dict() -> void:
+	control_groups.clear()
+	for u in units:
+		if int(u.get("faction", -1)) != viewer_faction:
+			continue
+		var g := int(u.get("ctrl_group", -1))
+		if g < 0:
+			continue
+		if not control_groups.has(g):
+			control_groups[g] = []
+		(control_groups[g] as Array).append(str(u.get("id", "")))
 
 func _select_control_group(g: int, allow_dbl_follow: bool) -> void:
 	var now := Time.get_ticks_msec()
@@ -5492,33 +7675,32 @@ func _follow_random_in_selection() -> void:
 	cam.update_follow_pos(pick["pos"])
 
 func _pilot_group_numbers(p: Dictionary) -> Array:
-	var uid := str(p.get("unit_id", ""))
-	var out: Array = []
-	if uid == "":
-		return out
-	for gk in control_groups.keys():
-		var arr: Array = control_groups[gk]
-		if arr.has(uid):
-			out.append(int(gk))
-	out.sort()
-	return out
+	## Number lives on the pilot. A dead ship does not clear it.
+	var g := int(p.get("ctrl_group", -1))
+	if g < 0:
+		return []
+	return [g]
 
 func _refresh_pilot_row_group_badge(row: Control, p: Dictionary) -> void:
 	if row == null:
 		return
 	var lab = row.find_child("GroupBadge", true, false) as Label
+	var bg = row.find_child("GroupBadgeBg", true, false) as Control
 	if lab == null:
 		return
 	var nums = _pilot_group_numbers(p)
-	if nums.is_empty():
+	## Number stays on the pilot frame after the ship portrait is cleared.
+	var badge_on := not nums.is_empty()
+	if badge_on:
+		lab.text = str(int(nums[0]))
+		lab.visible = true
+		if bg:
+			bg.visible = true
+	else:
 		lab.text = ""
 		lab.visible = false
-	else:
-		var parts: PackedStringArray = PackedStringArray()
-		for n in nums:
-			parts.append(str(n))
-		lab.text = "编组 " + ", ".join(parts)
-		lab.visible = true
+		if bg:
+			bg.visible = false
 
 func _refresh_all_group_badges() -> void:
 	if left_rows == null:
@@ -5647,7 +7829,7 @@ func _left_click(screen_pos: Vector2) -> void:
 	if has_friendly_sel:
 		if not u.is_empty():
 			var rel_atk := _rel_for(int(u["faction"]))
-			if rel_atk == "hostile":
+			if rel_atk == "hostile" and not _attack_forbidden_on(u):
 				## Commandable hostiles always; tactical sleeper full plate also attackable.
 				var can_atk := bool(u.get("commandable", true)) \
 					or (bool(u.get("garrison", false)) and cam != null \
@@ -5927,6 +8109,7 @@ func _drain_order_queue(budget: int) -> void:
 		# #endregion
 
 func _pathfind_apply(u: Dictionary, to_sys: String, to_cell: int) -> void:
+	u["player_hold"] = true
 	u["order_dest_sys"] = to_sys
 	u["order_dest_cell"] = to_cell
 	var ph: int = int(u.get("phase", 0))
@@ -6076,11 +8259,15 @@ func _cancel_prep_standby(u: Dictionary) -> void:
 	admin.request("board.move", {"unit": u["id"], "phase": "idle_cancel"})
 
 func _tick_nav_resume(delta: float) -> void:
-	## Idle at blocked gate with a remembered dest → repath when gate opens.
+	## Idle at a blocked gate with a remembered dest → repath when that gate opens.
+	## Player orders keep player_hold. Deputy orders repath without stealing the ship.
 	for u in units:
 		if not u.get("alive", false):
 			continue
-		if int(u.get("faction", 0)) != viewer_faction:
+		if bool(u.get("garrison", false)):
+			u["path"] = []
+			u.erase("order_dest_sys")
+			u.erase("order_dest_cell")
 			continue
 		if int(u.get("phase", 0)) != BoardTypes.MovePhase.IDLE:
 			continue
@@ -6100,7 +8287,15 @@ func _tick_nav_resume(delta: float) -> void:
 			continue
 		u["nav_retry_acc"] = 0.0
 		var before_len: int = u["path"].size()
-		_pathfind_apply(u, ds, dc)
+		if bool(u.get("player_hold", false)):
+			_pathfind_apply(u, ds, dc)
+		else:
+			var prep_r = BoardTypes.align_prep_s(u["inertia"], u["mass"])
+			u["path"] = BoardPlayerNav.find_path(
+				map, data.diplomacy, u["faction"],
+				u["sys"], u["cell"], ds, dc,
+				prep_r, u["move_s"], u["landing_s"], u["jump_s"]
+			)
 		# #region agent log
 		if u["path"].size() != before_len or (not u["path"].is_empty()):
 			_dbg59("NAV", "board_root._tick_nav_resume", "repath", {
@@ -6298,6 +8493,7 @@ func _on_any_popup(id: int) -> void:
 				_tick_guard_reopen(u)
 		12:
 			if u.has("implant") and str(u.get("implant", {}).get("ref", "")) != "":
+				## Intent only. Armed state is sampled when the weapon CD finishes.
 				u["implant"]["auto_on"] = not bool(u.get("implant", {}).get("auto_on", true))
 		13:
 			if u.has("guard") and u["guard"].get("field_fitted", false):
@@ -6355,14 +8551,16 @@ func _fx_ok() -> bool:
 	## Tactical top-down keeps plate↔plate beams (TACTICAL_TOPDOWN). Starmap silences FX.
 	return cam == null or not cam.starmap_mode
 
-func _play_turret_vfx(fx_kind: String, from: Vector3, to: Vector3) -> void:
+func _play_turret_vfx(fx_kind: String, from: Vector3, to: Vector3, src_id: String = "") -> void:
 	if not _fx_ok() or turret_vfx == null:
+		return
+	if src_id != "" and not _battle_fx_allowed(src_id):
 		return
 	var c3d: Camera3D = cam.cam if cam != null else null
 	## Tactical: beam width = tonnage icon circumscribed-circle radius (relative to plate scale).
 	var thick_wu := 0.0
 	if cam != null and cam.tactical_mode and not cam.starmap_mode:
-		thick_wu = BoardUnitOverhead.icon_circum_radius_world()
+		thick_wu = BoardUnitOverhead.icon_circum_radius_world() * 0.5
 	turret_vfx.play(fx_kind, from, to, c3d, thick_wu)
 
 func _on_tactical_changed(on: bool) -> void:
@@ -6428,8 +8626,8 @@ func _apply_view_tier(tier: String) -> void:
 	if tactical_callouts:
 		tactical_callouts.set_active(tier == "tactical")
 	if starmap_view and starmap_view.has_method("set_territory_visible"):
-		## Territory 底图：战术与星图都显示。
-		starmap_view.set_territory_visible(tier == "tactical" or tier == "starmap")
+		## Territory 底图：战场、战术、星图都显示。战场天空仍是全景。
+		starmap_view.set_territory_visible(tier == "battle" or tier == "tactical" or tier == "starmap")
 	if starmap_view and starmap_view.has_method("set_view_tier"):
 		starmap_view.set_view_tier(tier)
 	if not tac:
@@ -6466,6 +8664,9 @@ func _sync_starmap_rep_badges() -> void:
 	var skipped_empty_hostile := 0
 	for u in units:
 		if not u.get("alive", false):
+			continue
+		## Sleepers (incl. pledged) never count toward reputation headcount.
+		if bool(u.get("garrison", false)) or _unit_is_sleeper(u):
 			continue
 		var sid := str(u.get("sys", ""))
 		if sid == "":
@@ -6536,6 +8737,47 @@ func _sleeper_on_cell_locked(sys: String, cell: int) -> bool:
 				if str(w.get("lock_id", "")) == oid:
 					return true
 	return false
+
+func _viewer_combat_plate_ids() -> Dictionary:
+	## Ships whose battlefield plate stays full: both sides of a hostile fight that includes the viewer.
+	var out: Dictionary = {}
+	var viewer := int(viewer_faction)
+	for u in units:
+		if not u.get("alive", false):
+			continue
+		var u_ours := int(u.get("faction", -1)) == viewer
+		var fid := str(u.get("focus_id", ""))
+		if fid != "":
+			_mark_viewer_fight(out, u, fid, u_ours, viewer)
+		for w in u.get("weapons", []):
+			var kind := str(w.get("kind", ""))
+			if kind == "remote_armor" or kind == "remote_shield":
+				continue
+			var lid := str(w.get("lock_id", ""))
+			if lid != "":
+				_mark_viewer_fight(out, u, lid, u_ours, viewer)
+		for g in u.get("pd", []):
+			if float(g.get("cd", 0.0)) <= 0.0:
+				continue
+			var pt := str(g.get("target", ""))
+			if pt != "":
+				_mark_viewer_fight(out, u, pt, u_ours, viewer)
+	return out
+
+func _mark_viewer_fight(out: Dictionary, u: Dictionary, tid: String, u_ours: bool, viewer: int) -> void:
+	var tgt = _unit_by_id(tid)
+	if tgt.is_empty() or not tgt.get("alive", false):
+		return
+	## Fighting sleepers never expands battlefield plates (TACTICAL_TOPDOWN / SHIPS §13).
+	if _unit_is_sleeper(u) or _unit_is_sleeper(tgt):
+		return
+	var t_ours := int(tgt.get("faction", -1)) == viewer
+	if not u_ours and not t_ours:
+		return
+	if _rel_between(int(u.get("faction", 0)), int(tgt.get("faction", 0))) != "hostile":
+		return
+	out[str(u.get("id", ""))] = true
+	out[tid] = true
 
 func _sleeper_plate_expanded(u: Dictionary) -> bool:
 	## Full plate / callout when same-cell non-sleeper, or any sleeper on cell locked.
@@ -6769,7 +9011,12 @@ func _sync_tactical_overheads(_delta: float) -> void:
 			_unit_oh_cell.erase(uid)
 			continue
 		oh.visible = true
-		if str(_unit_oh_cell.get(uid, "")) != key:
+		var in_gap := int(u.get("phase", 0)) == BoardTypes.MovePhase.INVULN
+		if in_gap:
+			## Stay on the departure slot. Do not slide across the gap between callouts.
+			tactical_callouts.snap_overhead(uid, slot)
+			_unit_oh_cell[uid] = key
+		elif str(_unit_oh_cell.get(uid, "")) != key:
 			var from_pos: Vector3 = oh.global_position
 			if from_pos.length_squared() < 0.01:
 				from_pos = slot
@@ -7224,6 +9471,7 @@ func _launch_pilot(p: Dictionary, ship_id: String) -> void:
 	if br_tracker:
 		br_tracker.note_unit_enter_sys(u, cs)
 	admin.request("pilot.launch", {"pilot": p["id"], "ship": ship_id, "sys": cs})
+	_slot_launched_ship(u)
 
 func _pick_unit(screen_pos: Vector2, allow_garrison: bool = true) -> Dictionary:
 	if cam == null or cam.cam == null:
@@ -7286,11 +9534,19 @@ func _pick_unit(screen_pos: Vector2, allow_garrison: bool = true) -> Dictionary:
 	return best
 
 func _pick_cell(screen_pos: Vector2) -> Dictionary:
-	## Ray ∩ board plane Y=0; angular span matches GPU separator keys (BOARD_AND_INPUT).
+	## Visible ring first (BOARD_AND_INPUT). Analytic plane only when rings are hidden.
 	if cam == null or cam.cam == null or map == null:
 		return {}
 	var from = cam.cam.project_ray_origin(screen_pos)
 	var dir = cam.cam.project_ray_normal(screen_pos)
+	if starmap_view != null and starmap_view.has_method("rings_pick_active") \
+			and bool(starmap_view.rings_pick_active()) \
+			and starmap_view.has_method("pick_painted_cell"):
+		return starmap_view.pick_painted_cell(from, dir)
+	return _pick_cell_analytic(from, dir)
+
+func _pick_cell_analytic(from: Vector3, dir: Vector3) -> Dictionary:
+	## Starmap fallback: rings are hidden, so identify a system from the Y=0 hit.
 	if absf(dir.y) < 0.0001:
 		return {}
 	var plane_y := 0.0
@@ -7443,8 +9699,8 @@ func _describe_hidden_equip(h: Dictionary) -> String:
 					var sdesc := str(ieq.get("desc", ""))
 					if sdesc != "":
 						return "%s — %s" % [inm, sdesc]
-					return "%s — 连续%d轮0伤害，第%d轮%d倍伤害且必中" % [
-						inm, int(ieq.get("every", 10)) - 1, int(ieq.get("every", 10)), int(ieq.get("mul", 10))
+					return "%s — 伤害周期×%d，单发×%d，跟踪×%d" % [
+						inm, int(ieq.get("every", 10)), int(ieq.get("mul", 10)), int(ieq.get("tracking_mul", 1000))
 					]
 				"implant_focus_crystal":
 					return "%s — 叠层+%d%%；电容+%d%%；护盾冷却%d" % [

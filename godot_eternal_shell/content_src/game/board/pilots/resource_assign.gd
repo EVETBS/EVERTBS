@@ -34,6 +34,7 @@ static func list_held_cells(map: BoardMapModel, pilot_id: String) -> Array:
 	return out
 
 static func list_unassigned_owned(map: BoardMapModel, faction: int) -> Array:
+	## Strict empty only (no assignee).
 	var out: Array = []
 	for sid in map.systems.keys():
 		for c in map.systems[sid]["cells"]:
@@ -46,9 +47,48 @@ static func list_unassigned_owned(map: BoardMapModel, faction: int) -> Array:
 			out.append({"sys": sid, "cell": int(c["index"])})
 	return out
 
+static func list_pool_owned(map: BoardMapModel, faction: int, exclude_pilot: String = "") -> Array:
+	## 待分配池: empty OR auto_assigned.
+	## exclude_pilot: omit that pilot's auto cells (for + take / max — avoid double-count with held).
+	## Pass exclude_pilot="" to list ALL auto as free (submenu 待分配 display).
+	var out: Array = []
+	for sid in map.systems.keys():
+		for c in map.systems[sid]["cells"]:
+			if int(c["kind"]) != BoardTypes.CellKind.RESOURCE:
+				continue
+			if int(c["owner"]) != faction:
+				continue
+			var ap := str(c.get("assigned_pilot_id", ""))
+			var auto := bool(c.get("auto_assigned", false))
+			if ap == "":
+				out.append({"sys": sid, "cell": int(c["index"])})
+			elif auto and (exclude_pilot == "" or ap != exclude_pilot):
+				out.append({"sys": sid, "cell": int(c["index"])})
+	return out
+
+static func pool_counts(map: BoardMapModel, faction: int, exclude_pilot: String = "") -> Dictionary:
+	## {empty, auto, total} for debug / HUD.
+	var empty_n := 0
+	var auto_n := 0
+	for sid in map.systems.keys():
+		for c in map.systems[sid]["cells"]:
+			if int(c["kind"]) != BoardTypes.CellKind.RESOURCE:
+				continue
+			if int(c["owner"]) != faction:
+				continue
+			var ap := str(c.get("assigned_pilot_id", ""))
+			var auto := bool(c.get("auto_assigned", false))
+			if ap == "":
+				empty_n += 1
+			elif auto and (exclude_pilot == "" or ap != exclude_pilot):
+				auto_n += 1
+	return {"empty": empty_n, "auto": auto_n, "total": empty_n + auto_n}
+
 static func max_assignable(map: BoardMapModel, pilot: Dictionary) -> int:
-	var held := pilot_held_count(map, str(pilot["id"]))
-	var free := list_unassigned_owned(map, int(pilot["faction"])).size()
+	var pid := str(pilot["id"])
+	var held := pilot_held_count(map, pid)
+	## Take-pool excludes own auto (already inside held).
+	var free := list_pool_owned(map, int(pilot["faction"]), pid).size()
 	return held + free
 
 static func set_target_count(map: BoardMapModel, pilot: Dictionary, target: int, rng: RandomNumberGenerator, admin: BoardAdminProxy = null) -> int:
@@ -58,7 +98,7 @@ static func set_target_count(map: BoardMapModel, pilot: Dictionary, target: int,
 	var held := list_held_cells(map, pid)
 	var cur := held.size()
 	if target > cur:
-		var free := list_unassigned_owned(map, fac)
+		var free := list_pool_owned(map, fac, pid)
 		_shuffle(free, rng)
 		var need := target - cur
 		for i in mini(need, free.size()):
@@ -66,13 +106,22 @@ static func set_target_count(map: BoardMapModel, pilot: Dictionary, target: int,
 			var c: Dictionary = map.systems[ref["sys"]]["cells"][ref["cell"]]
 			c["assigned_pilot_id"] = pid
 			c["last_assignee"] = pid
+			c["auto_assigned"] = false
 	elif target < cur:
-		_shuffle(held, rng)
+		## Prefer releasing auto_assigned first so they return to 待分配 cleanly.
+		held.sort_custom(func(a, b):
+			var ca: Dictionary = map.systems[a["sys"]]["cells"][a["cell"]]
+			var cb: Dictionary = map.systems[b["sys"]]["cells"][b["cell"]]
+			var aa := 1 if bool(ca.get("auto_assigned", false)) else 0
+			var bb := 1 if bool(cb.get("auto_assigned", false)) else 0
+			return aa > bb
+		)
 		var drop := cur - target
 		for i in drop:
 			var ref2: Dictionary = held[i]
 			var c2: Dictionary = map.systems[ref2["sys"]]["cells"][ref2["cell"]]
 			c2["assigned_pilot_id"] = ""
+			c2["auto_assigned"] = false
 	if admin:
 		admin.request("pilot.assign_resource", {"pilot": pid, "count": pilot_held_count(map, pid)})
 	return pilot_held_count(map, pid)
@@ -119,6 +168,7 @@ static func on_resource_owner_flip(map: BoardMapModel, flip: Dictionary, pilots:
 			return
 		c["assigned_pilot_id"] = last
 		c["last_assignee"] = last
+		c["auto_assigned"] = true
 		return
 
 static func ai_redistribute(map: BoardMapModel, pilots: Array, faction: int, rng: RandomNumberGenerator) -> void:
@@ -140,6 +190,7 @@ static func ai_redistribute(map: BoardMapModel, pilots: Array, faction: int, rng
 		var c: Dictionary = map.systems[ref["sys"]]["cells"][ref["cell"]]
 		c["assigned_pilot_id"] = p["id"]
 		c["last_assignee"] = p["id"]
+		c["auto_assigned"] = true
 		idx += 1
 		mine.sort_custom(func(a, b): return pilot_held_count(map, a["id"]) < pilot_held_count(map, b["id"]))
 
@@ -170,6 +221,7 @@ static func auto_assign_new_cell(map: BoardMapModel, flip: Dictionary, pilots: A
 		for p in pilots:
 			if str(p["id"]) == last and int(p["faction"]) == fac:
 				c["assigned_pilot_id"] = last
+				c["auto_assigned"] = true
 				return
 	var mine: Array = []
 	for p in pilots:
@@ -187,3 +239,64 @@ static func auto_assign_new_cell(map: BoardMapModel, flip: Dictionary, pilots: A
 	var pick: Dictionary = pool[rng.randi_range(0, pool.size() - 1)]
 	c["assigned_pilot_id"] = pick["id"]
 	c["last_assignee"] = pick["id"]
+	c["auto_assigned"] = true
+
+static func rebalance_even(map: BoardMapModel, pilot_rows: Array) -> void:
+	## Spread resource cells evenly across pilot_rows (Chuang).
+	var ids: Array = []
+	for row in pilot_rows:
+		var pid := str(row.get("id", ""))
+		if pid != "" and not ids.has(pid):
+			ids.append(pid)
+	if ids.is_empty():
+		return
+	var pool: Array = []
+	for sid in map.systems.keys():
+		for c in map.systems[sid]["cells"]:
+			if int(c["kind"]) != BoardTypes.CellKind.RESOURCE:
+				continue
+			var ap := str(c.get("assigned_pilot_id", ""))
+			if not ids.has(ap):
+				continue
+			pool.append(c)
+			c["assigned_pilot_id"] = ""
+			c["auto_assigned"] = false
+	for i in pool.size():
+		var pid2 := str(ids[i % ids.size()])
+		var c2: Dictionary = pool[i]
+		c2["assigned_pilot_id"] = pid2
+		c2["last_assignee"] = pid2
+		c2["auto_assigned"] = true
+
+static func rebalance_yang(map: BoardMapModel, pilot_rows: Array) -> void:
+	## pilot_rows: [{id, guard}]. Fill one pilot to 3, guards first. Others untouched.
+	var idset: Dictionary = {}
+	for row in pilot_rows:
+		idset[str(row.get("id", ""))] = true
+	if idset.is_empty():
+		return
+	var pool: Array = []
+	for sid in map.systems.keys():
+		for c in map.systems[sid]["cells"]:
+			if int(c["kind"]) != BoardTypes.CellKind.RESOURCE:
+				continue
+			var ap := str(c.get("assigned_pilot_id", ""))
+			if not idset.has(ap):
+				continue
+			pool.append(c)
+			c["assigned_pilot_id"] = ""
+			c["auto_assigned"] = false
+	var rows: Array = pilot_rows.duplicate()
+	rows.sort_custom(func(a, b): return bool(a.get("guard", false)) and not bool(b.get("guard", false)))
+	var counts: Dictionary = {}
+	var idx := 0
+	for c2 in pool:
+		while idx < rows.size() and int(counts.get(str(rows[idx].get("id", "")), 0)) >= 3:
+			idx += 1
+		if idx >= rows.size():
+			break
+		var pid := str(rows[idx].get("id", ""))
+		c2["assigned_pilot_id"] = pid
+		c2["last_assignee"] = pid
+		c2["auto_assigned"] = true
+		counts[pid] = int(counts.get(pid, 0)) + 1

@@ -10,6 +10,8 @@ const FRAME_PAD0 := 0.178
 const RING_GAP := 3.2
 const HORIZ_LEN0 := 0.79
 const TWEEN_S := 0.20
+## Frame / slot ease when the box moves, flips side, or yaw changes.
+const SLIDE_TAU := 0.16
 const PICK_LAYER := 2
 
 var font_scale: float = 7.7
@@ -127,6 +129,7 @@ func sync_occupied(units: Array, claimants_fn: Callable, delta: float) -> void:
 		_ensure_cell(str(k3), ids3)
 	_resolve_callout_sides()
 	_spread_pie_columns()
+	_present_callouts(delta)
 	_tick_tweens(delta)
 
 func _ensure_cell(key: String, unit_ids: Array) -> void:
@@ -239,33 +242,18 @@ func _apply_cell_side(key: String, side: float, size_changed: bool = false) -> v
 		return
 	var d: Dictionary = _cells[key]
 	var frame_pos := _frame_pos_for_side(d, side)
-	var half_x := float(d.get("half_x", 4.0))
-	var horiz_len := float(d.get("horiz_len", 4.0))
 	var box_w := float(d.get("box_w", 8.0))
 	var box_h := float(d.get("box_h", 8.0))
-	var cell_pos: Vector3 = d.get("cell_pos", frame_pos)
-	var s_right := _screen_right()
-	var attach := frame_pos - s_right * (side * half_x) + Vector3(0.0, -0.02, 0.0)
-	attach.y = 0.1
 	d["side"] = side
 	d["frame_pos"] = frame_pos
-	var fr2: Node3D = d["frame"]
-	fr2.global_position = frame_pos
-	fr2.rotation = Vector3(0.0, -view_yaw, 0.0)
+	d["target_pos"] = frame_pos
+	d["target_yaw"] = -view_yaw
 	var box2: MeshInstance3D = d.get("box")
 	if box2 and box2.mesh is QuadMesh:
 		(box2.mesh as QuadMesh).size = Vector2(box_w, box_h)
 	var border2: MeshInstance3D = d.get("border")
 	if border2 and size_changed:
 		border2.mesh = _make_rect_outline(box_w, box_h)
-	_rebuild_leader_poly(d["line"] as MeshInstance3D, _pie_leader_pts(cell_pos, attach, side, horiz_len))
-	var unit_ids: Array = d.get("unit_ids", [])
-	var ncols := int(d.get("ncols", 1))
-	var nrows := int(d.get("nrows", 1))
-	var slots: Dictionary = {}
-	for i in unit_ids.size():
-		slots[str(unit_ids[i])] = _slot_world(frame_pos, i, ncols, nrows, box_w, box_h)
-	d["slots"] = slots
 
 func _callout_overlap_area(c1: Vector3, hx1: float, hz1: float, c2: Vector3, hx2: float, hz2: float) -> float:
 	var sr := _screen_right()
@@ -295,7 +283,7 @@ func _side_score(key: String, side: float) -> float:
 		var ofr: Node3D = od.get("frame")
 		if ofr == null or not is_instance_valid(ofr):
 			continue
-		var oc: Vector3 = ofr.global_position
+		var oc: Vector3 = od.get("target_pos", ofr.global_position)
 		var ohx := float(od.get("half_x", 4.0))
 		var ohz := float(od.get("half_z", float(od.get("box_h", 8.0)) * 0.5))
 		overlap += _callout_overlap_area(fp, hx, hz, oc, ohx, ohz)
@@ -367,51 +355,35 @@ func _spread_pie_columns() -> void:
 		if keys.size() < 2:
 			continue
 		keys.sort_custom(func(a, b):
-			var fa: Node3D = _cells[a]["frame"]
-			var fb: Node3D = _cells[b]["frame"]
-			return fa.global_position.dot(s_up) < fb.global_position.dot(s_up)
+			var pa: Vector3 = _cells[a].get("target_pos", Vector3.ZERO)
+			var pb: Vector3 = _cells[b].get("target_pos", Vector3.ZERO)
+			return pa.dot(s_up) < pb.dot(s_up)
 		)
 		var gap := 1.6
 		var along: Array = []
 		var cursor := -1.0e9
 		for k2 in keys:
-			var fr2: Node3D = _cells[k2]["frame"]
+			var p2: Vector3 = _cells[k2].get("target_pos", Vector3.ZERO)
 			var h := float(_cells[k2].get("box_h", 8.0))
-			var t := fr2.global_position.dot(s_up)
+			var t := p2.dot(s_up)
 			if t < cursor:
 				t = cursor
 			along.append(t)
 			cursor = t + h + gap
-		var frA: Node3D = _cells[keys[0]]["frame"]
-		var frB: Node3D = _cells[keys[keys.size() - 1]]["frame"]
-		var old_mid := (frA.global_position.dot(s_up) + frB.global_position.dot(s_up)) * 0.5
+		var pA: Vector3 = _cells[keys[0]].get("target_pos", Vector3.ZERO)
+		var pB: Vector3 = _cells[keys[keys.size() - 1]].get("target_pos", Vector3.ZERO)
+		var old_mid := (pA.dot(s_up) + pB.dot(s_up)) * 0.5
 		var new_mid := (float(along[0]) + float(along[along.size() - 1])) * 0.5
 		var shift := old_mid - new_mid
 		for i in keys.size():
 			var d3: Dictionary = _cells[keys[i]]
-			var fr3: Node3D = d3["frame"]
-			var p := fr3.global_position
+			var p: Vector3 = d3.get("target_pos", Vector3.ZERO)
 			var right_amt := p.dot(s_right)
 			var t3 := float(along[i]) + shift
 			p = s_right * right_amt + s_up * t3
 			p.y = 0.12
-			var side3 := float(d3.get("side", 1.0))
-			fr3.global_position = p
-			fr3.rotation = Vector3(0.0, -view_yaw, 0.0)
-			var half_x3 := float(d3.get("half_x", 4.0))
-			var attach3 := p - s_right * (side3 * half_x3)
-			attach3.y = 0.1
-			var cell3: Vector3 = d3.get("cell_pos", p)
-			_rebuild_leader_poly(d3["line"] as MeshInstance3D, _pie_leader_pts(cell3, attach3, side3, float(d3.get("horiz_len", 4.0))))
-			var ids: Array = d3.get("unit_ids", [])
-			var ncols3 := int(d3.get("ncols", 1))
-			var nrows3 := int(d3.get("nrows", 1))
-			var bw := float(d3.get("box_w", 8.0))
-			var bh := float(d3.get("box_h", 8.0))
-			var slots2: Dictionary = {}
-			for si in ids.size():
-				slots2[str(ids[si])] = _slot_world(p, si, ncols3, nrows3, bw, bh)
-			d3["slots"] = slots2
+			d3["target_pos"] = p
+			d3["frame_pos"] = p
 
 
 func _clamp_sys_dist(center: Vector3, fp: Vector3, max_d: float) -> Vector3:
@@ -543,16 +515,65 @@ func _pick_frame_away(self_sid: String, base_fp: Vector3, radial: Vector3, half_
 
 
 func _slot_world(frame_pos: Vector3, slot: int, ncols: int, nrows: int, box_w: float, box_h: float) -> Vector3:
+	return _slot_world_axes(frame_pos, slot, ncols, nrows, box_w, box_h, _screen_right(), _screen_up())
+
+func _slot_world_axes(frame_pos: Vector3, slot: int, ncols: int, nrows: int, box_w: float, box_h: float, s_right: Vector3, s_up: Vector3) -> Vector3:
 	var col := int(slot % ncols)
 	var row := int(floor(float(slot) / float(ncols)))
 	var ox := (float(col) + 0.5) / float(ncols) - 0.5
 	var oz := (float(row) + 0.5) / float(nrows) - 0.5
 	var pad := FRAME_PAD0 * maxf(font_scale, 0.25)
-	## Offsets in screen space so plates stay inside the yawed frame.
+	## Offsets in the frame's current screen axes so plates stay inside the yawed box.
 	return frame_pos \
-			+ _screen_right() * (ox * (box_w - pad)) \
-			+ _screen_up() * (oz * (box_h - pad)) \
+			+ s_right * (ox * (box_w - pad)) \
+			+ s_up * (oz * (box_h - pad)) \
 			+ Vector3(0.0, 0.35, 0.0)
+
+func _present_callouts(delta: float) -> void:
+	var k := 1.0 - exp(-maxf(delta, 0.0) / SLIDE_TAU)
+	for key in _cells.keys():
+		var d: Dictionary = _cells[key]
+		var target: Vector3 = d.get("target_pos", Vector3.ZERO)
+		var tyaw := float(d.get("target_yaw", -view_yaw))
+		var shown: Vector3
+		var syaw: float
+		if not bool(d.get("shown_ready", false)):
+			shown = target
+			syaw = tyaw
+			d["shown_ready"] = true
+		else:
+			shown = (d["shown_pos"] as Vector3).lerp(target, k)
+			syaw = lerp_angle(float(d.get("shown_yaw", tyaw)), tyaw, k)
+			if shown.distance_squared_to(target) < 0.0004 and absf(angle_difference(syaw, tyaw)) < 0.01:
+				shown = target
+				syaw = tyaw
+		d["shown_pos"] = shown
+		d["shown_yaw"] = syaw
+		var fr: Node3D = d.get("frame")
+		if fr == null or not is_instance_valid(fr):
+			continue
+		fr.global_position = shown
+		fr.rotation = Vector3(0.0, syaw, 0.0)
+		var vy := -syaw
+		var s_right := Vector3(cos(vy), 0.0, sin(vy))
+		var s_up := Vector3(sin(vy), 0.0, -cos(vy))
+		var side := float(d.get("side", 1.0))
+		var half_x := float(d.get("half_x", 4.0))
+		var attach := shown - s_right * (side * half_x)
+		attach.y = 0.1
+		var cell_pos: Vector3 = d.get("cell_pos", shown)
+		var elbow := attach - s_right * (side * float(d.get("horiz_len", 4.0)))
+		elbow.y = 0.1
+		_rebuild_leader_poly(d.get("line") as MeshInstance3D, [cell_pos, elbow, attach])
+		var ids: Array = d.get("unit_ids", [])
+		var ncols := int(d.get("ncols", 1))
+		var nrows := int(d.get("nrows", 1))
+		var bw := float(d.get("box_w", 8.0))
+		var bh := float(d.get("box_h", 8.0))
+		var slots: Dictionary = {}
+		for si in ids.size():
+			slots[str(ids[si])] = _slot_world_axes(shown, si, ncols, nrows, bw, bh, s_right, s_up)
+		d["slots"] = slots
 
 func slot_pos_for(unit_id: String, sys: String, cell: int) -> Vector3:
 	var key := "%s:%d" % [sys, cell]
@@ -563,6 +584,9 @@ func slot_pos_for(unit_id: String, sys: String, cell: int) -> Vector3:
 	if slots.has(unit_id):
 		return slots[unit_id]
 	return d["frame"].global_position if d.get("frame") else Vector3.ZERO
+
+func snap_overhead(unit_id: String, to: Vector3) -> void:
+	_oh_tween[unit_id] = {"from": to, "to": to, "t": 1.0}
 
 func begin_or_retarget_tween(unit_id: String, target: Vector3) -> void:
 	var cur := Vector3.ZERO
@@ -579,7 +603,12 @@ func set_tween(unit_id: String, from: Vector3, to: Vector3, reset_t: bool = true
 
 func update_tween_target(unit_id: String, to: Vector3) -> void:
 	if _oh_tween.has(unit_id):
-		_oh_tween[unit_id]["to"] = to
+		var tw: Dictionary = _oh_tween[unit_id]
+		if float(tw.get("t", 0.0)) >= 1.0:
+			tw["from"] = to
+			tw["to"] = to
+		else:
+			tw["to"] = to
 	else:
 		_oh_tween[unit_id] = {"from": to, "to": to, "t": 1.0}
 

@@ -145,7 +145,12 @@ func _ready() -> void:
 		_trails.append(_mk_ring_mi(COL_TRAIL, 10))
 		var col = COL_S if i == 0 else (COL_A if i == 1 else (COL_H if i == 2 else COL_CAP))
 		_fills.append(_mk_ring_mi(col, 12))
-	_cd_mi = _mk_ring_mi(COL_CD, 13)
+	## Same layer as the HP rings. no_depth_test / a higher priority paints a white stroke over ships.
+	_cd_mi = _mk_ring_mi(COL_CD, 8)
+	_cd_mi.name = "AtkCd"
+	var cd_mat := _cd_mi.material_override as StandardMaterial3D
+	cd_mat.no_depth_test = false
+	cd_mat.render_priority = 8
 
 func _rebuild_sectors(enemy: bool) -> void:
 	_enemy_mirrored = enemy
@@ -276,10 +281,15 @@ func _apply_compact_visibility() -> void:
 		for mi3 in _trails:
 			if mi3:
 				mi3.visible = false
+		for batches in _green_batches:
+			for d in batches:
+				var gmi: MeshInstance3D = d.get("mesh")
+				if gmi:
+					gmi.visible = false
 		if overlay_bg:
-			overlay_bg.visible = false
+			overlay_bg.visible = overlay_bg.texture != null
 		if overlay_tag:
-			overlay_tag.visible = false
+			overlay_tag.visible = _show_faction_badge and overlay_tag.texture != null
 		if _cd_mi:
 			_cd_mi.visible = false
 		if _sel_glow:

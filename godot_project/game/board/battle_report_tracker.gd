@@ -10,6 +10,10 @@ var closed: Array = []
 var _next_id: int = 1
 ## Callable(int faction_id) -> bool; NPC mark gate for opening sessions.
 var is_npc_faction: Callable = Callable()
+## Callable(int faction_id) -> bool; viewer or ally at settle time.
+var is_with_viewer: Callable = Callable()
+## Callable(int faction_id) -> String; display name snapshot.
+var faction_label: Callable = Callable()
 
 const TON_W := {
 	"frigate": 1,
@@ -65,14 +69,22 @@ func _ensure_session(sys_id: String, map = null) -> Dictionary:
 	return sess
 
 func _open_row(sess: Dictionary, u: Dictionary) -> Dictionary:
-	var pid := str(u.get("pilot_id", u.get("id", "?")))
+	var uid := str(u.get("id", ""))
+	var rows: Array = sess["rows"]
+	for i in rows.size():
+		var existing: Dictionary = rows[i]
+		if uid != "" and str(existing.get("unit_id", "")) == uid and not bool(existing.get("destroyed", false)):
+			return existing
+	## Blank pilot id (sleepers) must not share one key or every tick appends a row.
+	var pid := str(u.get("pilot_id", "")).strip_edges()
+	if pid == "":
+		pid = uid if uid != "" else "?"
 	if sess["pilot_open"].has(pid):
 		var ix: int = int(sess["pilot_open"][pid])
-		if ix >= 0 and ix < sess["rows"].size():
-			var existing: Dictionary = sess["rows"][ix]
-			if not bool(existing.get("destroyed", false)) \
-					and str(existing.get("unit_id", "")) == str(u.get("id", "")):
-				return existing
+		if ix >= 0 and ix < rows.size():
+			var prev: Dictionary = rows[ix]
+			if not bool(prev.get("destroyed", false)) and str(prev.get("unit_id", "")) == uid:
+				return prev
 	var row := {
 		"pilot_id": pid,
 		"pilot_name": str(u.get("pilot_name", pid)),
@@ -201,9 +213,9 @@ func tick_presence(units: Array, map = null, delta: float = 0.0, bar_fn: Callabl
 			reading_by_sys[sid] = true
 			if ratio < BAR_MOVING_MAX:
 				moving_by_sys[sid] = true
-	## Start: white bar begins reading — only if ≥2 non-NPC factions in-system.
-	for sid0 in reading_by_sys.keys():
-		if bool(reading_by_sys[sid0]) and not active.has(sid0):
+	## Start only while a bar is actually counting down. A full ready bar must not open another report.
+	for sid0 in moving_by_sys.keys():
+		if bool(moving_by_sys[sid0]) and not active.has(sid0):
 			if _sys_allows_battle_report(units_by_sys.get(sid0, [])):
 				seed_system_presence(str(sid0), units, map)
 	var to_close: Array = []
@@ -257,6 +269,8 @@ func _finalize(sys_id: String, map) -> void:
 		return
 	var sess: Dictionary = active[sys_id]
 	active.erase(sys_id)
+	if not _session_has_content(sess):
+		return
 	var end_t := battle_clock
 	var span := maxf(0.0, end_t - float(sess.get("start_t", 0.0)))
 	## Clamp stay to session length (presence accounting safety).
@@ -269,21 +283,33 @@ func _finalize(sys_id: String, map) -> void:
 	var foe_lost := 0
 	var mine_ton := 0
 	var foe_ton := 0
+	var mine_names: Array = []
+	var foe_names: Array = []
 	var seen_unit := {}
+	var seen_fac := {}
 	for r in sess["rows"]:
 		var fac := int(r.get("faction", 0))
+		var mine := _row_with_viewer(fac)
+		r["side"] = "mine" if mine else "foe"
 		var tw := ton_weight(str(r.get("tonnage", "destroyer")))
 		var uid := str(r.get("unit_id", ""))
+		if not seen_fac.has(fac):
+			seen_fac[fac] = true
+			var label := _fac_label(fac)
+			if mine:
+				mine_names.append(label)
+			else:
+				foe_names.append(label)
 		if not seen_unit.has(uid):
 			seen_unit[uid] = true
-			if fac == viewer_faction:
+			if mine:
 				mine_ships += 1
 				mine_ton += tw
 			else:
 				foe_ships += 1
 				foe_ton += tw
 		if bool(r.get("destroyed", false)):
-			if fac == viewer_faction:
+			if mine:
 				mine_lost += 1
 			else:
 				foe_lost += 1
@@ -299,6 +325,32 @@ func _finalize(sys_id: String, map) -> void:
 		"foe_lost": foe_lost,
 		"mine_ton": mine_ton,
 		"foe_ton": foe_ton,
+		"mine_names": mine_names,
+		"foe_names": foe_names,
 		"rows": sess["rows"].duplicate(true),
 	}
 	closed.append(rep)
+
+func _session_has_content(sess: Dictionary) -> bool:
+	for r in sess.get("rows", []):
+		if float(r.get("max_loss_dealt", 0.0)) > 0.01:
+			return true
+		if float(r.get("max_loss_taken", 0.0)) > 0.01:
+			return true
+		if int(r.get("kills", 0)) > 0 or bool(r.get("destroyed", false)):
+			return true
+	return false
+
+func _row_with_viewer(fac: int) -> bool:
+	if int(fac) == int(viewer_faction):
+		return true
+	if is_with_viewer.is_valid():
+		return bool(is_with_viewer.call(int(fac)))
+	return false
+
+func _fac_label(fac: int) -> String:
+	if faction_label.is_valid():
+		var s := str(faction_label.call(int(fac)))
+		if s != "":
+			return s
+	return "势力%d" % int(fac)

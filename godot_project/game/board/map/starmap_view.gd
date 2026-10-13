@@ -89,6 +89,9 @@ var _curtain_mesh_rev := 0
 const CURTAIN_MESH_REV := 7 ## bump when _build_unit_curtain / shader recipe changes
 var _ring_root: Node3D
 var _ring_ready := false
+## Static triangle BVH of the shared Fill/Rim meshes. Built once; click uses the node's live transform.
+var _fill_pick: Dictionary = {}
+var _rim_pick: Dictionary = {}
 ## Scale 补间 + throttled sector paint (avoid continuous micro-stutter).
 var _scale_tween_targets: Dictionary = {}
 var _scale_tweens: Dictionary = {}
@@ -138,7 +141,8 @@ func setup(m: BoardMapModel, dipl: Dictionary, viewer_fac: int) -> void:
 		territory_root.name = "Territory"
 		add_child(territory_root)
 		move_child(territory_root, 0)
-		territory_root.visible = false
+		## view_tier is already battle before setup; do not leave this hidden.
+		territory_root.visible = _territory_visible_for_tier()
 	if cell_pick_root == null:
 		cell_pick_root = Node3D.new()
 		cell_pick_root.name = "CellPick"
@@ -615,6 +619,8 @@ func _paint_all_sector_tex() -> void:
 				edges[i] = Color(1, 1, 1, 1)
 				works[i] = 1.0
 			keys[i] = ang
+		node.set_meta("pick_keys", keys)
+		node.set_meta("pick_n", n)
 		var img: Image = node.get_meta("sector_img")
 		_paint_sector_tex(img, keys, n, fills, edges, works)
 		var tex: ImageTexture = node.get_meta("sector_tex")
@@ -684,6 +690,164 @@ func _cell_at_angle(ang: float, keys: PackedFloat32Array, n: int) -> int:
 			return i
 	return 0
 
+func rings_pick_active() -> bool:
+	return _ring_root != null and is_instance_valid(_ring_root) and _ring_root.visible
+
+func pick_painted_cell(origin: Vector3, dir: Vector3) -> Dictionary:
+	## Closest triangle of the drawn Fill/Rim. UV of that hit reads this frame's sector image.
+	if not rings_pick_active() or map == null:
+		return {}
+	if dir.length_squared() < 1e-8:
+		return {}
+	var ndir := dir.normalized()
+	_ensure_pick_meshes()
+	var best_t := INF
+	var best_ring: Node3D = null
+	var best_uv := Vector2.ZERO
+	for ch in _ring_root.get_children():
+		var ring := ch as Node3D
+		if ring == null or not ring.visible:
+			continue
+		var fill := ring.get_node_or_null("Fill") as MeshInstance3D
+		var rim := ring.get_node_or_null("Rim") as MeshInstance3D
+		var hit := _closer_mesh_hit(fill, _fill_pick, rim, _rim_pick, origin, ndir)
+		if hit.is_empty() or float(hit["t"]) >= best_t:
+			continue
+		best_t = float(hit["t"])
+		best_ring = ring
+		best_uv = hit["uv"]
+	if best_ring == null:
+		return {}
+	return _cell_for_painted_angle(best_ring, fposmod(best_uv.x, 1.0) * TAU)
+
+func _closer_mesh_hit(a: MeshInstance3D, a_pick: Dictionary, b: MeshInstance3D, b_pick: Dictionary, origin: Vector3, dir: Vector3) -> Dictionary:
+	var ha := _ray_mesh_uv(a, a_pick, origin, dir)
+	var hb := _ray_mesh_uv(b, b_pick, origin, dir)
+	if ha.is_empty():
+		return hb
+	if hb.is_empty() or float(ha["t"]) <= float(hb["t"]):
+		return ha
+	return hb
+
+func _ray_mesh_uv(mi: MeshInstance3D, pick: Dictionary, origin: Vector3, dir: Vector3) -> Dictionary:
+	## TriangleMesh is local to the baked mesh. The instance transform (scale included) is applied here.
+	if mi == null or not mi.visible or pick.is_empty():
+		return {}
+	## Flat annulus AABB has no thickness. TriangleMesh.intersect_ray drops shallow battlefield rays.
+	## Hit the drawn plane, then the triangle in XZ. Transform is the live ring scale.
+	var inv := mi.global_transform.affine_inverse()
+	var lfrom: Vector3 = inv * origin
+	var ldir: Vector3 = inv.basis * dir
+	if ldir.length_squared() < 1e-12 or absf(ldir.y) < 1e-8:
+		return {}
+	var faces: PackedVector3Array = pick["faces"]
+	var uvs: PackedVector2Array = pick["uv"]
+	if faces.size() < 3 or uvs.size() < 3:
+		return {}
+	var plane_y := faces[0].y
+	var t_local := (plane_y - lfrom.y) / ldir.y
+	if t_local < 0.0:
+		return {}
+	var hit: Vector3 = lfrom + ldir * t_local
+	var nfaces := int(float(faces.size()) / 3.0)
+	var base := -1
+	var bc := Vector3.ZERO
+	for fi in nfaces:
+		var b0 := fi * 3
+		var bary := _bary_xz(hit, faces[b0], faces[b0 + 1], faces[b0 + 2])
+		if bary.x >= -0.002 and bary.y >= -0.002 and bary.z >= -0.002:
+			base = b0
+			bc = bary
+			break
+	if base < 0:
+		return {}
+	var uv := uvs[base] * bc.x + uvs[base + 1] * bc.y + uvs[base + 2] * bc.z
+	var world: Vector3 = mi.global_transform * hit
+	var t := (world - origin).dot(dir)
+	if t < 0.0:
+		return {}
+	return {"t": t, "uv": uv}
+
+
+func _bary_xz(p: Vector3, a: Vector3, b: Vector3, c: Vector3) -> Vector3:
+	var v0x := b.x - a.x
+	var v0z := b.z - a.z
+	var v1x := c.x - a.x
+	var v1z := c.z - a.z
+	var v2x := p.x - a.x
+	var v2z := p.z - a.z
+	var den := v0x * v1z - v1x * v0z
+	if absf(den) < 1e-8:
+		return Vector3(-1.0, -1.0, -1.0)
+	var inv_d := 1.0 / den
+	var bu := (v2x * v1z - v1x * v2z) * inv_d
+	var bv := (v0x * v2z - v2x * v0z) * inv_d
+	return Vector3(1.0 - bu - bv, bu, bv)
+
+func _ensure_pick_meshes() -> void:
+	if not _fill_pick.is_empty() and not _rim_pick.is_empty():
+		return
+	if _ring_root == null or _ring_root.get_child_count() == 0:
+		return
+	var sample := _ring_root.get_child(0)
+	var fill := sample.get_node_or_null("Fill") as MeshInstance3D
+	var rim := sample.get_node_or_null("Rim") as MeshInstance3D
+	if fill != null and fill.mesh is ArrayMesh:
+		_fill_pick = _cache_triangle_pick(fill.mesh as ArrayMesh)
+	if rim != null and rim.mesh is ArrayMesh:
+		_rim_pick = _cache_triangle_pick(rim.mesh as ArrayMesh)
+
+func _cache_triangle_pick(mesh: ArrayMesh) -> Dictionary:
+	var md := MeshDataTool.new()
+	if md.create_from_surface(mesh, 0) != OK:
+		return {}
+	var faces := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var n := md.get_face_count()
+	for i in n:
+		for k in 3:
+			var vi := md.get_face_vertex(i, k)
+			faces.append(md.get_vertex(vi))
+			uvs.append(md.get_vertex_uv(vi))
+	var tm := TriangleMesh.new()
+	if not tm.create_from_faces(faces):
+		return {}
+	return {"tm": tm, "uv": uvs, "faces": faces}
+
+func _cell_for_painted_angle(ring: Node3D, ang: float) -> Dictionary:
+	var sid := str(ring.name)
+	if not map.systems.has(sid):
+		return {}
+	var sys: Dictionary = map.systems[sid]
+	var cells: Array = sys.get("cells", [])
+	var n := int(ring.get_meta("pick_n", 0))
+	var keys: PackedFloat32Array = ring.get_meta("pick_keys", PackedFloat32Array())
+	if n <= 0 or keys.size() < n:
+		n = mini(cells.size(), 12)
+		keys = PackedFloat32Array()
+		keys.resize(n)
+		var stored: Array = sys.get("key_ang", [])
+		for i in n:
+			if stored.size() == cells.size():
+				keys[i] = float(stored[i])
+			else:
+				keys[i] = float(cells[i]["angle_center"]) - float(cells[i]["angle_half"])
+	if n <= 0:
+		return {}
+	var w := 256
+	var img: Image = ring.get_meta("sector_img") if ring.has_meta("sector_img") else null
+	if img != null:
+		w = img.get_width()
+	var px := int(floor(fposmod(ang, TAU) / TAU * float(w))) % w
+	## Transparent seam pixels are not a cell — do not award the neighbor.
+	if img != null and img.get_pixel(px, 0).a < 0.05 and img.get_pixel(px, 1).a < 0.05:
+		return {}
+	var ang_c := (float(px) + 0.5) / float(w) * TAU
+	var ci := _cell_at_angle(ang_c, keys, n)
+	if ci < 0 or ci >= cells.size():
+		return {}
+	return {"sys": sid, "cell": int(cells[ci].get("index", ci))}
+
 func _ensure_rings() -> void:
 	if _ring_ready and _ring_root != null:
 		## Rebuild once if leftover ShaderMaterial rings from prior attempt.
@@ -706,6 +870,8 @@ func _ensure_rings() -> void:
 			var dead := _ring_root.get_child(0)
 			_ring_root.remove_child(dead)
 			dead.free()
+		_fill_pick = {}
+		_rim_pick = {}
 		_ring_ready = false
 	if _ring_root == null:
 		_ring_root = Node3D.new()
@@ -782,6 +948,7 @@ func _build_annulus(segs: int) -> ArrayMesh:
 		var p11 = Vector3(sin(a1) * r_in, 0.02, -cos(a1) * r_in)
 		_st_uv_col_tri(st, p00, Vector2(u0, 1.0), c_out, p10, Vector2(u1, 1.0), c_out, p11, Vector2(u1, 0.0), c_in)
 		_st_uv_col_tri(st, p00, Vector2(u0, 1.0), c_out, p11, Vector2(u1, 0.0), c_in, p01, Vector2(u0, 0.0), c_in)
+	st.generate_normals()
 	return st.commit()
 
 func _build_rim_band(segs: int) -> ArrayMesh:
@@ -802,6 +969,7 @@ func _build_rim_band(segs: int) -> ArrayMesh:
 		var p11 = Vector3(sin(a1) * r0, 0.03, -cos(a1) * r0)
 		_st_uv_col_tri(st, p00, Vector2(u0, 1.0), col, p10, Vector2(u1, 1.0), col, p11, Vector2(u1, 0.0), col)
 		_st_uv_col_tri(st, p00, Vector2(u0, 1.0), col, p11, Vector2(u1, 0.0), col, p01, Vector2(u0, 0.0), col)
+	st.generate_normals()
 	return st.commit()
 
 func _st_uv_col_tri(st: SurfaceTool, a: Vector3, uva: Vector2, ca: Color, b: Vector3, uvb: Vector2, cb: Color, c: Vector3, uvc: Vector2, cc: Color) -> void:
@@ -1592,23 +1760,22 @@ func set_territory_visible(on: bool) -> void:
 		territory_root.visible = on
 
 func _rebuild_territory() -> void:
+	## Closed link faces + influence outside, fill on the ground and a raised stroke.
 	if territory_root == null or map == null:
 		return
-	var keep_vis := territory_root.visible
 	_voronoi_mi = null
-	## Immediate free — queue_free leaves stale "VoronoiTerritory" that steals set_border_jagged.
 	var doomed: Array = territory_root.get_children()
 	for c in doomed:
 		territory_root.remove_child(c)
 		c.free()
-	var sids: Array = map.systems.keys()
-	## Voronoi fill: grow until neighbor midpoint (no overlap, not forced circles, no cycle boxes).
-	var min_x := 1e9
-	var max_x := -1e9
-	var min_z := 1e9
-	var max_z := -1e9
-	var sites: Array = []
-	for sid in sids:
+	var sites_pos := PackedVector4Array()
+	var sites_col := PackedVector4Array()
+	var min_x := INF
+	var max_x := -INF
+	var min_z := INF
+	var max_z := -INF
+	var sov_snap: Array = []
+	for sid in map.systems.keys():
 		var center: Vector3 = map.systems[sid]["center"]
 		min_x = minf(min_x, center.x)
 		max_x = maxf(max_x, center.x)
@@ -1616,64 +1783,294 @@ func _rebuild_territory() -> void:
 		max_z = maxf(max_z, center.z)
 		var sov_owner := _sov_owner_of(str(sid))
 		var col: Color = _owner_color(sov_owner) if sov_owner != 0 else Color(0.78, 0.78, 0.80, 1.0)
-		sites.append({"sid": str(sid), "c": center, "col": col, "fac": sov_owner})
-	if sites.is_empty():
-		territory_root.visible = keep_vis
+		sites_pos.append(Vector4(center.x, 0.0, center.z, float(sov_owner)))
+		sites_col.append(Vector4(col.r, col.g, col.b, 1.0))
+		sov_snap.append({"sid": str(sid), "ow": sov_owner})
+	var nsite := mini(sites_pos.size(), 512)
+	if nsite <= 0:
+		territory_root.visible = _territory_visible_for_tier()
 		return
 	var mid := Vector3((min_x + max_x) * 0.5, 0.02, (min_z + max_z) * 0.5)
-	var nsite := mini(sites.size(), 8)
-	var cluster_r := 0.0
+	const RING_OUT := 26.0
+	var nn_sum := 0.0
+	var nn_n := 0
 	for i in nsite:
-		var c0: Vector3 = sites[i]["c"]
-		cluster_r = maxf(cluster_r, Vector2(c0.x - mid.x, c0.z - mid.z).length())
-	cluster_r = maxf(cluster_r + 28.0, 45.0)
-	## Quad must exceed max jagged reach so silhouette never becomes a square mesh edge.
-	var max_reach := cluster_r * (0.88 + 1.5 * 2.6) + 40.0
+		var sp: Vector4 = sites_pos[i]
+		var best_nn := 1.0e20
+		for j in nsite:
+			if i == j:
+				continue
+			var sq: Vector4 = sites_pos[j]
+			best_nn = minf(best_nn, Vector2(sp.x - sq.x, sp.z - sq.z).length())
+		if best_nn < 1.0e19:
+			nn_sum += best_nn
+			nn_n += 1
+	var nn_avg := nn_sum / float(maxi(nn_n, 1))
+	var site_r := clampf(nn_avg * 0.58, RING_OUT * 1.35, RING_OUT * 3.5) * 2.0
 	var span_x := maxf(max_x - min_x, 40.0)
 	var span_z := maxf(max_z - min_z, 40.0)
-	var size := Vector2(
-		maxf(span_x + 40.0, max_reach * 2.0),
-		maxf(span_z + 40.0, max_reach * 2.0)
-	)
+	var pad := site_r * 2.2 + 20.0
+	var size := Vector2(span_x + pad * 2.0, span_z + pad * 2.0)
+	var pos_img := Image.create(nsite, 1, false, Image.FORMAT_RGBAF)
+	var col_img := Image.create(nsite, 1, false, Image.FORMAT_RGBAF)
+	for i in nsite:
+		var sp2: Vector4 = sites_pos[i]
+		var sc: Vector4 = sites_col[i]
+		pos_img.set_pixel(i, 0, Color(sp2.x, sp2.y, sp2.z, sp2.w))
+		col_img.set_pixel(i, 0, Color(sc.x, sc.y, sc.z, sc.w))
+	var pos_tex := ImageTexture.create_from_image(pos_img)
+	var col_tex := ImageTexture.create_from_image(col_img)
+	var border_w := 0.22
+	var raise_y := 0.45
+	var faces: Array = _terr_bounded_faces()
+	var mask_tex := _terr_bake_closed_mask(faces, mid, size, border_w)
+	_terr_add_layer(territory_root, "TerritoryFill", pos_tex, col_tex, nsite, mid, size, site_r, border_w, border_jagged, 0.05, 0.2, mask_tex)
+	_terr_add_layer(territory_root, "TerritoryStrokeRaised", pos_tex, col_tex, nsite, mid + Vector3(0.0, raise_y, 0.0), size, site_r, border_w, border_jagged, 0.0, 0.2, mask_tex)
+	_voronoi_mi = territory_root.get_node_or_null("TerritoryFill") as MeshInstance3D
+	territory_root.visible = _territory_visible_for_tier()
+	_dbg59_board("TERR", "starmap._rebuild_territory", "territory", {
+		"blobs": territory_root.get_child_count(), "sites": nsite, "faces": faces.size(),
+		"mode": "closed_influence", "sov": sov_snap, "jagged": border_jagged, "runId": "studio-port"
+	})
+
+
+
+func _terr_link_adj_sorted() -> Dictionary:
+	var adj: Dictionary = {}
+	for sid in map.systems.keys():
+		var s := str(sid)
+		if not adj.has(s):
+			adj[s] = []
+		for link in map.systems[sid]["links"]:
+			var to_id := str(link)
+			if to_id == "" or not map.systems.has(to_id):
+				continue
+			if not (adj[s] as Array).has(to_id):
+				(adj[s] as Array).append(to_id)
+			if not adj.has(to_id):
+				adj[to_id] = []
+			if not (adj[to_id] as Array).has(s):
+				(adj[to_id] as Array).append(s)
+	for s in adj.keys():
+		var c: Vector3 = map.systems[str(s)]["center"]
+		var neigh: Array = adj[s]
+		neigh.sort_custom(func(na: String, nb: String) -> bool:
+			var ca: Vector3 = map.systems[na]["center"]
+			var cb: Vector3 = map.systems[nb]["center"]
+			return atan2(ca.x - c.x, ca.z - c.z) < atan2(cb.x - c.x, cb.z - c.z)
+		)
+		adj[s] = neigh
+	return adj
+
+
+func _terr_bounded_faces() -> Array:
+	var adj: Dictionary = _terr_link_adj_sorted()
+	var used: Dictionary = {}
+	var faces_nodes: Array = []
+	for a0 in adj.keys():
+		var a := str(a0)
+		for b0 in adj[a]:
+			var b := str(b0)
+			var dkey := "%s>%s" % [a, b]
+			if used.has(dkey):
+				continue
+			var path: Array = [a]
+			var prev := a
+			var cur := b
+			var ok := true
+			var guard := 0
+			while cur != a:
+				used["%s>%s" % [prev, cur]] = true
+				path.append(cur)
+				var neigh: Array = adj.get(cur, [])
+				if neigh.is_empty():
+					ok = false
+					break
+				var idx := neigh.find(prev)
+				if idx < 0:
+					ok = false
+					break
+				var nidx := (idx - 1 + neigh.size()) % neigh.size()
+				var nxt := str(neigh[nidx])
+				prev = cur
+				cur = nxt
+				guard += 1
+				if guard > 96 or path.size() > 96:
+					ok = false
+					break
+			if not ok or path.size() < 3:
+				continue
+			used["%s>%s" % [prev, cur]] = true
+			faces_nodes.append(path)
+	var polys: Array = []
+	var areas: Array = []
+	var max_abs := -1.0
+	var max_i := -1
+	for fi in faces_nodes.size():
+		var nodes: Array = faces_nodes[fi]
+		var poly := PackedVector2Array()
+		poly.resize(nodes.size())
+		for pi in nodes.size():
+			var pc: Vector3 = map.systems[str(nodes[pi])]["center"]
+			poly[pi] = Vector2(pc.x, pc.z)
+		var area := _terr_poly_area(poly)
+		polys.append(poly)
+		areas.append(area)
+		if absf(area) > max_abs:
+			max_abs = absf(area)
+			max_i = fi
+	var out: Array = []
+	for ai in polys.size():
+		if ai == max_i:
+			continue
+		if absf(float(areas[ai])) < 4.0:
+			continue
+		out.append(polys[ai])
+	return out
+
+
+func _terr_poly_area(poly: PackedVector2Array) -> float:
+	var area := 0.0
+	var n := poly.size()
+	for i in n:
+		var p0: Vector2 = poly[i]
+		var p1: Vector2 = poly[(i + 1) % n]
+		area += p0.x * p1.y - p1.x * p0.y
+	return area * 0.5
+
+
+func _terr_point_in_poly(p: Vector2, poly: PackedVector2Array) -> bool:
+	var inside := false
+	var n := poly.size()
+	var prev_i := n - 1
+	for i in n:
+		var yi: float = poly[i].y
+		var yj: float = poly[prev_i].y
+		var xi: float = poly[i].x
+		var xj: float = poly[prev_i].x
+		if ((yi > p.y) != (yj > p.y)) and (p.x < (xj - xi) * (p.y - yi) / (yj - yi + 1e-20) + xi):
+			inside = not inside
+		prev_i = i
+	return inside
+
+
+func _terr_dist_seg(p: Vector2, a: Vector2, b: Vector2) -> float:
+	var ab := b - a
+	var lab2 := ab.length_squared()
+	if lab2 < 1e-12:
+		return p.distance_to(a)
+	var t := clampf((p - a).dot(ab) / lab2, 0.0, 1.0)
+	return p.distance_to(a + ab * t)
+
+
+func _terr_bake_closed_mask(faces: Array, mid: Vector3, size: Vector2, border_w: float) -> ImageTexture:
+	var tex_n := 384
+	var img := Image.create(tex_n, tex_n, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 1, 0, 1))
+	if faces.is_empty():
+		return ImageTexture.create_from_image(img)
+	var origin := Vector2(mid.x - size.x * 0.5, mid.z - size.y * 0.5)
+	var sx := size.x / float(tex_n)
+	var sz := size.y / float(tex_n)
+	var pack := 256.0
+	var search_r := maxf(border_w * 4.0, 8.0)
+	var edges: Array = []
+	for face in faces:
+		var poly: PackedVector2Array = face
+		var n := poly.size()
+		for i in n:
+			edges.append([poly[i], poly[(i + 1) % n]])
+		var tris: PackedInt32Array = Geometry2D.triangulate_polygon(poly)
+		if tris.is_empty():
+			var bbmin := Vector2(INF, INF)
+			var bbmax := Vector2(-INF, -INF)
+			for i in n:
+				bbmin = bbmin.min(poly[i])
+				bbmax = bbmax.max(poly[i])
+			var x0 := clampi(int(floor((bbmin.x - origin.x) / sx)), 0, tex_n - 1)
+			var x1 := clampi(int(ceil((bbmax.x - origin.x) / sx)), 0, tex_n - 1)
+			var y0 := clampi(int(floor((bbmin.y - origin.y) / sz)), 0, tex_n - 1)
+			var y1 := clampi(int(ceil((bbmax.y - origin.y) / sz)), 0, tex_n - 1)
+			for py in range(y0, y1 + 1):
+				var wz := origin.y + (float(py) + 0.5) * sz
+				for px in range(x0, x1 + 1):
+					var wx := origin.x + (float(px) + 0.5) * sx
+					if _terr_point_in_poly(Vector2(wx, wz), poly):
+						var old := img.get_pixel(px, py)
+						img.set_pixel(px, py, Color(1.0, old.g, 0.0, 1.0))
+			continue
+		var ti := 0
+		while ti + 2 < tris.size():
+			var ta: Vector2 = poly[tris[ti]]
+			var tb: Vector2 = poly[tris[ti + 1]]
+			var tc: Vector2 = poly[tris[ti + 2]]
+			ti += 3
+			var bbmin2 := Vector2(minf(ta.x, minf(tb.x, tc.x)), minf(ta.y, minf(tb.y, tc.y)))
+			var bbmax2 := Vector2(maxf(ta.x, maxf(tb.x, tc.x)), maxf(ta.y, maxf(tb.y, tc.y)))
+			var x0b := clampi(int(floor((bbmin2.x - origin.x) / sx)), 0, tex_n - 1)
+			var x1b := clampi(int(ceil((bbmax2.x - origin.x) / sx)), 0, tex_n - 1)
+			var y0b := clampi(int(floor((bbmin2.y - origin.y) / sz)), 0, tex_n - 1)
+			var y1b := clampi(int(ceil((bbmax2.y - origin.y) / sz)), 0, tex_n - 1)
+			for py2 in range(y0b, y1b + 1):
+				var wz2 := origin.y + (float(py2) + 0.5) * sz
+				for px2 in range(x0b, x1b + 1):
+					var wx2 := origin.x + (float(px2) + 0.5) * sx
+					if Geometry2D.point_is_inside_triangle(Vector2(wx2, wz2), ta, tb, tc):
+						var old2 := img.get_pixel(px2, py2)
+						img.set_pixel(px2, py2, Color(1.0, old2.g, 0.0, 1.0))
+	for e in edges:
+		var ea: Vector2 = e[0]
+		var eb: Vector2 = e[1]
+		var emin := Vector2(minf(ea.x, eb.x) - search_r, minf(ea.y, eb.y) - search_r)
+		var emax := Vector2(maxf(ea.x, eb.x) + search_r, maxf(ea.y, eb.y) + search_r)
+		var x0e := clampi(int(floor((emin.x - origin.x) / sx)), 0, tex_n - 1)
+		var x1e := clampi(int(ceil((emax.x - origin.x) / sx)), 0, tex_n - 1)
+		var y0e := clampi(int(floor((emin.y - origin.y) / sz)), 0, tex_n - 1)
+		var y1e := clampi(int(ceil((emax.y - origin.y) / sz)), 0, tex_n - 1)
+		for py3 in range(y0e, y1e + 1):
+			var wz3 := origin.y + (float(py3) + 0.5) * sz
+			for px3 in range(x0e, x1e + 1):
+				var wx3 := origin.x + (float(px3) + 0.5) * sx
+				var dist := _terr_dist_seg(Vector2(wx3, wz3), ea, eb)
+				if dist > search_r:
+					continue
+				var old3 := img.get_pixel(px3, py3)
+				var g := minf(old3.g, clampf(dist / pack, 0.0, 1.0))
+				img.set_pixel(px3, py3, Color(old3.r, g, 0.0, 1.0))
+	return ImageTexture.create_from_image(img)
+
+
+func _terr_add_layer(
+	parent: Node3D, layer_name: String, pos_tex: Texture2D, col_tex: Texture2D, nsite: int,
+	mid: Vector3, size: Vector2, cluster_r: float, border_w: float, jagged: float,
+	fill_a: float, border_a: float, closed_mask: Texture2D
+) -> void:
 	var mi := MeshInstance3D.new()
-	mi.name = "VoronoiTerritory"
+	mi.name = layer_name
 	var qm := QuadMesh.new()
 	qm.size = size
 	mi.mesh = qm
 	var sm := ShaderMaterial.new()
 	sm.shader = load("res://shaders/board_territory_voronoi.gdshader")
+	sm.set_shader_parameter("site_pos_tex", pos_tex)
+	sm.set_shader_parameter("site_col_tex", col_tex)
 	sm.set_shader_parameter("site_count", nsite)
-	sm.set_shader_parameter("fill_a", 0.05)
-	sm.set_shader_parameter("border_a", 0.2)
-	sm.set_shader_parameter("border_w", 2.4)
-	sm.set_shader_parameter("jagged", border_jagged)
-	sm.set_shader_parameter("edge_base", 0.88)
 	sm.set_shader_parameter("cluster_center", Vector4(mid.x, 0.0, mid.z, 0.0))
 	sm.set_shader_parameter("cluster_r", cluster_r)
+	sm.set_shader_parameter("fill_a", fill_a)
+	sm.set_shader_parameter("border_a", border_a)
+	sm.set_shader_parameter("border_w", border_w)
+	sm.set_shader_parameter("jagged", jagged)
+	sm.set_shader_parameter("edge_base", 0.92)
 	sm.set_shader_parameter("quad_half", Vector2(size.x * 0.5, size.y * 0.5))
-	for i in nsite:
-		var s: Dictionary = sites[i]
-		var c: Vector3 = s["c"]
-		var col: Color = s["col"]
-		var fac := float(int(s.get("fac", 0)))
-		sm.set_shader_parameter("site_pos_%d" % i, Vector4(c.x, 0.0, c.z, fac))
-		sm.set_shader_parameter("site_col_%d" % i, Vector4(col.r, col.g, col.b, 1.0))
+	sm.set_shader_parameter("noise_scale", 1.0)
+	sm.set_shader_parameter("closed_mask_tex", closed_mask)
+	sm.set_shader_parameter("use_closed_mask", 1)
 	mi.material_override = sm
 	mi.rotation_degrees = Vector3(-90, 0, 0)
 	mi.position = mid
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	territory_root.add_child(mi)
-	_voronoi_mi = mi
-	territory_root.visible = keep_vis
-	var sov_snap: Array = []
-	for i in nsite:
-		var s0: Dictionary = sites[i]
-		sov_snap.append({"sid": s0["sid"], "ow": _sov_owner_of(str(s0["sid"]))})
-	_dbg59_board("TERR", "starmap._rebuild_territory", "territory", {
-		"blobs": territory_root.get_child_count(), "sites": nsite, "mode": "voronoi_sov",
-		"sov": sov_snap, "jagged": border_jagged, "runId": "junc-fix"
-	})
-
+	parent.add_child(mi)
 
 
 func set_border_jagged(v: float) -> void:
@@ -1683,19 +2080,16 @@ func set_border_jagged(v: float) -> void:
 	var kids := 0
 	if territory_root:
 		kids = territory_root.get_child_count()
-	var mi: MeshInstance3D = _voronoi_mi
-	if mi == null or not is_instance_valid(mi) or mi.is_queued_for_deletion():
-		mi = null
-		if territory_root:
-			for c in territory_root.get_children():
-				if c is MeshInstance3D and str(c.name).begins_with("VoronoiTerritory") and not c.is_queued_for_deletion():
-					mi = c
-					_voronoi_mi = mi
-	if mi and mi.material_override is ShaderMaterial:
-		var sm := mi.material_override as ShaderMaterial
-		sm.set_shader_parameter("jagged", border_jagged)
-		applied = float(sm.get_shader_parameter("jagged"))
-		mi_ok = true
+		for layer in territory_root.get_children():
+			if not (layer is MeshInstance3D):
+				continue
+			var lmi := layer as MeshInstance3D
+			if not (lmi.material_override is ShaderMaterial):
+				continue
+			var sm := lmi.material_override as ShaderMaterial
+			sm.set_shader_parameter("jagged", border_jagged)
+			applied = float(sm.get_shader_parameter("jagged"))
+			mi_ok = true
 	# #region agent log
 	_dbg59_board("JAG_JUNC", "starmap.set_border_jagged", "jagged_junction", {
 		"v": border_jagged,
@@ -1771,9 +2165,13 @@ func _apply_sysname_scale_for_tier() -> void:
 			(c as Label3D).font_size = int(round(float(base_f) * eff))
 
 
+func _territory_visible_for_tier() -> bool:
+	return view_tier == "battle" or view_tier == "tactical" or view_tier == "starmap"
+
+
 func _apply_tier_visibility() -> void:
 	var star := view_tier == "starmap"
-	var show_terr := view_tier == "tactical" or view_tier == "starmap"
+	var show_terr := _territory_visible_for_tier()
 	## 星图: hide ring/fill/rim chrome; keep Territory 底图 + StarmapGraph.
 	if label_root:
 		label_root.visible = not star

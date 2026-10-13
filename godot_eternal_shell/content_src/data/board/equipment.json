@@ -158,8 +158,8 @@
     "name": "狙击技术",
     "every": 10,
     "mul": 10,
-    "tracking_override": 9999,
-    "desc": "连续9轮0伤害，第10轮十倍伤害且必中"
+    "tracking_mul": 1000,
+    "desc": "伤害周期×10，单发伤害×10，跟踪×1000。开关在该武器冷却完成时才生效"
   },
   "implant_focus_crystal": {
     "id": "implant_focus_crystal",

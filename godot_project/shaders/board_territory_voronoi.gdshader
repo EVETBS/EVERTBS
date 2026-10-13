@@ -1,66 +1,33 @@
 shader_type spatial;
-// depth_draw_never: translucent 底图 must not occlude with a square depth plate.
+// Closed link-faces: always fill. Outside faces: per-site influence.
+// Constant-width stroke at faction junctions AND fill↔void boundary.
 render_mode unshaded, cull_disabled, depth_draw_never, blend_mix, world_vertex_coords;
 
-uniform int site_count : hint_range(0, 8) = 0;
-uniform vec4 site_pos_0; // xyz = XZ, w = faction id (float)
-uniform vec4 site_pos_1;
-uniform vec4 site_pos_2;
-uniform vec4 site_pos_3;
-uniform vec4 site_pos_4;
-uniform vec4 site_pos_5;
-uniform vec4 site_pos_6;
-uniform vec4 site_pos_7;
-uniform vec4 site_col_0;
-uniform vec4 site_col_1;
-uniform vec4 site_col_2;
-uniform vec4 site_col_3;
-uniform vec4 site_col_4;
-uniform vec4 site_col_5;
-uniform vec4 site_col_6;
-uniform vec4 site_col_7;
-uniform vec4 cluster_center; // xyz centroid
-uniform float cluster_r = 80.0;
+uniform sampler2D site_pos_tex : hint_default_black, filter_nearest, repeat_disable;
+uniform sampler2D site_col_tex : hint_default_white, filter_nearest, repeat_disable;
+uniform sampler2D closed_mask_tex : hint_default_black, filter_linear, repeat_disable;
+uniform int use_closed_mask = 0;
+uniform int site_count = 0;
+uniform vec4 cluster_center = vec4(0.0);
+uniform float cluster_r = 80.0; // per-site influence radius outside closed faces
 uniform float fill_a = 0.05;
 uniform float border_a = 0.2;
-uniform float border_w = 2.2;
+uniform float border_w = 2.4;
 uniform float jagged = 0.42;
 uniform float edge_base = 0.92;
-uniform vec4 border_col_b = vec4(0.92, 0.94, 0.98, 1.0);
-// Half-extents of the hosting QuadMesh in world XZ (from center).
+uniform float noise_scale = 1.0;
 uniform vec2 quad_half = vec2(200.0, 200.0);
 
 varying vec3 v_wpos;
 
-vec4 spos(int i) {
-	if (i == 0) return site_pos_0;
-	if (i == 1) return site_pos_1;
-	if (i == 2) return site_pos_2;
-	if (i == 3) return site_pos_3;
-	if (i == 4) return site_pos_4;
-	if (i == 5) return site_pos_5;
-	if (i == 6) return site_pos_6;
-	return site_pos_7;
-}
-
-vec4 scol(int i) {
-	if (i == 0) return site_col_0;
-	if (i == 1) return site_col_1;
-	if (i == 2) return site_col_2;
-	if (i == 3) return site_col_3;
-	if (i == 4) return site_col_4;
-	if (i == 5) return site_col_5;
-	if (i == 6) return site_col_6;
-	return site_col_7;
-}
+vec4 fetch_pos(int i) { return texelFetch(site_pos_tex, ivec2(i, 0), 0); }
+vec4 fetch_col(int i) { return texelFetch(site_col_tex, ivec2(i, 0), 0); }
 
 float coast_noise(vec2 p, float ang) {
 	return sin(ang * 5.0) * 0.45 + sin(ang * 11.0 + 1.7) * 0.30 + sin(ang * 3.0 - 0.4) * 0.25
 		+ sin(ang * 17.0 + 2.1) * 0.15
 		+ sin(p.x * 0.08 + p.y * 0.11) * 0.20 + sin(p.x * 0.19 - p.y * 0.07 + 0.9) * 0.15;
 }
-
-/// Higher-frequency junction noise (boundary seams).
 float seam_noise(vec2 p) {
 	return sin(p.x * 0.22 + p.y * 0.17) * 0.40
 		+ sin(p.x * 0.41 - p.y * 0.29 + 1.1) * 0.30
@@ -68,102 +35,126 @@ float seam_noise(vec2 p) {
 		+ sin(p.x * 0.09 - p.y * 0.48 + 0.6) * 0.25;
 }
 
-void vertex() {
-	v_wpos = VERTEX;
-}
+void vertex() { v_wpos = VERTEX; }
 
 void fragment() {
-	if (site_count <= 0) {
-		discard;
-	}
+	if (site_count <= 0) discard;
+	float ns = max(noise_scale, 0.0001);
 	vec2 p = v_wpos.xz;
+	vec2 pn = p * ns;
 	vec2 cc = cluster_center.xz;
-	vec2 from_c = p - cc;
-	float ang = atan(from_c.y, from_c.x);
-	float n = coast_noise(p, ang);
-	// Outer silhouette tracks jagged hard (gain 2.6) so the HUD spin is obvious even with one faction.
-	float reach = cluster_r * (edge_base + jagged * 2.6 * n);
-
-	// Kill square QuadMesh frame: never draw near the mesh AABB edge.
 	vec2 local = abs(p - cc);
-	vec2 margin = max(quad_half - vec2(6.0), vec2(1.0));
-	if (local.x > margin.x || local.y > margin.y) {
-		discard;
+	if (local.x > max(quad_half.x - 6.0 / ns, 1.0) || local.y > max(quad_half.y - 6.0 / ns, 1.0)) discard;
+
+	float in_closed = 0.0;
+	float closed_edge_dist = 1e10;
+	if (use_closed_mask > 0) {
+		vec2 uv = (p - cc) / max(quad_half * 2.0, vec2(0.001)) + vec2(0.5);
+		if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
+			vec4 m = texture(closed_mask_tex, uv);
+			in_closed = m.r;
+			// G stores world distance to closed-face boundary, packed / 256.
+			closed_edge_dist = m.g * 256.0;
+		}
 	}
 
-	// Outer silhouette uses plain nearest site.
-	float best0 = 1.0e20;
+	float best0 = 1e20;
 	int bi0 = 0;
-	for (int i = 0; i < 8; i++) {
+	vec2 p0 = vec2(0.0);
+	for (int i = 0; i < 512; i++) {
 		if (i >= site_count) break;
-		float d = distance(p, spos(i).xz);
+		vec2 sp = fetch_pos(i).xz;
+		float d = distance(p, sp);
 		if (d < best0) {
 			best0 = d;
 			bi0 = i;
+			p0 = sp;
 		}
 	}
-	if (best0 > reach) {
-		discard;
-	}
 
-	// Junction ownership: domain-warp sample so faction seams follow jagged strongly.
-	// Gain ~28 world units at jagged=1 → spin is very visible on borders.
-	float warp = jagged * 28.0;
-	float sn = seam_noise(p);
-	float sn2 = seam_noise(p + vec2(23.0, -11.0));
-	vec2 pw = p + warp * vec2(sn, sn2);
+	float ang = atan((p - p0).y, (p - p0).x);
+	float coast = coast_noise(pn, ang);
+	float reach = cluster_r * (edge_base + jagged * 0.18 * coast);
+	reach = max(reach, cluster_r * 0.82);
 
-	float best = 1.0e20;
+	bool filled = in_closed > 0.5 || best0 <= reach;
+	if (!filled) discard;
+
+	float warp = jagged * 28.0 / ns;
+	vec2 pw = p + warp * vec2(seam_noise(pn), seam_noise(pn + vec2(23.0, -11.0)));
+
+	float best = 1e20;
 	int bi = 0;
-	for (int i = 0; i < 8; i++) {
+	vec2 p_best = vec2(0.0);
+	for (int i = 0; i < 512; i++) {
 		if (i >= site_count) break;
-		float d = distance(pw, spos(i).xz);
+		vec2 sp = fetch_pos(i).xz;
+		float d = distance(pw, sp);
 		if (d < best) {
 			best = d;
 			bi = i;
+			p_best = sp;
 		}
 	}
-	float fac = spos(bi).w;
-
-	float second_diff = 1.0e20;
-	for (int j = 0; j < 8; j++) {
-		if (j >= site_count) break;
-		if (abs(spos(j).w - fac) < 0.5) {
-			continue;
-		}
-		float d2 = distance(pw, spos(j).xz);
-		second_diff = min(second_diff, d2);
-	}
-
-	// Edge metric wobble: zero-crossing moves further with jagged.
-	float nedge = seam_noise(p * 1.15) * 0.65 + coast_noise(p * 1.3, ang + 0.7) * 0.35;
-	float edge = (second_diff - best) - jagged * 16.0 * nedge;
-	float thr = border_w * (1.0 + jagged * 4.0 * abs(nedge));
-
-	vec4 fill = scol(bi);
-	vec3 rgb = fill.rgb;
+	float fac = fetch_pos(bi).w;
+	vec3 rgb = fetch_col(bi).rgb;
 	float a = fill_a;
 
-	// Soft outer rim (less jagged-coupled than seams).
-	float outer_edge = reach - best0;
-	if (outer_edge < border_w * 1.4) {
-		a = max(a, border_a * 0.85);
-		rgb = mix(fill.rgb, border_col_b.rgb, 0.35);
-	}
-	if (outer_edge < border_w * 0.55) {
-		a = max(a, border_a);
-		rgb = mix(fill.rgb, border_col_b.rgb, 0.7);
+	// Soft fade only on influence silhouette (closed interiors stay solid).
+	if (in_closed <= 0.5) {
+		float outer_edge = reach - best0;
+		if (outer_edge < border_w * 1.4) {
+			a *= mix(0.35, 1.0, clamp(outer_edge / max(border_w * 1.4, 0.001), 0.0, 1.0));
+		}
 	}
 
-	// Faction borders — width + path both track jagged.
-	if (second_diff < 1.0e19 && edge < thr) {
-		a = max(a, border_a);
-		rgb = fill.rgb;
+	float half_w = border_w * 0.5;
+	float aa = max(border_w * 0.08, 0.05);
+	float stroke = 0.0;
+
+	// 1) Faction color junctions — constant world width.
+	if (border_a > 0.001) {
+		float second_diff = 1e20;
+		vec2 p_second = p_best;
+		for (int j = 0; j < 512; j++) {
+			if (j >= site_count) break;
+			if (abs(fetch_pos(j).w - fac) < 0.5) continue;
+			vec2 sj = fetch_pos(j).xz;
+			float d = distance(pw, sj);
+			if (d < second_diff) {
+				second_diff = d;
+				p_second = sj;
+			}
+		}
+		if (second_diff < 1e19) {
+			vec2 n1 = (pw - p_best) / max(best, 1e-4);
+			vec2 n2 = (pw - p_second) / max(second_diff, 1e-4);
+			float grad = max(length(n2 - n1), 1e-3);
+			float dist_to_edge = (second_diff - best) / grad;
+			stroke = max(stroke, 1.0 - smoothstep(half_w - aa, half_w + aa, dist_to_edge));
+		}
 	}
-	if (second_diff < 1.0e19 && edge < thr * 0.42) {
-		a = max(a, border_a);
-		rgb = mix(fill.rgb, border_col_b.rgb, 0.65);
+
+	// 2) Fill ↔ void junction.
+	// Influence rim always; closed-face edge only where exterior is colorless (not covered by influence).
+	if (border_a > 0.001) {
+		float void_dist = 1e10;
+		if (in_closed > 0.5) {
+			if (best0 > reach) {
+				void_dist = closed_edge_dist;
+			}
+		} else {
+			void_dist = reach - best0;
+		}
+		stroke = max(stroke, 1.0 - smoothstep(half_w - aa, half_w + aa, void_dist));
 	}
+
+	if (stroke > 0.001) {
+		a = max(a, border_a * stroke);
+		rgb = mix(rgb, rgb * 1.15, 0.35 * stroke);
+	}
+
+	if (a < 0.001) discard;
 	ALBEDO = rgb;
 	ALPHA = a;
 }
