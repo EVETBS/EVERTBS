@@ -1,5 +1,5 @@
 ﻿{
   "version": "0.1.0-board",
   "entry": "res://game/board_test.tscn",
-  "shellCompatibilityId": "evetbs-shell-v1"
+  "shellCompatibilityId": "evertbs-shell-v1"
 }

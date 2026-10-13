@@ -1,5 +1,5 @@
 extends Node3D
-## EVETBS board test orchestrator (sleeper NPC) 鈥?bricks talk via AdminProxy.
+## EVERTBS / eve战棋 board test orchestrator (sleeper NPC) — bricks talk via AdminProxy.
 
 const DATA := preload("res://game/board/board_data.gd")
 const MAP_MODEL := preload("res://game/board/map/map_model.gd")
@@ -30,6 +30,19 @@ var selection: Array = [] # unit ids
 var control_groups: Dictionary = {}
 var viewer_faction = 1
 var rng = RandomNumberGenerator.new()
+## Soft-key bar (mobile): sticky Ctrl like Windows OSK.
+var soft_ctrl_sticky := false
+var soft_ctrl_btn: Button
+var _digit_last_g := -1
+var _digit_last_ms := 0
+const DIGIT_DBL_MS := 400
+const BUBBLE_PULSE_S := 45.0
+## Touch → mouse / cam (BOARD_AND_INPUT §5.1).
+var _touch_pts: Dictionary = {} ## index -> {pos: Vector2, t0: float, moved: bool}
+var _touch_long_fired: Dictionary = {} ## index -> true
+var _pinch_prev_dist := -1.0
+var _pinch_prev_angle := 0.0
+var _touch_panning := false
 
 var drag_start = Vector2.ZERO
 var dragging = false
@@ -548,6 +561,7 @@ func _spawn_garrison_unit(ship_id: String, sys: String, cell: int, faction: int,
 		"inst": inst,
 		"bubble_on": false,
 		"bubble_t": 0.0,
+		"bubble_cd": 0.0,
 		"pd": _build_pd(def),
 		"bubble_immune": true,
 		"float_t": rng.randf() * 10.0,
@@ -949,6 +963,7 @@ func _spawn_unit(pilot: Dictionary, inst: Dictionary, sys: String, cell: int) ->
 		"inst": inst,
 		"bubble_on": false,
 		"bubble_t": 0.0,
+		"bubble_cd": 0.0,
 		"pd": _build_pd(def),
 		"bubble_immune": _has_bubble_immune(def),
 		"float_t": rng.randf() * 10.0,
@@ -2205,6 +2220,7 @@ func _build_hud() -> void:
 	sync_move_btn.toggled.connect(_on_sync_move_toggled)
 	_apply_ui_font(sync_move_btn)
 	left_col.add_child(sync_move_btn)
+	_build_soft_key_bar(left_col)
 	layer.add_child(left_col)
 	_layout_left_col()
 	_apply_baked_view_tune()
@@ -2325,10 +2341,100 @@ func _rebuild_hud_list() -> void:
 		return
 	for c in left_rows.get_children():
 		c.queue_free()
+	for p in _sorted_viewer_pilots():
+		left_rows.add_child(_make_pilot_row(p))
+
+func _sorted_viewer_pilots() -> Array:
+	var mine: Array = []
 	for p in pilots:
 		if int(p["faction"]) != viewer_faction:
 			continue
-		left_rows.add_child(_make_pilot_row(p))
+		mine.append(p)
+	mine.sort_custom(func(a, b):
+		var sa := _pilot_list_sort_key(a)
+		var sb := _pilot_list_sort_key(b)
+		if sa[0] != sb[0]:
+			return sa[0] < sb[0]
+		if sa[1] != sb[1]:
+			return sa[1] < sb[1]
+		return str(a.get("name", "")) < str(b.get("name", ""))
+	)
+	return mine
+
+func _pilot_list_sort_key(p: Dictionary) -> Array:
+	## Lower = earlier: selected first, then numbered groups, then rest.
+	var uid := str(p.get("unit_id", ""))
+	var selected := 0 if (uid != "" and selection.has(uid)) else 1
+	var nums = _pilot_group_numbers(p)
+	var group_rank := 0 if not nums.is_empty() else 1
+	var first_g := int(nums[0]) if not nums.is_empty() else 99
+	return [selected, group_rank, first_g]
+
+func _pin_selected_left_rows() -> void:
+	if left_rows == null:
+		return
+	var rows: Array = left_rows.get_children()
+	if rows.is_empty():
+		return
+	rows.sort_custom(func(ra, rb):
+		var pa = _pilot_by_id(str(ra.get_meta("pilot", "")))
+		var pb = _pilot_by_id(str(rb.get_meta("pilot", "")))
+		var sa := _pilot_list_sort_key(pa) if not pa.is_empty() else [2, 1, 99]
+		var sb := _pilot_list_sort_key(pb) if not pb.is_empty() else [2, 1, 99]
+		if sa[0] != sb[0]:
+			return sa[0] < sb[0]
+		if sa[1] != sb[1]:
+			return sa[1] < sb[1]
+		return sa[2] < sb[2]
+	)
+	for i in range(rows.size()):
+		left_rows.move_child(rows[i], i)
+
+func _build_soft_key_bar(parent: Control) -> void:
+	var bar = HBoxContainer.new()
+	bar.name = "SoftKeyBar"
+	bar.add_theme_constant_override("separation", 4)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	soft_ctrl_btn = Button.new()
+	soft_ctrl_btn.name = "SoftCtrl"
+	soft_ctrl_btn.text = "Ctrl"
+	soft_ctrl_btn.toggle_mode = true
+	soft_ctrl_btn.custom_minimum_size = Vector2(48, 36)
+	soft_ctrl_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	soft_ctrl_btn.toggled.connect(_on_soft_ctrl_toggled)
+	_apply_ui_font(soft_ctrl_btn)
+	bar.add_child(soft_ctrl_btn)
+	for d in range(1, 11):
+		var g := d % 10 ## 1..9 then 0
+		var b = Button.new()
+		b.text = str(g)
+		b.custom_minimum_size = Vector2(32, 36)
+		b.mouse_filter = Control.MOUSE_FILTER_STOP
+		b.pressed.connect(_on_soft_digit.bind(g))
+		_apply_ui_font(b)
+		bar.add_child(b)
+	parent.add_child(bar)
+
+func _on_soft_ctrl_toggled(on: bool) -> void:
+	soft_ctrl_sticky = on
+	_refresh_soft_ctrl_btn()
+
+func _refresh_soft_ctrl_btn() -> void:
+	if soft_ctrl_btn == null:
+		return
+	soft_ctrl_btn.set_pressed_no_signal(soft_ctrl_sticky)
+	soft_ctrl_btn.modulate = Color(1.0, 0.85, 0.35, 1.0) if soft_ctrl_sticky else Color.WHITE
+
+func _clear_soft_ctrl_sticky() -> void:
+	soft_ctrl_sticky = false
+	_refresh_soft_ctrl_btn()
+
+func _on_soft_digit(g: int) -> void:
+	if soft_ctrl_sticky:
+		_assign_control_group(g)
+		_clear_soft_ctrl_sticky()
+		return
+	_select_control_group(g, true)
 
 func _make_pilot_row(p: Dictionary) -> Control:
 	var row = PanelContainer.new()
@@ -2763,8 +2869,14 @@ func _ensure_br_window() -> void:
 	br_window.title = "战报"
 	br_window.size = Vector2i(980, 600)
 	br_window.visible = false
-	br_window.close_requested.connect(func(): br_window.hide())
-	add_child(br_window)
+	br_window.close_requested.connect(func():
+		if br_window != null and is_instance_valid(br_window):
+			br_window.hide()
+	)
+	## Window must live under CanvasLayer/Control tree — parenting to Node3D
+	## then popup_centered can free/invalid the window and crash on reopen.
+	var host: Node = hud if hud != null and is_instance_valid(hud) else self
+	host.add_child(br_window)
 	var margin = MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left", 12)
@@ -2786,7 +2898,17 @@ func _ensure_br_window() -> void:
 
 func _br_body_vbox() -> VBoxContainer:
 	_ensure_br_window()
+	if br_window == null or not is_instance_valid(br_window):
+		return null
 	return br_window.find_child("BrBodyVBox", true, false) as VBoxContainer
+
+func _br_clear_body(vbox: VBoxContainer) -> void:
+	if vbox == null:
+		return
+	var kids := vbox.get_children()
+	for c in kids:
+		vbox.remove_child(c)
+		c.free()
 
 func _refresh_br_list() -> void:
 	if br_list == null or br_tracker == null:
@@ -2866,10 +2988,9 @@ func _open_br_report(report_id: String) -> void:
 	if rep.is_empty():
 		return
 	var vbox := _br_body_vbox()
-	if vbox == null:
+	if vbox == null or br_window == null or not is_instance_valid(br_window):
 		return
-	for c in vbox.get_children():
-		c.queue_free()
+	_br_clear_body(vbox)
 	var st = br_tracker.format_clock(float(rep.get("start_t", 0)))
 	var et = br_tracker.format_clock(float(rep.get("end_t", 0)))
 	var head_row = HBoxContainer.new()
@@ -3253,6 +3374,7 @@ func _pilot_by_id(id: String) -> Dictionary:
 
 func _process(delta: float) -> void:
 	_tick_mouse_hint(delta)
+	_tick_touch_long_press()
 	_consume_lmb_gesture()
 	_consume_rmb_order()
 	# #region agent log
@@ -3947,15 +4069,40 @@ func _gate_hops(a: String, b: String) -> int:
 		d += 1
 	return d
 
-func _tick_combat(delta: float) -> void:
+func _tick_bubbles(delta: float) -> void:
+	## Expire active light-bubble fields (pull only; no leave-block).
+	for sid in map.systems.keys():
+		var cells: Array = map.systems[sid]["cells"]
+		for cell in cells:
+			if not cell.get("bubble", false):
+				continue
+			var remain := float(cell.get("bubble_remain", 0.0)) - delta
+			cell["bubble_t"] = float(cell.get("bubble_t", 0.0)) + delta
+			if remain <= 0.0:
+				cell["bubble"] = false
+				cell["bubble_remain"] = 0.0
+			else:
+				cell["bubble_remain"] = remain
+	## 45s pulse: if switch on at check, apply 45s pull field on current cell.
 	for u in units:
 		if not u.get("alive", false):
 			continue
-		if u.get("bubble_on", false):
-			u["bubble_t"] = float(u["bubble_t"]) + delta
-			var cell: Dictionary = map.systems[u["sys"]]["cells"][u["cell"]]
-			cell["bubble"] = true
-			cell["bubble_t"] = u["bubble_t"]
+		if not u.get("bubble_on", false):
+			continue
+		u["bubble_cd"] = float(u.get("bubble_cd", 0.0)) - delta
+		if float(u["bubble_cd"]) > 0.0:
+			continue
+		u["bubble_cd"] = BUBBLE_PULSE_S
+		var cell2: Dictionary = map.systems[u["sys"]]["cells"][u["cell"]]
+		cell2["bubble"] = true
+		cell2["bubble_remain"] = BUBBLE_PULSE_S
+		cell2["bubble_t"] = float(cell2.get("bubble_t", 0.0))
+
+func _tick_combat(delta: float) -> void:
+	_tick_bubbles(delta)
+	for u in units:
+		if not u.get("alive", false):
+			continue
 		if int(u["phase"]) == BoardTypes.MovePhase.INVULN or int(u["phase"]) == BoardTypes.MovePhase.LANDING:
 			continue
 		var pd_claimed: Dictionary = {}
@@ -4983,6 +5130,8 @@ func _check_defeat() -> void:
 
 # --- Input ---
 func _input(event: InputEvent) -> void:
+	if _handle_touch_input(event):
+		return
 	## LMB: latch press/release only. UI hit-test gates the press, never the release
 	## (Mindustry keyRelease(select) commits the rect even after the cursor enters UI).
 	if event is InputEventMouseMotion and dragging:
@@ -5036,6 +5185,119 @@ func _input(event: InputEvent) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
 		_handle_key(event as InputEventKey)
+
+func _handle_touch_input(event: InputEvent) -> bool:
+	## Returns true when the event was consumed as touch.
+	if event is InputEventScreenTouch:
+		var st := event as InputEventScreenTouch
+		var idx := int(st.index)
+		if st.pressed:
+			if _pointer_blocks_gesture_start(st.position):
+				return true
+			_touch_pts[idx] = {
+				"pos": st.position,
+				"t0": Time.get_ticks_msec() / 1000.0,
+				"moved": false,
+			}
+			_touch_long_fired.erase(idx)
+			if _touch_pts.size() >= 2:
+				_touch_panning = false
+				_pinch_prev_dist = -1.0
+			return true
+		## Release
+		var info: Dictionary = _touch_pts.get(idx, {})
+		_touch_pts.erase(idx)
+		var was_long := bool(_touch_long_fired.get(idx, false))
+		_touch_long_fired.erase(idx)
+		if _touch_pts.size() < 2:
+			_pinch_prev_dist = -1.0
+		if _touch_pts.is_empty():
+			_touch_panning = false
+		if info.is_empty() or was_long or bool(info.get("moved", false)):
+			return true
+		if _touch_pts.size() == 0:
+			## Single-finger tap → LMB click
+			_lmb_press_latch = true
+			_lmb_press_pos = st.position
+			_lmb_press_on_ui = false
+			_lmb_release_latch = true
+			_lmb_release_pos = st.position
+		return true
+	if event is InputEventScreenDrag:
+		var sd := event as InputEventScreenDrag
+		var idx2 := int(sd.index)
+		if not _touch_pts.has(idx2):
+			_touch_pts[idx2] = {
+				"pos": sd.position, "t0": Time.get_ticks_msec() / 1000.0, "moved": false
+			}
+		var info2: Dictionary = _touch_pts[idx2]
+		var prev_pos: Vector2 = info2.get("pos", sd.position)
+		info2["pos"] = sd.position
+		if sd.relative.length() >= 4.0 or sd.position.distance_to(prev_pos) >= 8.0:
+			info2["moved"] = true
+		_touch_pts[idx2] = info2
+		if _touch_pts.size() >= 2:
+			_apply_pinch_or_rotate()
+			return true
+		## Single-finger drag → middle-button pan
+		if cam and bool(info2.get("moved", false)):
+			_touch_panning = true
+			cam.pan_by_screen_delta(sd.relative)
+		return true
+	return false
+
+func _apply_pinch_or_rotate() -> void:
+	if cam == null or _touch_pts.size() < 2:
+		return
+	var keys: Array = _touch_pts.keys()
+	var a: Dictionary = _touch_pts[keys[0]]
+	var b: Dictionary = _touch_pts[keys[1]]
+	var pa: Vector2 = a["pos"]
+	var pb: Vector2 = b["pos"]
+	var dist := pa.distance_to(pb)
+	var ang := (pb - pa).angle()
+	if _pinch_prev_dist < 0.0:
+		_pinch_prev_dist = dist
+		_pinch_prev_angle = ang
+		return
+	var dd := dist - _pinch_prev_dist
+	if absf(dd) > 1.5:
+		## Pinch open → zoom out (wheel down); pinch close → zoom in.
+		var factor := 1.0 - clampf(dd * 0.004, -0.12, 0.12)
+		cam.zoom_by_factor(factor)
+	var dang := ang - _pinch_prev_angle
+	while dang > PI:
+		dang -= TAU
+	while dang < -PI:
+		dang += TAU
+	## Two-finger rotate: tactical overview only.
+	if cam.tactical_mode and not cam.starmap_mode and absf(dang) > 0.01:
+		cam.add_tactical_yaw(dang)
+	_pinch_prev_dist = dist
+	_pinch_prev_angle = ang
+
+func _tick_touch_long_press() -> void:
+	## Single finger hold ≥1s → RMB click (once per touch).
+	if _touch_pts.size() != 1:
+		return
+	var idx = _touch_pts.keys()[0]
+	if bool(_touch_long_fired.get(idx, false)):
+		return
+	var info: Dictionary = _touch_pts[idx]
+	if bool(info.get("moved", false)):
+		return
+	var held := Time.get_ticks_msec() / 1000.0 - float(info.get("t0", 0.0))
+	if held < 1.0:
+		return
+	_touch_long_fired[idx] = true
+	var pos: Vector2 = info.get("pos", Vector2.ZERO)
+	var mb = InputEventMouseButton.new()
+	mb.button_index = MOUSE_BUTTON_RIGHT
+	mb.pressed = true
+	mb.position = pos
+	_handle_mouse_button(mb)
+	mb.pressed = false
+	_handle_mouse_button(mb)
 
 func _event_pos(event: InputEvent) -> Vector2:
 	if event is InputEventMouseButton:
@@ -5182,24 +5444,52 @@ func _mouse_over_blocking_hud(pos: Vector2) -> bool:
 	return false
 
 func _handle_key(e: InputEventKey) -> void:
-	if e.ctrl_pressed and e.keycode >= KEY_0 and e.keycode <= KEY_9:
+	var ctrl_mod := e.ctrl_pressed or soft_ctrl_sticky
+	if ctrl_mod and e.keycode >= KEY_0 and e.keycode <= KEY_9:
 		var g = e.keycode - KEY_0
-		## Clear this group number from other assignments first
-		for gk in control_groups.keys():
-			if int(gk) == g:
-				continue
-		control_groups[g] = selection.filter(func(id): return _unit_by_id(id).get("faction", 0) == viewer_faction)
-		_refresh_all_group_badges()
-		# #region agent log
-		_dbg59("GRP", "board_root._handle_key", "set_group", {
-			"g": g, "n": (control_groups[g] as Array).size(), "runId": "ctrl-group"
-		})
-		# #endregion
+		_assign_control_group(g)
+		if soft_ctrl_sticky and not e.ctrl_pressed:
+			_clear_soft_ctrl_sticky()
 		return
 	if not e.ctrl_pressed and e.keycode >= KEY_0 and e.keycode <= KEY_9:
 		var g2 = e.keycode - KEY_0
-		selection = control_groups.get(g2, []).duplicate()
+		_select_control_group(g2, true)
 		return
+
+func _assign_control_group(g: int) -> void:
+	control_groups[g] = selection.filter(func(id): return _unit_by_id(id).get("faction", 0) == viewer_faction)
+	_refresh_all_group_badges()
+	_rebuild_hud_list()
+	# #region agent log
+	_dbg59("GRP", "board_root._assign_control_group", "set_group", {
+		"g": g, "n": (control_groups[g] as Array).size(), "runId": "ctrl-group"
+	})
+	# #endregion
+
+func _select_control_group(g: int, allow_dbl_follow: bool) -> void:
+	var now := Time.get_ticks_msec()
+	var is_dbl := allow_dbl_follow and g == _digit_last_g and (now - _digit_last_ms) <= DIGIT_DBL_MS
+	_digit_last_g = g
+	_digit_last_ms = now
+	selection = control_groups.get(g, []).duplicate()
+	_update_detail()
+	_pin_selected_left_rows()
+	if is_dbl:
+		_follow_random_in_selection()
+
+func _follow_random_in_selection() -> void:
+	if cam == null or cam.starmap_mode:
+		return
+	var alive: Array = []
+	for id in selection:
+		var u = _unit_by_id(str(id))
+		if u and u.get("alive", false):
+			alive.append(u)
+	if alive.is_empty():
+		return
+	var pick: Dictionary = alive[rng.randi_range(0, alive.size() - 1)]
+	cam.set_follow(str(pick["id"]))
+	cam.update_follow_pos(pick["pos"])
 
 func _pilot_group_numbers(p: Dictionary) -> Array:
 	var uid := str(p.get("unit_id", ""))
@@ -5978,8 +6268,13 @@ func _on_any_popup(id: int) -> void:
 			if int(u["phase"]) == BoardTypes.MovePhase.LANDING or int(u["phase"]) == BoardTypes.MovePhase.INVULN:
 				return
 			u["bubble_on"] = not u.get("bubble_on", false)
-			if not u["bubble_on"]:
-				map.systems[u["sys"]]["cells"][u["cell"]]["bubble"] = false
+			if u["bubble_on"]:
+				## Next combat tick applies a 45s pulse on current cell.
+				u["bubble_cd"] = 0.0
+			else:
+				var cell_off: Dictionary = map.systems[u["sys"]]["cells"][u["cell"]]
+				cell_off["bubble"] = false
+				cell_off["bubble_remain"] = 0.0
 		2:
 			u["path"].clear()
 			if int(u["phase"]) == BoardTypes.MovePhase.PREP:
@@ -7181,6 +7476,9 @@ func _describe_hidden_equip(h: Dictionary) -> String:
 			return ""
 
 func _update_detail() -> void:
+	_pin_selected_left_rows()
+	if detail == null:
+		return
 	if selection.is_empty():
 		detail.text = ""
 		return

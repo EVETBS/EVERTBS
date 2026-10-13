@@ -203,6 +203,59 @@ func _dbg_zoom(msg: String, btn: int) -> void:
 		f.close()
 	# #endregion
 
+func zoom_by_factor(factor: float) -> void:
+	## factor < 1 zooms in; > 1 zooms out. Mirrors wheel path.
+	if factor <= 0.0:
+		return
+	if tactical_mode:
+		if starmap_mode:
+			distance = clampf(distance * factor, TACTICAL_DIST_MIN, TACTICAL_DIST_MAX)
+			_apply()
+			_sync_starmap_from_distance()
+		elif factor < 1.0 and distance <= TACTICAL_DIST_MIN + 0.5:
+			exit_tactical()
+		elif factor > 1.0:
+			distance = minf(maxf(distance * factor, TACTICAL_DIST_MIN), TACTICAL_DIST_MAX)
+			_apply()
+			_sync_starmap_from_distance()
+		else:
+			distance = clampf(distance * factor, TACTICAL_DIST_MIN, STARMAP_ENTER - 0.01)
+			_apply()
+	else:
+		if factor > 1.0 and distance >= DIST_MAX - 0.01:
+			enter_tactical()
+		else:
+			distance = clampf(distance * factor, DIST_MIN, DIST_MAX)
+			_apply()
+
+func add_tactical_yaw(delta_rad: float) -> void:
+	if not tactical_mode or starmap_mode:
+		return
+	tactical_yaw += delta_rad
+	_apply()
+
+func pan_by_screen_delta(rel: Vector2) -> void:
+	## Same axes as middle-drag pan (tactical nadir or battle orbit look shift).
+	if tactical_mode:
+		var k: float = PAN_SENS * (distance / TACTICAL_DIST_ENTER)
+		var s_right := Vector3(cos(tactical_yaw), 0.0, sin(tactical_yaw))
+		var s_up := Vector3(sin(tactical_yaw), 0.0, -cos(tactical_yaw))
+		look_at_point += s_right * (-rel.x * k) + s_up * (rel.y * k)
+		_look_smooth = look_at_point
+		_look_init = true
+		clear_follow_keep_look()
+		_apply()
+	else:
+		## Battle: shift look in camera right / forward-flat.
+		var k2: float = PAN_SENS * (distance / 140.0)
+		var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+		var fwd := Vector3(sin(yaw), 0.0, cos(yaw))
+		look_at_point += right * (-rel.x * k2) + fwd * (rel.y * k2)
+		_look_smooth = look_at_point
+		_look_init = true
+		clear_follow_keep_look()
+		_apply()
+
 ## Prefer _input so wheel is not lost when board_root/_gui consumes unhandled path.
 func _input(event: InputEvent) -> void:
 	_handle_cam_input(event)

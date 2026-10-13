@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="烬海征服者"
+config/name="eve战棋"
 config/description="EVETBS content foundation"
 run/main_scene="res://game/board_test.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")

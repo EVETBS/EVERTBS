@@ -2,7 +2,7 @@ class_name UpdateConfig
 extends RefCounted
 
 ## Frozen shell protocol id — must match version.json.shellCompatibilityId
-const SHELL_COMPATIBILITY_ID := "evetbs-shell-v1"
+const SHELL_COMPATIBILITY_ID := "evertbs-shell-v1"
 const PROTOCOL_SUPPORTED := 1
 
 const VERSION_FILE := "version.json"

@@ -1,7 +1,7 @@
-﻿# OBSOLETE — do not use for release. Monolithic game.pck / ContentPack path is retired.
+# OBSOLETE — do not use for release. Monolithic game.pck / ContentPack path is retired.
 # Use: H:\game_dev\eveautochess-dev\tools\pack_hf_content.ps1 (five packs: data/logic/ui/models/audio)
 param(
-  [string]$Godot = "H:\game\game_dev\EVETBS\tools\godot\Godot_v4.7.1-stable_win64.exe",
+  [string]$Godot = "H:\game\game_dev\EVERTBS\tools\godot\Godot_v4.7.1-stable_win64.exe",
   [string]$OutPck = ""
 )
 

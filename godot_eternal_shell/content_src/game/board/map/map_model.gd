@@ -48,8 +48,10 @@ func _generate_cells(sys: Dictionary) -> Array:
 			"weight": 1.0,
 			"bubble": false,
 			"bubble_t": 0.0,
+			"bubble_remain": 0.0,
 			"assigned_pilot_id": "",
 			"last_assignee": "",
+			"auto_assigned": false,
 		})
 	# 1) gates by link bearing
 	var center = Vector3(float(sys["pos"][0]), 0, float(sys["pos"][1]))
@@ -161,31 +163,40 @@ func recompute_angles(sys_id: String, _occupants: Dictionary = {}) -> bool:
 		systems[sys_id]["ring_phase"] = start0
 	return _apply_weighted_phase(sys_id)
 
+func _cell_min_span_rad(cell: Dictionary) -> float:
+	## Gate wedges never thinner than 30° (BOARD_AND_INPUT).
+	if int(cell.get("kind", -1)) == BoardTypes.CellKind.GATE:
+		return deg_to_rad(30.0)
+	return deg_to_rad(8.0)
+
 func _compute_spans(cells: Array) -> PackedFloat32Array:
 	var n = cells.size()
 	var raw: PackedFloat32Array = PackedFloat32Array()
 	raw.resize(n)
+	var mins: PackedFloat32Array = PackedFloat32Array()
+	mins.resize(n)
 	var total := 0.0
 	for i in n:
 		var w = maxf(float(cells[i].get("weight", 1.0)), 0.01)
 		raw[i] = w
+		mins[i] = _cell_min_span_rad(cells[i])
 		total += w
 	if total <= 0.0:
 		total = float(n)
-	var min_span = deg_to_rad(8.0)
 	var max_span = deg_to_rad(120.0)
 	var spans: PackedFloat32Array = PackedFloat32Array()
 	spans.resize(n)
 	for i in n:
 		spans[i] = TAU * raw[i] / total
-	for _iter in 10:
+	for _iter in 12:
 		var locked := 0.0
 		var free_w := 0.0
 		var free_i: Array = []
 		for i in n:
-			if spans[i] <= min_span + 1e-5:
-				spans[i] = min_span
-				locked += min_span
+			var lo := float(mins[i])
+			if spans[i] <= lo + 1e-5:
+				spans[i] = lo
+				locked += lo
 			elif spans[i] >= max_span - 1e-5:
 				spans[i] = max_span
 				locked += max_span
@@ -197,8 +208,9 @@ func _compute_spans(cells: Array) -> PackedFloat32Array:
 			break
 		var changed = false
 		for i in free_i:
+			var lo2 := float(mins[i])
 			var s = remain * raw[i] / free_w
-			var c = clampf(s, min_span, max_span)
+			var c = clampf(s, lo2, max_span)
 			if absf(c - spans[i]) > 1e-5:
 				changed = true
 			spans[i] = c
@@ -209,11 +221,52 @@ func _compute_spans(cells: Array) -> PackedFloat32Array:
 			var k = TAU / sum_s
 			for i in n:
 				spans[i] *= k
+			## Re-enforce per-cell mins after normalize (gates stay ≥30°).
+			for i in n:
+				spans[i] = maxf(spans[i], float(mins[i]))
+			var sum2 := 0.0
+			for i in n:
+				sum2 += spans[i]
+			if sum2 > TAU + 1e-4:
+				## Shrink non-floor cells proportionally.
+				var floor_sum := 0.0
+				var flex := 0.0
+				for i in n:
+					if spans[i] <= float(mins[i]) + 1e-5:
+						floor_sum += spans[i]
+					else:
+						flex += spans[i]
+				var room := maxf(TAU - floor_sum, 0.0)
+				if flex > 1e-6 and room >= 0.0:
+					var fk := room / flex
+					for i in n:
+						if spans[i] > float(mins[i]) + 1e-5:
+							spans[i] *= fk
 		if not changed:
 			break
+	# #region agent log
+	var path := "H:/debug-59aff0.log"
+	var f := FileAccess.open(path, FileAccess.READ_WRITE)
+	if f == null:
+		f = FileAccess.open(path, FileAccess.WRITE)
+	if f and Engine.get_process_frames() % 120 == 0:
+		var gate_spans: Array = []
+		for i in n:
+			if int(cells[i].get("kind", -1)) == BoardTypes.CellKind.GATE:
+				gate_spans.append(snappedf(rad_to_deg(spans[i]), 0.1))
+		f.seek_end()
+		f.store_line(JSON.stringify({
+			"sessionId": "59aff0", "hypothesisId": "GATE",
+			"location": "map_model._compute_spans", "message": "gate_min30",
+			"data": {"gates_deg": gate_spans, "runId": "gate-arc"},
+			"timestamp": Time.get_ticks_msec()
+		}))
+		f.close()
+	# #endregion
 	return spans
 
 func _apply_weighted_phase(sys_id: String) -> bool:
+	## Write soft targets only — draw/pos lerp in tick_smooth_arcs (BH-35).
 	var cells: Array = systems[sys_id]["cells"]
 	var n = cells.size()
 	var spans = _compute_spans(cells)
@@ -224,11 +277,19 @@ func _apply_weighted_phase(sys_id: String) -> bool:
 		var span = spans[i]
 		var half = span * 0.5
 		var center = fposmod(a + half, TAU)
-		if absf(float(cells[i].get("angle_half", 0.0)) - half) > 0.0005 \
-			or absf(_angle_delta(float(cells[i].get("angle_center", 0.0)), center)) > 0.0005:
+		var th = float(cells[i].get("target_half", cells[i].get("angle_half", half)))
+		var tc = float(cells[i].get("target_center", cells[i].get("angle_center", center)))
+		## Only commit targets when they move enough — keeps 200ms 补间 end-point stable.
+		if absf(th - half) > 0.012 or absf(_angle_delta(tc, center)) > 0.012:
 			changed = true
-		cells[i]["angle_half"] = half
-		cells[i]["angle_center"] = center
+			cells[i]["target_half"] = half
+			cells[i]["target_center"] = center
+		elif not cells[i].has("target_half"):
+			cells[i]["target_half"] = half
+			cells[i]["target_center"] = center
+		if not cells[i].has("angle_half"):
+			cells[i]["angle_half"] = half
+			cells[i]["angle_center"] = center
 		cells[i]["ring_start_locked"] = true
 		a += span
 	systems[sys_id]["cells"] = cells
@@ -236,6 +297,142 @@ func _apply_weighted_phase(sys_id: String) -> bool:
 
 func _apply_ring_phase(sys_id: String) -> void:
 	_apply_weighted_phase(sys_id)
+	## Hard snap visual = target (setup / bias lock).
+	var keys: Array = []
+	var spans: Array = []
+	for c in systems[sys_id]["cells"]:
+		c["angle_half"] = float(c.get("target_half", c.get("angle_half", 0.0)))
+		c["angle_center"] = float(c.get("target_center", c.get("angle_center", 0.0)))
+		keys.append(fposmod(float(c["angle_center"]) - float(c["angle_half"]), TAU))
+		spans.append(float(c["angle_half"]) * 2.0)
+	systems[sys_id]["key_ang"] = keys
+	systems[sys_id]["span_from"] = spans.duplicate()
+	systems[sys_id]["span_to"] = spans.duplicate()
+	systems[sys_id]["arc_tween_t"] = 1.0
+	systems[sys_id]["arc_retarget_lock"] = 0.0
+
+func tick_smooth_arcs(delta: float) -> bool:
+	## Span tween from locked ring_phase — cell index order never crosses (BH-23).
+	var moved := false
+	const ARC_TWEEN_DUR := 0.35
+	const RETARGET_EPS := 0.022 ## ~1.25 deg span chatter
+	const HUGE_JUMP := 0.12
+	for sid in systems.keys():
+		var cells: Array = systems[sid]["cells"]
+		var n: int = cells.size()
+		if n < 2:
+			continue
+		var phase := float(systems[sid].get("ring_phase", 0.0))
+		var desired: PackedFloat32Array = PackedFloat32Array()
+		desired.resize(n)
+		for i in n:
+			desired[i] = maxf(float(cells[i].get("target_half", cells[i].get("angle_half", PI / float(n)))) * 2.0, 0.001)
+		## Normalize desired to TAU (clamp artifacts).
+		var dsum := 0.0
+		for i in n:
+			dsum += desired[i]
+		if dsum > 1e-6:
+			var dk := TAU / dsum
+			for i in n:
+				desired[i] *= dk
+		var to_sp: Array = systems[sid].get("span_to", []) as Array
+		var max_d := 0.0
+		var need_retarget := to_sp.size() != n
+		if not need_retarget:
+			for i in n:
+				var d := absf(desired[i] - float(to_sp[i]))
+				max_d = maxf(max_d, d)
+				if d > RETARGET_EPS:
+					need_retarget = true
+		var lock := float(systems[sid].get("arc_retarget_lock", 0.0))
+		lock = maxf(0.0, lock - delta)
+		systems[sid]["arc_retarget_lock"] = lock
+		var from_sp: Array = systems[sid].get("span_from", []) as Array
+		if need_retarget:
+			if lock <= 0.0 or max_d >= HUGE_JUMP:
+				## Capture current displayed spans as from.
+				from_sp = []
+				for i in n:
+					from_sp.append(maxf(float(cells[i].get("angle_half", PI / float(n))) * 2.0, 0.001))
+				var fsum := 0.0
+				for i in n:
+					fsum += float(from_sp[i])
+				if fsum > 1e-6:
+					var fk := TAU / fsum
+					for i in n:
+						from_sp[i] = float(from_sp[i]) * fk
+				var to_arr: Array = []
+				for i in n:
+					to_arr.append(desired[i])
+				systems[sid]["span_from"] = from_sp
+				systems[sid]["span_to"] = to_arr
+				systems[sid]["arc_tween_t"] = 0.0
+				systems[sid]["arc_retarget_lock"] = ARC_TWEEN_DUR
+				to_sp = to_arr
+			else:
+				var to_arr2: Array = []
+				for i in n:
+					to_arr2.append(desired[i])
+				systems[sid]["span_to"] = to_arr2
+				to_sp = to_arr2
+		if from_sp.size() != n:
+			from_sp = []
+			for i in n:
+				from_sp.append(float(to_sp[i]) if i < to_sp.size() else desired[i])
+			systems[sid]["span_from"] = from_sp
+		var t: float = float(systems[sid].get("arc_tween_t", 1.0))
+		var spans: PackedFloat32Array = PackedFloat32Array()
+		spans.resize(n)
+		if t < 1.0:
+			t = minf(1.0, t + delta / ARC_TWEEN_DUR)
+			systems[sid]["arc_tween_t"] = t
+			var u := t * t * (3.0 - 2.0 * t)
+			for i in n:
+				spans[i] = lerpf(float(from_sp[i]), float(to_sp[i]), u)
+			moved = true
+		else:
+			for i in n:
+				spans[i] = float(to_sp[i]) if i < to_sp.size() else float(desired[i])
+		## Keep sum exactly TAU after lerp, then rebuild keys from locked phase.
+		var ssum := 0.0
+		for i in n:
+			ssum += spans[i]
+		if ssum > 1e-6:
+			var sk := TAU / ssum
+			for i in n:
+				spans[i] *= sk
+		var keys: Array = []
+		keys.resize(n)
+		var a := phase
+		for i in n:
+			keys[i] = fposmod(a, TAU)
+			cells[i]["angle_half"] = spans[i] * 0.5
+			cells[i]["angle_center"] = fposmod(a + spans[i] * 0.5, TAU)
+			a += spans[i]
+		systems[sid]["key_ang"] = keys
+		systems[sid]["cells"] = cells
+		# #region agent log
+		if moved and Engine.get_process_frames() % 45 == 0:
+			var path := "H:/debug-59aff0.log"
+			var f := FileAccess.open(path, FileAccess.READ_WRITE)
+			if f == null:
+				f = FileAccess.open(path, FileAccess.WRITE)
+			if f:
+				f.seek_end()
+				f.store_line(JSON.stringify({
+					"sessionId": "59aff0", "hypothesisId": "BH23",
+					"location": "map_model.tick_smooth_arcs",
+					"message": "span_rebuild",
+					"data": {
+						"sid": str(sid), "phase": phase,
+						"k0": keys[0], "k1": keys[1] if n > 1 else -1.0,
+						"runId": "arc-order"
+					},
+					"timestamp": Time.get_ticks_msec()
+				}))
+				f.close()
+		# #endregion
+	return moved
 
 func _angle_delta(a: float, b: float) -> float:
 	var d = fposmod(a - b + PI, TAU) - PI
@@ -278,24 +475,9 @@ func desired_ring_phase(sys_id: String) -> float:
 		return float(sys.get("ring_phase", 0.0))
 	return fposmod(atan2(sy, sx), TAU)
 
-func tick_ring_align(delta: float) -> bool:
-	var moved := false
-	var rate := 1.2 ## rad/s
-	for sid in systems.keys():
-		var want := desired_ring_phase(str(sid))
-		var cur := float(systems[sid].get("ring_phase", want))
-		var err := _angle_delta(want, cur)
-		if absf(err) < 0.0005:
-			if absf(err) > 0.00005:
-				systems[sid]["ring_phase"] = want
-				_apply_ring_phase(str(sid))
-				moved = true
-			continue
-		var step = clampf(err, -rate * delta, rate * delta)
-		systems[sid]["ring_phase"] = fposmod(cur + step, TAU)
-		_apply_ring_phase(str(sid))
-		moved = true
-	return moved
+func tick_ring_align(_delta: float) -> bool:
+	## BH-23: ring_phase locked at setup (identity+bias). Never mean-align / spin.
+	return false
 
 func cell_world_pos(sys_id: String, cell_i: int, y: float = 0.0) -> Vector3:
 	var sys: Dictionary = systems[sys_id]

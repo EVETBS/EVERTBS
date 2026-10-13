@@ -1,6 +1,6 @@
-﻿# Thin wrapper: same gate for eternal shell project (incremental; -Full available).
+# Thin wrapper: same gate for eternal shell project (incremental; -Full available).
 param(
-  [string]$Godot = "H:\game\game_dev\EVETBS\tools\godot\Godot_v4.7.1-stable_win64.exe",
+  [string]$Godot = "H:\game\game_dev\EVERTBS\tools\godot\Godot_v4.7.1-stable_win64.exe",
   [switch]$SkipSmoke,
   [switch]$Full
 )

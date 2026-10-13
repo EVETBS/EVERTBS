@@ -1,5 +1,5 @@
-﻿param(
-  [string]$Godot = "H:\game\game_dev\EVETBS\tools\godot\Godot_v4.7.1-stable_win64.exe"
+param(
+  [string]$Godot = "H:\game\game_dev\EVERTBS\tools\godot\Godot_v4.7.1-stable_win64.exe"
 )
 
 $ErrorActionPreference = "Stop"

@@ -48,6 +48,7 @@ func _generate_cells(sys: Dictionary) -> Array:
 			"weight": 1.0,
 			"bubble": false,
 			"bubble_t": 0.0,
+			"bubble_remain": 0.0,
 			"assigned_pilot_id": "",
 			"last_assignee": "",
 			"auto_assigned": false,
