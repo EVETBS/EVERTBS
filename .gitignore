@@ -47,6 +47,9 @@ godot_eternal_shell/tools/cache/
 godot_eternal_shell/tools/cache/**
 godot_eternal_shell/tools/_adb_*.png
 godot_eternal_shell/installer/._sc_
+# Installer artwork stays local (EVE autochess wizard images must not return)
+godot_eternal_shell/installer/*.bmp
+godot_eternal_shell/installer/*.png
 godot_eternal_shell/shell/._sc_
 
 # OS

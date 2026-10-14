@@ -216,6 +216,9 @@ func tick_presence(units: Array, map = null, delta: float = 0.0, bar_fn: Callabl
 	## Start only while a bar is actually counting down. A full ready bar must not open another report.
 	for sid0 in moving_by_sys.keys():
 		if bool(moving_by_sys[sid0]) and not active.has(sid0):
+			var bag0: Dictionary = living_by_sys.get(sid0, {})
+			if not bag0.has(int(viewer_faction)):
+				continue
 			if _sys_allows_battle_report(units_by_sys.get(sid0, [])):
 				seed_system_presence(str(sid0), units, map)
 	var to_close: Array = []
@@ -332,7 +335,10 @@ func _finalize(sys_id: String, map) -> void:
 	closed.append(rep)
 
 func _session_has_content(sess: Dictionary) -> bool:
+	## Own-faction perspective: only rows of the viewer faction count as participation.
 	for r in sess.get("rows", []):
+		if int(r.get("faction", -1)) != int(viewer_faction):
+			continue
 		if float(r.get("max_loss_dealt", 0.0)) > 0.01:
 			return true
 		if float(r.get("max_loss_taken", 0.0)) > 0.01:

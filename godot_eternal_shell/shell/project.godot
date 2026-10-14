@@ -9,10 +9,11 @@ config_version=5
 config/name="eve战棋"
 run/main_scene="res://scenes/boot.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
-config/icon="res://icon.png"
-config/version="202609.13.17"
+config/icon="res://icon.svg"
+config/version="202610.14.1"
 config/use_custom_user_dir=true
-config/custom_user_dir_name="userdata"
+; Windows user:// = %APPDATA%\EVERTBS. Must not be "userdata" (EVE自走棋 owns that dir).
+config/custom_user_dir_name="EVERTBS"
 
 [autoload]
 

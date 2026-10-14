@@ -37,6 +37,12 @@ var TACTICAL_DIST_MAX := 3090.0
 ## Tactical further zoom-out → 星图视角.
 var STARMAP_ENTER := 1400.0
 const PAN_SENS := 0.22
+const EDGE_PAN_SPEED_PX := 520.0
+const EDGE_PAN_TAU := 0.08
+var _edge_dir := Vector2.ZERO
+var _edge_depth := 0.0
+var _edge_vel := Vector3.ZERO
+var _edge_intent_on := false
 ## When valid and returns true, skip cam wheel/pan/rotate.
 var block_input_fn: Callable = Callable()
 
@@ -234,6 +240,72 @@ func add_tactical_yaw(delta_rad: float) -> void:
 	tactical_yaw += delta_rad
 	_apply()
 
+func set_edge_pan(dir: Vector2, depth: float) -> void:
+	_edge_dir = dir
+	_edge_depth = clampf(depth, 0.0, 1.0)
+
+func cut_edge_pan() -> void:
+	_edge_dir = Vector2.ZERO
+	_edge_depth = 0.0
+	_edge_vel = Vector3.ZERO
+	_edge_intent_on = false
+
+func _screen_pan_axes() -> Array:
+	if tactical_mode:
+		return [
+			Vector3(cos(tactical_yaw), 0.0, sin(tactical_yaw)),
+			Vector3(sin(tactical_yaw), 0.0, -cos(tactical_yaw)),
+		]
+	return [
+		Vector3(cos(yaw), 0.0, -sin(yaw)),
+		Vector3(sin(yaw), 0.0, cos(yaw)),
+	]
+
+func _tick_edge_velocity(delta: float) -> void:
+	## World-space velocity, same axes as middle-drag. Smooth accel; one integrate per frame.
+	var desired := Vector3.ZERO
+	if _edge_dir != Vector2.ZERO:
+		var k := PAN_SENS * (distance / TACTICAL_DIST_ENTER) if tactical_mode else PAN_SENS * (distance / 140.0)
+		var speed := EDGE_PAN_SPEED_PX * k * lerpf(0.35, 1.0, _edge_depth)
+		var nd := _edge_dir.normalized()
+		var ax: Array = _screen_pan_axes()
+		## dir.y < 0 is the top band. CNC: look toward that screen edge.
+		## Battle orbit `fwd` and tactical `s_up` have opposite screen-Y signs — split them.
+		var y := -nd.y if tactical_mode else nd.y
+		desired = (ax[0] as Vector3) * (nd.x * speed) + (ax[1] as Vector3) * (y * speed)
+		clear_follow_keep_look()
+	var a := 1.0 - exp(-delta / EDGE_PAN_TAU)
+	_edge_vel = _edge_vel.lerp(desired, a)
+	if _edge_vel.length_squared() < 0.04:
+		_edge_vel = Vector3.ZERO
+		return
+	look_at_point += _edge_vel * delta
+	_look_smooth = look_at_point
+	_look_init = true
+	# #region agent log
+	var intent := _edge_dir != Vector2.ZERO
+	if intent != _edge_intent_on:
+		_edge_intent_on = intent
+		var path := "h:/debug-59aff0.log"
+		var f := FileAccess.open(path, FileAccess.READ_WRITE)
+		if f == null:
+			f = FileAccess.open(path, FileAccess.WRITE)
+		if f:
+			f.seek_end()
+			f.store_line(JSON.stringify({
+				"sessionId": "59aff0", "hypothesisId": "EDGE",
+				"location": "board_camera._tick_edge_velocity", "message": "edge_toggle",
+				"data": {
+					"on": intent, "dir_x": _edge_dir.x, "dir_y": _edge_dir.y,
+					"y_sign": "tac_neg" if tactical_mode else "battle_pos",
+					"speed": snappedf(desired.length(), 0.01), "dt": snappedf(delta, 0.0001),
+					"tac": tactical_mode, "star": starmap_mode, "runId": "post-fix"
+				},
+				"timestamp": Time.get_ticks_msec()
+			}))
+			f.close()
+	# #endregion
+
 func pan_by_screen_delta(rel: Vector2) -> void:
 	## Same axes as middle-drag pan (tactical nadir or battle orbit look shift).
 	if tactical_mode:
@@ -367,12 +439,14 @@ func _handle_cam_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func tick_breathe(delta: float) -> void:
+	_tick_edge_velocity(delta)
 	if not _look_init:
 		_look_smooth = look_at_point
 		_look_init = true
-	var rate = LOOK_LERP_FOLLOW if follow_unit_id != "" and not starmap_mode else LOOK_LERP
-	_look_smooth = _look_smooth.lerp(look_at_point, clampf(delta * rate, 0.0, 1.0))
-	if not tactical_mode:
+	if _edge_vel == Vector3.ZERO:
+		var rate = LOOK_LERP_FOLLOW if follow_unit_id != "" and not starmap_mode else LOOK_LERP
+		_look_smooth = _look_smooth.lerp(look_at_point, clampf(delta * rate, 0.0, 1.0))
+	if not tactical_mode and _edge_vel == Vector3.ZERO:
 		_breathe_t += delta
 	_apply()
 
@@ -397,7 +471,7 @@ func _apply() -> void:
 	var sy = sin(yaw)
 	var offset = Vector3(sy * cp, sp, cy * cp) * distance
 	var breath = Vector3.ZERO
-	if follow_unit_id == "":
+	if follow_unit_id == "" and _edge_vel == Vector3.ZERO:
 		var th = _breathe_t * TAU / BREATHE_PERIOD
 		var s = sin(th)
 		var c = cos(th)

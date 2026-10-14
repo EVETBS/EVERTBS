@@ -60,7 +60,6 @@ func _setup_fleets_chuang(mine: Array) -> void:
 	elif n >= 10:
 		specs = [["small", 2], ["attrition", 1]]
 	_assign_by_weight_specs(mine, specs)
-	_chuang_ensure_armor_link()
 
 func _chuang_pick_score(u: Dictionary) -> float:
 	var ton_w := float(BoardTypes.tonnage_weight(u.get("tonnage", "destroyer")))
@@ -72,16 +71,6 @@ func _chuang_pick_score(u: Dictionary) -> float:
 		link = 50.0
 	## Prefer high PD DPS and higher tonnage for attrition pools.
 	return pd * 3.0 + ton_w * 10.0 + link
-
-func _chuang_ensure_armor_link() -> void:
-	for f in fleets:
-		if str(f.get("role", "")) != "attrition":
-			continue
-		var _has_link := false
-		for _uid in f.get("members", []):
-			## Members are unit ids; board tags guard at init — best-effort skip if missing.
-			pass
-		## Prefer at least one cruiser+ in attrition; score sort already biased PD/ton.
 
 func _assign_by_weight_specs(mine: Array, specs: Array) -> void:
 	var part_sum := 0
@@ -152,6 +141,23 @@ func accept_ship(u: Dictionary) -> void:
 	fleets[best]["members"].append(uid)
 	fleets[best]["weight"] = int(fleets[best].get("weight", 0)) + BoardTypes.tonnage_weight(u.get("tonnage", "destroyer"))
 	u["fleet_id"] = int(fleets[best].get("id", best))
+
+func accept_ship_into(u: Dictionary, fid: int) -> bool:
+	var uid := str(u.get("id", ""))
+	if uid == "":
+		return false
+	for f0 in fleets:
+		if (f0.get("members", []) as Array).has(uid):
+			return true
+	for f in fleets:
+		if int(f.get("id", -1)) != fid:
+			continue
+		if not (f["members"] as Array).has(uid):
+			f["members"].append(uid)
+			f["weight"] = int(f.get("weight", 0)) + BoardTypes.tonnage_weight(u.get("tonnage", "destroyer"))
+		u["fleet_id"] = fid
+		return true
+	return false
 
 func total_weight(units: Array) -> float:
 	var w = 0.0

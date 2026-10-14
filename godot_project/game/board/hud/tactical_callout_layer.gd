@@ -13,6 +13,8 @@ const TWEEN_S := 0.20
 ## Frame / slot ease when the box moves, flips side, or yaw changes.
 const SLIDE_TAU := 0.16
 const PICK_LAYER := 2
+const RELAX_ITERS := 12
+const RELAX_GAP := 1.2
 
 var font_scale: float = 7.7
 ## Matches BoardCamera.tactical_yaw — frame/slots stay screen-parallel.
@@ -129,6 +131,7 @@ func sync_occupied(units: Array, claimants_fn: Callable, delta: float) -> void:
 		_ensure_cell(str(k3), ids3)
 	_resolve_callout_sides()
 	_spread_pie_columns()
+	_relax_callouts()
 	_present_callouts(delta)
 	_tick_tweens(delta)
 
@@ -385,6 +388,120 @@ func _spread_pie_columns() -> void:
 			d3["target_pos"] = p
 			d3["frame_pos"] = p
 
+
+func _count_callout_hits(keys: Array, pos: Dictionary) -> Vector2i:
+	## x = box↔box overlaps, y = box↔ring overlaps.
+	var sr := _screen_right()
+	var su := _screen_up()
+	var bb := 0
+	var br := 0
+	for i in keys.size():
+		var a: Dictionary = _cells[keys[i]]
+		var pa: Vector3 = pos[keys[i]]
+		for j in range(i + 1, keys.size()):
+			var b: Dictionary = _cells[keys[j]]
+			var dl: Vector3 = (pos[keys[j]] as Vector3) - pa
+			if absf(dl.dot(sr)) < float(a["half_x"]) + float(b["half_x"]) \
+					and absf(dl.dot(su)) < float(a["half_z"]) + float(b["half_z"]):
+				bb += 1
+		for osid in _map.systems.keys():
+			var oc: Vector3 = _map.systems[osid]["center"]
+			var cl := _box_closest(pa, float(a["half_x"]), float(a["half_z"]), oc, sr, su)
+			if Vector2(cl.x - oc.x, cl.z - oc.z).length() < _sys_radius(str(osid)):
+				br += 1
+	return Vector2i(bb, br)
+
+func _box_closest(fp: Vector3, hx: float, hz: float, p: Vector3, sr: Vector3, su: Vector3) -> Vector3:
+	## Closest point of the screen-axis box (center fp) to p, on the board plane.
+	var d := Vector3(p.x - fp.x, 0.0, p.z - fp.z)
+	var lx := clampf(d.dot(sr), -hx, hx)
+	var lz := clampf(d.dot(su), -hz, hz)
+	return Vector3(fp.x, 0.0, fp.z) + sr * lx + su * lz
+
+func _relax_callouts() -> void:
+	## Push boxes apart along the shallower screen axis; push boxes out of system rings.
+	## Recomputed each frame from the side/stack anchors, so it never drifts.
+	var keys: Array = []
+	for k in _cells.keys():
+		var dk: Dictionary = _cells[k]
+		if dk.get("frame") != null and dk.has("target_pos"):
+			keys.append(k)
+	if keys.is_empty():
+		return
+	keys.sort()
+	var sr := _screen_right()
+	var su := _screen_up()
+	var pos: Dictionary = {}
+	for k0 in keys:
+		pos[k0] = _cells[k0]["target_pos"]
+	var before := _count_callout_hits(keys, pos)
+	for _it in RELAX_ITERS:
+		var moved := false
+		for i in keys.size():
+			var a: Dictionary = _cells[keys[i]]
+			var hxa := float(a["half_x"]) + RELAX_GAP * 0.5
+			var hza := float(a["half_z"]) + RELAX_GAP * 0.5
+			for j in range(i + 1, keys.size()):
+				var b: Dictionary = _cells[keys[j]]
+				var pa: Vector3 = pos[keys[i]]
+				var pb: Vector3 = pos[keys[j]]
+				var dl := pb - pa
+				var dr := dl.dot(sr)
+				var du := dl.dot(su)
+				var o_r := hxa + float(b["half_x"]) + RELAX_GAP * 0.5 - absf(dr)
+				var o_u := hza + float(b["half_z"]) + RELAX_GAP * 0.5 - absf(du)
+				if o_r <= 0.0 or o_u <= 0.0:
+					continue
+				var push: Vector3
+				if o_u <= o_r:
+					push = su * ((1.0 if du >= 0.0 else -1.0) * o_u * 0.5)
+				else:
+					push = sr * ((1.0 if dr >= 0.0 else -1.0) * o_r * 0.5)
+				pos[keys[i]] = pa - push
+				pos[keys[j]] = pb + push
+				moved = true
+		for k2 in keys:
+			var d2: Dictionary = _cells[k2]
+			var hx := float(d2["half_x"])
+			var hz := float(d2["half_z"])
+			for osid in _map.systems.keys():
+				var oc: Vector3 = _map.systems[osid]["center"]
+				var rad := _sys_radius(str(osid)) + RELAX_GAP
+				var fp: Vector3 = pos[k2]
+				var cl := _box_closest(fp, hx, hz, oc, sr, su)
+				var out := Vector3(cl.x - oc.x, 0.0, cl.z - oc.z)
+				var dist := out.length()
+				if dist >= rad:
+					continue
+				if dist < 0.001:
+					out = Vector3(fp.x - oc.x, 0.0, fp.z - oc.z)
+					if out.length_squared() < 0.0001:
+						out = sr
+				pos[k2] = fp + out.normalized() * (rad - dist)
+				moved = true
+		if not moved:
+			break
+	for k3 in keys:
+		var p: Vector3 = pos[k3]
+		p.y = 0.12
+		_cells[k3]["target_pos"] = p
+		_cells[k3]["frame_pos"] = p
+	# #region agent log
+	if Engine.get_process_frames() % 120 == 0:
+		var after := _count_callout_hits(keys, pos)
+		var _lf := FileAccess.open("H:/debug-59aff0.log", FileAccess.READ_WRITE)
+		if _lf == null:
+			_lf = FileAccess.open("H:/debug-59aff0.log", FileAccess.WRITE)
+		if _lf:
+			_lf.seek_end()
+			_lf.store_line(JSON.stringify({
+				"sessionId": "59aff0", "hypothesisId": "CO", "location": "tactical_callout_layer._relax_callouts",
+				"message": "relax", "data": {"n": keys.size(), "box_before": before.x, "ring_before": before.y,
+					"box_after": after.x, "ring_after": after.y, "runId": "post-fix"},
+				"timestamp": Time.get_ticks_msec()
+			}))
+			_lf.close()
+	# #endregion
 
 func _clamp_sys_dist(center: Vector3, fp: Vector3, max_d: float) -> Vector3:
 	var flat := Vector3(fp.x - center.x, 0.0, fp.z - center.z)
