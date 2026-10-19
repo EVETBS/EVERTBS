@@ -23,7 +23,7 @@ uniform float threshold3 = 0.68;
 uniform float metallic_threshold = 0.75;
 uniform float normal_scale = 1.0;
 uniform float glow_mul = 1.0;
-uniform float intensity_floor = 0.04;
+uniform float intensity_floor = 0.14;
 uniform float combat_emission_strength : hint_range(0.0, 2.0) = 0.0;
 uniform vec3 combat_emission_color = vec3(1.0);
 /// When >0, discard fragments with albedo.a below this (glass / atlas padding).
@@ -35,7 +35,11 @@ void fragment() {
 		discard;
 	}
 	// Match Unity StandardShipShader: intensity from albedo.r only.
+	// Soft-lift near-black panels so TQ cargo bays do not read as hull holes (BH-50).
 	float intensity = max(ad.r, intensity_floor);
+	if (intensity < intensity_floor * 2.0) {
+		intensity = mix(intensity_floor * 2.0, intensity, 0.35);
+	}
 	vec4 pmwo = texture(pmwo_tex, UV);
 	vec4 rg = texture(rg_tex, UV);
 

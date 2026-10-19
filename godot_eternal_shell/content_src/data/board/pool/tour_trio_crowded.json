@@ -1,0 +1,118 @@
+{
+  "map_name": "三人锦标赛标准图 拥挤",
+  "name": "三人锦标赛标准图 拥挤",
+  "viewer_faction": 1,
+  "cell_count": 12,
+  "ring_inner": 12.0,
+  "ring_outer": 26.0,
+  "empty_system_scale": 0.62,
+  "systems": [
+    {
+      "id": "408",
+      "name": "R2",
+      "pos": [
+        98.24,
+        -703.64
+      ],
+      "links": [
+        "412",
+        "411"
+      ],
+      "kind": "resource_system"
+    },
+    {
+      "id": "409",
+      "name": "R1",
+      "pos": [
+        -453.5,
+        -89.53
+      ],
+      "links": [
+        "412",
+        "413"
+      ],
+      "kind": "resource_system"
+    },
+    {
+      "id": "410",
+      "name": "R3",
+      "pos": [
+        357.62,
+        79.69
+      ],
+      "links": [
+        "413",
+        "411"
+      ],
+      "kind": "resource_system"
+    },
+    {
+      "id": "411",
+      "name": "B2",
+      "pos": [
+        276.49,
+        -327.72
+      ],
+      "links": [
+        "410",
+        "408",
+        "412",
+        "414",
+        "413"
+      ],
+      "kind": "station_system"
+    },
+    {
+      "id": "412",
+      "name": "B1",
+      "pos": [
+        -214.43,
+        -429.3
+      ],
+      "links": [
+        "408",
+        "409",
+        "411",
+        "414",
+        "413"
+      ],
+      "kind": "station_system"
+    },
+    {
+      "id": "413",
+      "name": "B3",
+      "pos": [
+        -55.1,
+        29.69
+      ],
+      "links": [
+        "409",
+        "410",
+        "414",
+        "411",
+        "412"
+      ],
+      "kind": "station_system"
+    },
+    {
+      "id": "414",
+      "name": "M1",
+      "pos": [
+        6.98,
+        -258.12
+      ],
+      "links": [
+        "411",
+        "413",
+        "412"
+      ],
+      "kind": "normal"
+    }
+  ],
+  "source_export": {
+    "editor": "starfield map manual editor",
+    "node_count": 7,
+    "edge_count": 12,
+    "scale": 1.0
+  }
+}

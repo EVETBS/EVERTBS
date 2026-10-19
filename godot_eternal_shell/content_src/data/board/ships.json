@@ -260,7 +260,7 @@
           },
           {
             "kind": "weapon",
-            "ref": "weapon_large_cannon_ljf",
+            "ref": "weapon_large_cannon",
             "range_cells": 2
           },
           {

@@ -6,7 +6,13 @@ enum MovePhase { IDLE, PREP, INVULN, LANDING }
 enum Relation { SELF, ALLY, HOSTILE, NEUTRAL }
 
 const UNIT_Y := 1.6
+## Visual hull bounding-sphere after the authored 2π×26/24 diameter (SHIPS.md).
+const HULL_DIAMETER := (TAU * 26.0 / 24.0) * 0.55 * 1.5
 const METERS_PER_CELL := 2000.0
+const TRACKING_METERS_PER_CELL := 2000.0
+## Movement mapping only. Missile damage keeps meters and does not use this.
+const SPEED_METERS_PER_CELL := 750.0
+const KIT_METERS_PER_CELL := 500.0
 const MIN_SAME_CELL_FRAC := 0.25
 const SECTOR_MIN_DEG := 8.0
 const SECTOR_MAX_DEG := 120.0

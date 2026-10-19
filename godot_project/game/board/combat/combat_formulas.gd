@@ -20,6 +20,29 @@ static func turret_hit_chance(
 		range_term = over / falloff_m
 	return pow(0.5, tracking_term * tracking_term + range_term * range_term)
 
+## Autochess missile DR. Paper damage stays the board's four-type sum.
+## dr = min(1, S/Er, (S/Er * Ev/Vt) ^ exp). DRF <= 1 is already the exponent.
+static func missile_damage_factor(
+	signature: float,
+	target_speed: float,
+	explosion_radius: float,
+	explosion_velocity: float,
+	drf: float,
+	drs: float = 5.5
+) -> float:
+	var er := maxf(explosion_radius, 1.0)
+	var ev := maxf(explosion_velocity, 1.0)
+	var sig := maxf(signature, 1.0)
+	var sig_ratio := sig / er
+	if drf <= 0.0:
+		return minf(1.0, sig_ratio)
+	var drf_exp := drf
+	if drf > 1.0:
+		var base := drs if drs > 1.0 else 5.5
+		drf_exp = log(drf) / log(base)
+	var vt := maxf(target_speed, 0.0001)
+	return minf(1.0, minf(sig_ratio, pow(sig_ratio * (ev / vt), drf_exp)))
+
 static func roll_quality(rng: RandomNumberGenerator) -> float:
 	var u = rng.randf()
 	if u < 0.01:
@@ -31,7 +54,8 @@ static func apply_layer_damage(
 	shield: float, armor: float, structure: float,
 	max_s: float, max_a: float, max_h: float,
 	raw: float, resist: int,
-	skip_max_loss: bool = false
+	skip_max_loss: bool = false,
+	max_loss_ratio: float = 0.1
 ) -> Dictionary:
 	var taken = raw * (1.0 - clampf(float(resist), 0.0, 100.0) / 100.0)
 	var rem = taken
@@ -50,11 +74,12 @@ static func apply_layer_damage(
 		dh = minf(structure, rem)
 		structure -= dh
 		rem -= dh
-	# capital-style 10% max loss on absorbed (guard redirect skips on bearer)
+	# capital-style max loss on absorbed (guard redirect skips on bearer). Base ratio 0.1.
+	var loss_ratio := maxf(0.0, max_loss_ratio)
 	if not skip_max_loss:
-		max_s = maxf(1.0, max_s - ds * 0.1)
-		max_a = maxf(1.0, max_a - da * 0.1)
-		max_h = maxf(1.0, max_h - dh * 0.1)
+		max_s = maxf(1.0, max_s - ds * loss_ratio)
+		max_a = maxf(1.0, max_a - da * loss_ratio)
+		max_h = maxf(1.0, max_h - dh * loss_ratio)
 	shield = minf(shield, max_s)
 	armor = minf(armor, max_a)
 	structure = minf(structure, max_h)

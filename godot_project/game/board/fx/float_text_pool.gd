@@ -4,8 +4,11 @@ extends Node
 const COLOR_DAMAGE := Color(1.0, 0.45, 0.35)
 const COLOR_HEAL := Color(0.35, 0.95, 0.55)
 const GAP_RESET_S := 1.0
-const BASE_FONT := 48
-const BASE_PIXEL := 0.012
+## UI_AND_SHELL §5: world size = font × pixel = 2.88 (5× the old 48 × 0.012).
+## Any later tier / accumulation multiplier must multiply THIS base once, never stack.
+const BASE_FONT := 120
+const BASE_PIXEL := 0.024
+const BASE_OUTLINE := 20
 const TTL_S := 0.95
 
 var _pool: Array = []
@@ -65,7 +68,7 @@ func _spawn(world_pos: Vector3, text: String, color: Color, track_key: String, y
 		lab = Label3D.new()
 		lab.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		lab.font_size = BASE_FONT
-		lab.outline_size = 8
+		lab.outline_size = BASE_OUTLINE
 		lab.outline_modulate = Color(0, 0, 0, 0.85)
 		lab.no_depth_test = true
 		lab.pixel_size = BASE_PIXEL

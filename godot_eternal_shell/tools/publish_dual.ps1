@@ -10,7 +10,7 @@ param(
   # Pinned pack instead of re-exporting from godot_project.
   [string]$ContentPck = "",
   [string]$ContentVersion = "",
-  [string]$ContentEntry = "res://game/board_test.tscn"
+  [string]$ContentEntry = "res://game/main_menu.tscn"
 )
 
 $ErrorActionPreference = "Stop"

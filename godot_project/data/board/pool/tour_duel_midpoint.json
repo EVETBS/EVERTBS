@@ -1,0 +1,118 @@
+{
+  "map_name": "双人锦标赛标准图 中点",
+  "name": "双人锦标赛标准图 中点",
+  "viewer_faction": 1,
+  "cell_count": 12,
+  "ring_inner": 12.0,
+  "ring_outer": 26.0,
+  "empty_system_scale": 0.62,
+  "systems": [
+    {
+      "id": "401",
+      "name": "R2",
+      "pos": [
+        -305.9,
+        -436.32
+      ],
+      "links": [
+        "406",
+        "402",
+        "405",
+        "403"
+      ],
+      "kind": "resource_system"
+    },
+    {
+      "id": "402",
+      "name": "N1",
+      "pos": [
+        -295.68,
+        80.74
+      ],
+      "links": [
+        "401",
+        "406",
+        "405",
+        "404"
+      ],
+      "kind": "normal"
+    },
+    {
+      "id": "403",
+      "name": "N2",
+      "pos": [
+        211.16,
+        -446.55
+      ],
+      "links": [
+        "405",
+        "401",
+        "404",
+        "407"
+      ],
+      "kind": "normal"
+    },
+    {
+      "id": "404",
+      "name": "R1",
+      "pos": [
+        221.39,
+        70.51
+      ],
+      "links": [
+        "405",
+        "402",
+        "403",
+        "407"
+      ],
+      "kind": "resource_system"
+    },
+    {
+      "id": "405",
+      "name": "M1",
+      "pos": [
+        -42.26,
+        -182.9
+      ],
+      "links": [
+        "402",
+        "404",
+        "401",
+        "403"
+      ],
+      "kind": "station_system"
+    },
+    {
+      "id": "406",
+      "name": "B1",
+      "pos": [
+        -674.39,
+        -170.41
+      ],
+      "links": [
+        "401",
+        "402"
+      ],
+      "kind": "station_system"
+    },
+    {
+      "id": "407",
+      "name": "B2",
+      "pos": [
+        589.88,
+        -195.42
+      ],
+      "links": [
+        "404",
+        "403"
+      ],
+      "kind": "station_system"
+    }
+  ],
+  "source_export": {
+    "editor": "starfield map manual editor",
+    "node_count": 7,
+    "edge_count": 12,
+    "scale": 1.0
+  }
+}

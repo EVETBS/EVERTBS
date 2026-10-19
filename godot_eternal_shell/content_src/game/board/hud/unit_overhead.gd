@@ -60,6 +60,9 @@ static var battle_nameplate_y: float = (3.6 + NAMEPLATE_LIFT) * 2.0
 var _compact_icon_only := false
 var _show_faction_badge := true
 
+var _wrap_text := ""
+var _vis_stamp := ""
+var _cd_stamp := ""
 var name_lab: Label3D
 var ton_spr: Sprite3D
 var overlay_bg: Sprite3D
@@ -87,8 +90,7 @@ var _sel_glow: MeshInstance3D
 var _sel_highlight := false
 var _cd_mi: MeshInstance3D
 var _cd_ratio := -1.0
-static var _dbg_oh_frame := -1
-
+var hp_batched := true
 func _ready() -> void:
 	name_lab = Label3D.new()
 	name_lab.billboard = BaseMaterial3D.BILLBOARD_DISABLED
@@ -261,6 +263,9 @@ func set_faction_badge(_col: Color) -> void:
 		name_lab.outline_modulate = Color(0.05, 0.05, 0.08, 1.0) if lum > 0.45 else Color(0.95, 0.95, 0.98, 1.0)
 
 func set_compact_icon_only(on: bool) -> void:
+	if on != _compact_icon_only:
+		_vis_stamp = ""
+		_cd_stamp = ""
 	_compact_icon_only = on
 	_apply_compact_visibility()
 
@@ -308,12 +313,28 @@ func _apply_compact_visibility() -> void:
 func set_enemy_mirror(enemy: bool) -> void:
 	if enemy == _enemy_mirrored and _sector_a0.size() == 4:
 		return
+	_vis_stamp = ""
+	_cd_stamp = ""
 	_rebuild_sectors(enemy)
 	_layer_inited = false
 
 func set_alive_view(on: bool) -> void:
 	_alive_view = on
 	visible = on
+
+func _hide_local_hp_rings() -> void:
+	for mi in _fills:
+		if mi:
+			mi.visible = false
+	for mi2 in _blacks:
+		if mi2:
+			mi2.visible = false
+	for mi3 in _trails:
+		if mi3:
+			mi3.visible = false
+	if _cd_mi:
+		_cd_mi.visible = false
+
 
 func update_view(title: String, s: float, a: float, h: float, max_s: float, max_a: float, max_h: float, pris_s: float, pris_a: float, pris_h: float, cap: float = -1.0, max_cap: float = 1.0, atk_cd_ratio: float = -1.0) -> void:
 	if not _alive_view:
@@ -323,6 +344,9 @@ func update_view(title: String, s: float, a: float, h: float, max_s: float, max_
 	if name_lab.text != title:
 		name_lab.text = title
 	_apply_name_wrap()
+	if hp_batched:
+		_hide_local_hp_rings()
+		return
 	_sync_layer(0, s, max_s, pris_s)
 	_sync_layer(1, a, max_a, pris_a)
 	_sync_layer(2, h, max_h, pris_h)
@@ -431,6 +455,20 @@ func _apply_visuals() -> void:
 	if _compact_icon_only:
 		_apply_compact_visibility()
 		return
+	## Rebuild annulus meshes only when quantized HP/cap/trail changed (many plates were hitching).
+	var stamp := ""
+	for i in 4:
+		var batches: Array = _green_batches[i]
+		var age_q := 0
+		if not batches.is_empty():
+			age_q = int(float(batches[0].get("age", 0.0)) * 8.0)
+		stamp += "%d,%d,%d,%d,%d|" % [
+			int(_fill_ratio[i] * 48.0), int(_trail_ratio[i] * 48.0),
+			int(_black_frac[i] * 48.0), batches.size(), age_q
+		]
+	if stamp == _vis_stamp:
+		return
+	_vis_stamp = stamp
 	for i in 4:
 		var a0 = _sector_a0[i]
 		var a1 = _sector_a1[i]
@@ -503,7 +541,13 @@ func _apply_cd_visual() -> void:
 		return
 	if _cd_ratio < 0.0:
 		_cd_mi.visible = false
+		_cd_stamp = "off"
 		return
+	var thick := _cd_thick()
+	var cd_key := "%d:%d:%d" % [int(_cd_ratio * 32.0), int(thick * 100.0), 1 if _enemy_mirrored else 0]
+	if cd_key == _cd_stamp:
+		return
+	_cd_stamp = cd_key
 	var a0: float
 	var a1: float
 	if _enemy_mirrored:
@@ -512,7 +556,6 @@ func _apply_cd_visual() -> void:
 	else:
 		a0 = HP_A0
 		a1 = CAP_A1
-	var thick := _cd_thick()
 	var r0 := RING_OUTER + CD_GAP
 	var r1 := r0 + thick
 	var fr := clampf(_cd_ratio, 0.0, 1.0)
@@ -565,6 +608,9 @@ func _bar_local_diameter() -> float:
 func _apply_name_wrap() -> void:
 	if name_lab == null:
 		return
+	if name_lab.text == _wrap_text:
+		return
+	_wrap_text = name_lab.text
 	## Label3D.width is in *pixels* (Godot 4), not world units.
 	## Convert ring diameter to px via Label3D.pixel_size (default 0.005).
 	var px: float = maxf(name_lab.pixel_size, 0.0001)
@@ -633,33 +679,6 @@ func place_tactical(cam: Camera3D, world_pos: Vector3) -> void:
 	scale = Vector3.ONE * font_scale
 	_apply_name_wrap()
 	_apply_cd_visual()
-	# #region agent log
-	var frt := Engine.get_process_frames()
-	if frt % 60 == 0:
-		var path := "H:/debug-59aff0.log"
-		var f := FileAccess.open(path, FileAccess.READ_WRITE)
-		if f == null:
-			f = FileAccess.open(path, FileAccess.WRITE)
-		if f:
-			f.seek_end()
-			var by: Vector3 = global_transform.basis.y
-			var cy: Vector3 = cam.global_transform.basis.y if cam else Vector3.ZERO
-			f.store_line(JSON.stringify({
-				"sessionId": "59aff0",
-				"hypothesisId": "YAW_OH",
-				"location": "unit_overhead.place_tactical",
-				"message": "screen_parallel",
-				"data": {
-					"sc": font_scale, "sel": _sel_highlight,
-					"oh_up": {"x": by.x, "z": by.z},
-					"cam_up": {"x": cy.x, "z": cy.z},
-					"dot": by.dot(cy),
-					"runId": "yaw-screen"
-				},
-				"timestamp": Time.get_ticks_msec()
-			}))
-			f.close()
-	# #endregion
 
 func face_camera(cam: Camera3D, world_anchor: Vector3) -> void:
 	## 战场视角: distance scale only — never inherit tactical font_scale.
@@ -681,27 +700,3 @@ func face_camera(cam: Camera3D, world_anchor: Vector3) -> void:
 	scale = Vector3.ONE * sc
 	_apply_name_wrap()
 	_apply_cd_visual()
-	# #region agent log
-	var fr := Engine.get_process_frames()
-	if fr % 45 == 0 and fr != _dbg_oh_frame:
-		_dbg_oh_frame = fr
-		var path := "H:/debug-59aff0.log"
-		var f := FileAccess.open(path, FileAccess.READ_WRITE)
-		if f == null:
-			f = FileAccess.open(path, FileAccess.WRITE)
-		if f:
-			f.seek_end()
-			f.store_line(JSON.stringify({
-				"sessionId": "59aff0",
-				"hypothesisId": "OH_Y",
-				"location": "unit_overhead.face_camera",
-				"message": "orbit_nameplate",
-				"data": {
-					"dist": dist, "sc": sc, "bind_y": bind_y,
-					"anchor_y": world_anchor.y, "oh_y": global_position.y,
-					"runId": "nameplate-y"
-				},
-				"timestamp": Time.get_ticks_msec()
-			}))
-			f.close()
-	# #endregion

@@ -22,7 +22,7 @@ const GITHUB_POINTER_VERSION_URL := (
 	"https://raw.githubusercontent.com/EVETBS/evetbs-online-update/main/version.json"
 )
 
-const DEFAULT_ENTRY := "res://game/board_test.tscn"
+const DEFAULT_ENTRY := "res://game/main_menu.tscn"
 
 static var base_url: String = DEFAULT_BASE_URLS[0]
 

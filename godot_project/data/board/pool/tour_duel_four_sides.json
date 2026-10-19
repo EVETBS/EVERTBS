@@ -1,0 +1,174 @@
+{
+  "map_name": "双人人锦标赛标准图 四面",
+  "name": "双人人锦标赛标准图 四面",
+  "viewer_faction": 1,
+  "cell_count": 12,
+  "ring_inner": 12.0,
+  "ring_outer": 26.0,
+  "empty_system_scale": 0.62,
+  "systems": [
+    {
+      "id": "424",
+      "name": "R1",
+      "pos": [
+        -636.57,
+        -629.89
+      ],
+      "links": [
+        "428",
+        "426",
+        "431"
+      ],
+      "kind": "resource_system"
+    },
+    {
+      "id": "425",
+      "name": "R3",
+      "pos": [
+        -488.55,
+        151.86
+      ],
+      "links": [
+        "428",
+        "427",
+        "432"
+      ],
+      "kind": "resource_system"
+    },
+    {
+      "id": "426",
+      "name": "M2",
+      "pos": [
+        -408.48,
+        -434.46
+      ],
+      "links": [
+        "428",
+        "424",
+        "429"
+      ],
+      "kind": "normal"
+    },
+    {
+      "id": "427",
+      "name": "M3",
+      "pos": [
+        -470.18,
+        -145.11
+      ],
+      "links": [
+        "425",
+        "428",
+        "430"
+      ],
+      "kind": "normal"
+    },
+    {
+      "id": "428",
+      "name": "B2",
+      "pos": [
+        -693.07,
+        -242.72
+      ],
+      "links": [
+        "424",
+        "425",
+        "427",
+        "426",
+        "434"
+      ],
+      "kind": "station_system"
+    },
+    {
+      "id": "429",
+      "name": "M4",
+      "pos": [
+        21.58,
+        -492.4
+      ],
+      "links": [
+        "431",
+        "426",
+        "433"
+      ],
+      "kind": "normal"
+    },
+    {
+      "id": "430",
+      "name": "M5",
+      "pos": [
+        -214.48,
+        -14.13
+      ],
+      "links": [
+        "433",
+        "427",
+        "432"
+      ],
+      "kind": "normal"
+    },
+    {
+      "id": "431",
+      "name": "R2",
+      "pos": [
+        -235.08,
+        -564.57
+      ],
+      "links": [
+        "424",
+        "429",
+        "433"
+      ],
+      "kind": "resource_system"
+    },
+    {
+      "id": "432",
+      "name": "R4",
+      "pos": [
+        -83.99,
+        224.6
+      ],
+      "links": [
+        "433",
+        "430",
+        "425"
+      ],
+      "kind": "resource_system"
+    },
+    {
+      "id": "433",
+      "name": "B1",
+      "pos": [
+        41.07,
+        -182.29
+      ],
+      "links": [
+        "429",
+        "430",
+        "431",
+        "432",
+        "434"
+      ],
+      "kind": "station_system"
+    },
+    {
+      "id": "434",
+      "name": "M1",
+      "pos": [
+        -267.98,
+        -272.99
+      ],
+      "links": [
+        "428",
+        "433"
+      ],
+      "kind": "station_system"
+    }
+  ],
+  "source_export": {
+    "editor": "starfield map manual editor",
+    "node_count": 11,
+    "edge_count": 18,
+    "scale": 1.0
+  }
+}

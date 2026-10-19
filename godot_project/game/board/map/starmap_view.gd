@@ -1,6 +1,8 @@
 extends Node3D
 class_name BoardStarmapView
 
+const DevBalance := preload("res://game/board/dev_balance.gd")
+
 var map: BoardMapModel
 var diplomacy: Dictionary
 var viewer = 1
@@ -16,6 +18,11 @@ var cell_pick_root: Node3D
 var link_cam: Camera3D
 ## visual_scale per system id (smoothed)
 var visual_scales: Dictionary = {}
+## sid -> true when that system is outside vision. Empty means fog is off.
+var fog_mask: Dictionary = {}
+
+func _work_full(c: Dictionary) -> float:
+	return DevBalance.work_cap(int(c.get("kind", 0)))
 
 @onready var mesh_inst: MeshInstance3D = $Mesh
 
@@ -522,15 +529,17 @@ func _deferred_rebuild_decor() -> void:
 	_rebuild_system_markers()
 	_rebuild_territory()
 
-func sync_ring_visuals(delta: float, arcs_moving: bool, scale_moving: bool, force_paint: bool) -> void:
+func sync_ring_visuals(delta: float, arcs_moving: bool, scale_moving: bool, force_paint: bool) -> bool:
 	## 200ms arc 补帧: paint every frame while keys tween; idle = no paint storm.
+	## Returns true when sector textures were rewritten (caller may clear capture_dirty).
 	if map == null:
-		return
+		return false
 	_ensure_gpu_board()
 	if not _gpu_draw_enabled:
 		if force_paint or arcs_moving or scale_moving:
 			_cpu_rebuild_mesh()
-		return
+			return force_paint or arcs_moving
+		return false
 	_ensure_rings()
 	if arcs_moving or scale_moving or force_paint:
 		_sync_ring_xforms_only()
@@ -557,6 +566,7 @@ func sync_ring_visuals(delta: float, arcs_moving: bool, scale_moving: bool, forc
 	elif scale_moving:
 		sync_links()
 	_apply_battle_gpu_vis()
+	return do_paint
 
 func _sync_ring_xforms_only() -> void:
 	if _ring_root == null or map == null:
@@ -611,7 +621,7 @@ func _paint_all_sector_tex() -> void:
 						edge = _owner_color(owner_fac)
 				fills[i] = Color(base.r, base.g, base.b, 0.70)
 				edges[i] = edge
-				works[i] = clampf(float(c.get("work", 0.0)) / BoardTypes.WORK_MAX, 0.0, 1.0)
+				works[i] = clampf(float(c.get("work", 0.0)) / _work_full(c), 0.0, 1.0)
 				var span := float(c.get("angle_half", 0.0)) * 2.0
 				max_span_deg = maxf(max_span_deg, rad_to_deg(span))
 			else:
@@ -1069,17 +1079,20 @@ func sync_instance_data() -> void:
 		if span - 2.0 * gap < 0.012:
 			gap = maxf(0.0, span * 0.04)
 		var work_logic = float(c.get("work", 0.0))
+		var work_full := _work_full(c)
 		c["work_vis"] = work_logic
 		var ga0 = a0 + gap
 		var ga1 = a1 - gap
-		var must_draw = capturing != 0 or absf(work_logic - BoardTypes.WORK_MAX) > 0.5
+		## Capture rim must stay visible on narrow wedges (CAPTURE §4.1).
+		var must_draw = capturing != 0 or absf(work_logic - work_full) > 0.5
 		var show_cell := 1.0
-		if ga1 <= ga0 + 0.002 and not must_draw:
-			show_cell = 0.0
-		elif ga1 <= ga0:
-			ga0 = a0
-			ga1 = a1
-		var work_n = clampf(work_logic / BoardTypes.WORK_MAX, 0.0, 1.0)
+		if ga1 <= ga0 + 0.002:
+			if must_draw:
+				ga0 = a0
+				ga1 = a1
+			else:
+				show_cell = 0.0
+		var work_n = clampf(work_logic / work_full, 0.0, 1.0)
 		var fill = Color(base.r, base.g, base.b, 0.70)
 		_write_cell_texel(i, center.x, center.z, ga0, ga1, inner, outer, work_n, show_cell, fill, edge)
 		var custom := Color(
@@ -1219,9 +1232,15 @@ func _cpu_rebuild_mesh() -> void:
 				gap = maxf(0.0, span * 0.04)
 			var ga0 = a0 + gap
 			var ga1 = a1 - gap
-			if ga1 <= ga0 + 0.002:
-				continue
 			var work_logic = float(c.get("work", 0.0))
+			var work_full := _work_full(c)
+			var must_draw_cpu = capturing != 0 or absf(work_logic - work_full) > 0.5
+			if ga1 <= ga0 + 0.002:
+				if must_draw_cpu:
+					ga0 = a0
+					ga1 = a1
+				else:
+					continue
 			var steps = maxi(4, int((ga1 - ga0) / 0.08))
 			var c_out = Color(base.r, base.g, base.b, 0.70)
 			var c_in = Color(base.r * 0.55, base.g * 0.55, base.b * 0.55, 0.28)
@@ -1247,9 +1266,9 @@ func _cpu_rebuild_mesh() -> void:
 				st.set_color(c_in)
 				st.add_vertex(p01)
 				var mid_t = (t0 + t1) * 0.5
-				var spread = (BoardTypes.WORK_MAX - work_logic) / BoardTypes.WORK_MAX
+				var spread = (work_full - work_logic) / work_full
 				var from_mid = absf(mid_t - 0.5) * 2.0
-				var rimc = edge if (work_logic >= BoardTypes.WORK_MAX - 0.01 or from_mid <= spread) else Color(1, 1, 1, 1)
+				var rimc = edge if (work_logic >= work_full - 0.01 or from_mid <= spread) else Color(1, 1, 1, 1)
 				var r1 = outer + RIM_THICK
 				var q00 = center + Vector3(sin(b0) * r1, 0.03, -cos(b0) * r1)
 				var q10 = center + Vector3(sin(b1) * r1, 0.03, -cos(b1) * r1)
@@ -1826,6 +1845,18 @@ func _rebuild_territory() -> void:
 	var mask_tex := _terr_bake_closed_mask(faces, mid, size, border_w)
 	_terr_add_layer(territory_root, "TerritoryFill", pos_tex, col_tex, nsite, mid, size, site_r, border_w, border_jagged, 0.05, 0.2, mask_tex)
 	_terr_add_layer(territory_root, "TerritoryStrokeRaised", pos_tex, col_tex, nsite, mid + Vector3(0.0, raise_y, 0.0), size, site_r, border_w, border_jagged, 0.0, 0.2, mask_tex)
+	if not fog_mask.is_empty():
+		var fog_img := Image.create(nsite, 1, false, Image.FORMAT_RGBAF)
+		var fi := 0
+		for sid_f in map.systems.keys():
+			if fi >= nsite:
+				break
+			var hidden := bool(fog_mask.get(str(sid_f), false))
+			var fc := Color(0, 0, 0, 0.3) if hidden else Color(0, 0, 0, 0)
+			fog_img.set_pixel(fi, 0, fc)
+			fi += 1
+		var fog_tex := ImageTexture.create_from_image(fog_img)
+		_terr_add_layer(territory_root, "FogFill", pos_tex, fog_tex, nsite, mid + Vector3(0.0, 0.08, 0.0), size, site_r, border_w, border_jagged, 1.0, 0.0, mask_tex)
 	_voronoi_mi = territory_root.get_node_or_null("TerritoryFill") as MeshInstance3D
 	territory_root.visible = _territory_visible_for_tier()
 	_dbg59_board("TERR", "starmap._rebuild_territory", "territory", {

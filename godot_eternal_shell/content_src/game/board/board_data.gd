@@ -1,16 +1,20 @@
 extends RefCounted
 class_name BoardData
 
+const MemberTableScr := preload("res://game/board/pilots/member_table.gd")
+
 var factions: Dictionary = {}
 var diplomacy: Dictionary = {}
 var ships: Dictionary = {} # id -> dict
 var equipment: Dictionary = {}
+var members: Dictionary = {} # 8-digit id -> row
 var layout_path = "res://data/board/layout.json"
 
 func load_all() -> void:
 	factions = _load_json("res://data/board/factions.json")
 	diplomacy = _load_json("res://data/board/diplomacy.json")
 	equipment = _load_json("res://data/board/equipment.json")
+	_load_members()
 	var ships_root = _load_json("res://data/board/ships.json")
 	ships.clear()
 	for s in ships_root.get("ships", []):
@@ -27,6 +31,40 @@ func _load_json(path: String) -> Dictionary:
 
 func ship_def(id: String) -> Dictionary:
 	return ships.get(id, {})
+
+func member_by_id(member_id: String) -> Dictionary:
+	var row = members.get(member_id, {})
+	return row if typeof(row) == TYPE_DICTIONARY else {}
+
+func apply_saved_members(factions_in: Array) -> void:
+	for fac in factions_in:
+		if typeof(fac) != TYPE_DICTIONARY:
+			continue
+		for member in fac.get("members", []):
+			if typeof(member) != TYPE_DICTIONARY:
+				continue
+			var mid := str(member.get("id", ""))
+			if mid.is_empty():
+				continue
+			members[mid] = member
+			var eq: Dictionary = MemberTableScr.crew_equipment(member)
+			var eid := str(eq.get("id", ""))
+			if eid != "" and eid != "crew_":
+				equipment[eid] = eq
+
+func _load_members() -> void:
+	members.clear()
+	for row in MemberTableScr.load_merged():
+		if typeof(row) != TYPE_DICTIONARY:
+			continue
+		var mid := str(row.get("id", ""))
+		if mid.is_empty():
+			continue
+		members[mid] = row
+		var eq: Dictionary = MemberTableScr.crew_equipment(row)
+		var eid := str(eq.get("id", ""))
+		if eid != "" and eid != "crew_":
+			equipment[eid] = eq
 
 func is_npc_faction(fid: int) -> bool:
 	for f in factions.get("factions", []):

@@ -4,7 +4,7 @@
 
 #define MyAppName "EVE战棋"
 #define MyAppNameEn "EVERTBS"
-#define MyAppVersion "202610.14.1"
+#define MyAppVersion "202610.18.4"
 #define MyAppPublisher "EVERTBS"
 #define MyAppExeName "EVERTBS.exe"
 ; Stable GUID — do not change or upgrades break.
@@ -30,7 +30,7 @@ SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
-VersionInfoVersion=2026.10.14.1
+VersionInfoVersion=2026.10.18.4
 VersionInfoProductName={#MyAppName}
 UsePreviousAppDir=yes
 UsePreviousGroup=yes

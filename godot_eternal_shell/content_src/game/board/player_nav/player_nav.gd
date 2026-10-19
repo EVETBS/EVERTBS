@@ -1,6 +1,8 @@
 extends RefCounted
 class_name BoardPlayerNav
 
+const DevBalance := preload("res://game/board/dev_balance.gd")
+
 ## Shortest-time path: start -> gates -> dest. Same-system one hop.
 
 ## Arrow corridor (BOARD §6.1). Empty when no arrow is on the map.
@@ -68,35 +70,45 @@ static func _search(
 	if from_sys == to_sys:
 		if from_cell == to_cell:
 			return {"path": [], "real": 0.0}
-		var intra := prep_s + move_s + landing_s
+		var intra := _intra_duration(map, from_sys, from_cell, to_cell, prep_s, move_s, landing_s)
 		return {"path": [{
 			"sys": from_sys, "from": from_cell, "to": to_cell,
 			"kind": "intra",
 			"duration": intra
 		}], "real": intra}
-	## BFS. cost is the weighted selection cost; real is unweighted travel time.
+	## Dijkstra-style expansion keyed by sys:cell (BOARD_AND_INPUT §6): prune at ENQUEUE,
+	## so the frontier never blows up on long routes. cost = weighted selection cost; real = travel time.
 	var q: Array = [{"sys": from_sys, "cell": from_cell, "cost": 0.0, "real": 0.0, "path": []}]
 	var best: Dictionary = {}
+	best["%s:%d" % [from_sys, from_cell]] = 0.0
 	var best_path: Array = []
 	var best_cost = INF
 	var best_real = INF
 	var guard = 0
-	while not q.is_empty() and guard < 400:
+	const GUARD_MAX := 20000
+	while not q.is_empty() and guard < GUARD_MAX:
 		guard += 1
-		var cur: Dictionary = q.pop_front()
+		## Pop cheapest (small frontier: linear scan is fine).
+		var bi := 0
+		for qi in range(1, q.size()):
+			if float(q[qi]["cost"]) < float(q[bi]["cost"]):
+				bi = qi
+		var cur: Dictionary = q[bi]
+		q.remove_at(bi)
 		var sid: String = cur["sys"]
 		var cell: int = cur["cell"]
 		var cost: float = cur["cost"]
 		var real: float = cur["real"]
 		var path: Array = cur["path"]
 		var key = "%s:%d" % [sid, cell]
-		if best.has(key) and best[key] <= cost:
+		if best.has(key) and best[key] < cost:
 			continue
-		best[key] = cost
+		if cost >= best_cost:
+			continue
 		if sid == to_sys:
 			var last = path.duplicate()
 			if cell != to_cell:
-				var intra_d := prep_s + move_s + landing_s
+				var intra_d := _intra_duration(map, sid, cell, to_cell, prep_s, move_s, landing_s)
 				last.append({
 					"sys": sid, "from": cell, "to": to_cell,
 					"kind": "intra",
@@ -124,7 +136,7 @@ static func _search(
 			var step_cost = cost
 			var step_real = real
 			if cell != gi:
-				var intra2 := prep_s + move_s + landing_s
+				var intra2 := _intra_duration(map, sid, cell, gi, prep_s, move_s, landing_s)
 				step_path.append({
 					"sys": sid, "from": cell, "to": gi,
 					"kind": "intra",
@@ -143,14 +155,51 @@ static func _search(
 				jump_cost *= 0.65
 			step_cost += jump_cost
 			step_real += jump_d
+			var nkey := "%s:%d" % [to_side, land]
+			if best.has(nkey) and float(best[nkey]) <= step_cost:
+				continue
+			best[nkey] = step_cost
 			q.append({"sys": to_side, "cell": land, "cost": step_cost, "real": step_real, "path": step_path})
+	# #region agent log
+	var hops := 0
+	for st0 in best_path:
+		if str(st0.get("kind", "")) == "jump":
+			hops += 1
+	DebugSessionLog.append("J1", "player_nav._search", "bfs_done", {
+		"from": from_sys, "to": to_sys, "pops": guard, "guard_hit": guard >= GUARD_MAX,
+		"found": not best_path.is_empty(), "jumps": hops, "visited": best.size(), "arrow": use_arrow,
+		"runId": "nav-depth"
+	})
+	# #endregion
 	if not best_path.is_empty():
 		return {"path": best_path, "real": best_real}
 	var blocked := _path_to_first_blocked(map, diplomacy, faction, from_sys, from_cell, to_sys, prep_s, move_s, landing_s)
 	var blocked_real := 0.0
 	for st in blocked:
 		blocked_real += float(st.get("duration", 0.0))
+	# #region agent log
+	var first_gate_owner := -1
+	var first_gate_to := ""
+	for st1 in blocked:
+		if str(st1.get("kind", "")) == "intra":
+			var gi2 := int(st1.get("to", -1))
+			var cells2: Array = map.systems.get(from_sys, {}).get("cells", [])
+			if gi2 >= 0 and gi2 < cells2.size():
+				first_gate_owner = int(cells2[gi2].get("owner", -1))
+				first_gate_to = str(cells2[gi2].get("gate_to", ""))
+	DebugSessionLog.append("J2", "player_nav._search", "fallback_first_blocked", {
+		"from": from_sys, "to": to_sys, "steps": blocked.size(), "gate_owner": first_gate_owner,
+		"gate_to": first_gate_to, "faction": faction, "runId": "nav-depth"
+	})
+	# #endregion
 	return {"path": blocked, "real": blocked_real}
+
+static func _intra_duration(
+	map: BoardMapModel, sys: String, from_cell: int, to_cell: int,
+	prep_s: float, move_s: float, landing_s: float
+) -> float:
+	var n := int(map.systems[sys]["cells"].size())
+	return prep_s + move_s + landing_s * DevBalance.land_arc_mul(from_cell, to_cell, n)
 
 static func _paired_gate(map: BoardMapModel, sys_id: String, from_sys: String) -> int:
 	var sys: Dictionary = map.systems.get(sys_id, {})
@@ -199,7 +248,7 @@ static func _path_to_first_blocked(
 	if from_cell != gate_i:
 		steps.append({
 			"sys": from_sys, "from": from_cell, "to": gate_i,
-			"kind": "intra", "duration": prep_s + move_s + landing_s
+			"kind": "intra", "duration": _intra_duration(map, from_sys, from_cell, gate_i, prep_s, move_s, landing_s)
 		})
 	# stop at gate if blocked
 	if not map.can_pass_gate(from_sys, gate_i, faction, diplomacy):

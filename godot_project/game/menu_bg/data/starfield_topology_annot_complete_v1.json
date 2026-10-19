@@ -1,0 +1,6778 @@
+{
+  "source": "canonical: topology + annot complete",
+  "size": [
+    8192,
+    8192
+  ],
+  "center": [
+    4096,
+    4096
+  ],
+  "node_count": 347,
+  "edge_count": 588,
+  "nodes": [
+    {
+      "id": 3,
+      "x": 3517.53,
+      "y": 981.64,
+      "name": "",
+      "degree": 6,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 10,
+      "x": 3386.3,
+      "y": 793.32,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 11,
+      "x": 3662.03,
+      "y": 778,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 12,
+      "x": 3731.81,
+      "y": 1017.98,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 13,
+      "x": 3149.72,
+      "y": 1017.98,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 14,
+      "x": 3353.96,
+      "y": 1167.76,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 15,
+      "x": 3624.58,
+      "y": 1274.99,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 16,
+      "x": 4431.34,
+      "y": 1201.8,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 17,
+      "x": 4841.53,
+      "y": 978.84,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 18,
+      "x": 5011.73,
+      "y": 871.61,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 19,
+      "x": 5304.48,
+      "y": 909.05,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 20,
+      "x": 5321.5,
+      "y": 1155.85,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 21,
+      "x": 5088.32,
+      "y": 1108.19,
+      "name": "",
+      "degree": 6,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 22,
+      "x": 5190.44,
+      "y": 1300.52,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 23,
+      "x": 4970.88,
+      "y": 1237.54,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 24,
+      "x": 4810.89,
+      "y": 1309.03,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 25,
+      "x": 5091.73,
+      "y": 1448.6,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 26,
+      "x": 5066.19,
+      "y": 1654.54,
+      "name": "",
+      "degree": 6,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 27,
+      "x": 4594.73,
+      "y": 1629.01,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 28,
+      "x": 4218.59,
+      "y": 1421.36,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 29,
+      "x": 3670.54,
+      "y": 1506.46,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 30,
+      "x": 3178.65,
+      "y": 1351.58,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 31,
+      "x": 2776.97,
+      "y": 1404.34,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 32,
+      "x": 3153.12,
+      "y": 1600.08,
+      "name": "",
+      "degree": 5,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 33,
+      "x": 2632.3,
+      "y": 1722.62,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 34,
+      "x": 2867.18,
+      "y": 1806.02,
+      "name": "",
+      "degree": 3,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": null
+    },
+    {
+      "id": 35,
+      "x": 3091.85,
+      "y": 2000.05,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 36,
+      "x": 3314.81,
+      "y": 1960.9,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 37,
+      "x": 3495.23,
+      "y": 1829.85,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 38,
+      "x": 3456.08,
+      "y": 1673.26,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 39,
+      "x": 3709.68,
+      "y": 1998.35,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 40,
+      "x": 3990.52,
+      "y": 1794.11,
+      "name": "",
+      "degree": 5,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": null
+    },
+    {
+      "id": 41,
+      "x": 4279.86,
+      "y": 1652.84,
+      "name": "",
+      "degree": 2,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 42,
+      "x": 4380.28,
+      "y": 1812.83,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 43,
+      "x": 4907.91,
+      "y": 1799.21,
+      "name": "",
+      "degree": 2,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 44,
+      "x": 4962.37,
+      "y": 1967.71,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 45,
+      "x": 4819.4,
+      "y": 2063.03,
+      "name": "",
+      "degree": 3,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": null
+    },
+    {
+      "id": 46,
+      "x": 4712.17,
+      "y": 1931.97,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 47,
+      "x": 4564.1,
+      "y": 2057.92,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 48,
+      "x": 4507.93,
+      "y": 2251.95,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 49,
+      "x": 4778.55,
+      "y": 2299.61,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 50,
+      "x": 4911.31,
+      "y": 2202.59,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 51,
+      "x": 4909.61,
+      "y": 2543,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 52,
+      "x": 4715.58,
+      "y": 2571.93,
+      "name": "",
+      "degree": 4,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": null
+    },
+    {
+      "id": 53,
+      "x": 4589.63,
+      "y": 2554.91,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 54,
+      "x": 4414.32,
+      "y": 2592.36,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 55,
+      "x": 4204.97,
+      "y": 2587.25,
+      "name": "",
+      "degree": 5,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 56,
+      "x": 4216.88,
+      "y": 2061.32,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 57,
+      "x": 3966.69,
+      "y": 2047.71,
+      "name": "",
+      "degree": 4,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 58,
+      "x": 3944.56,
+      "y": 2338.75,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 59,
+      "x": 3951.37,
+      "y": 2604.27,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 60,
+      "x": 4068.81,
+      "y": 2432.36,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 61,
+      "x": 3985.41,
+      "y": 2754.05,
+      "name": "",
+      "degree": 2,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": null
+    },
+    {
+      "id": 62,
+      "x": 4005.83,
+      "y": 3031.48,
+      "name": "",
+      "degree": 7,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 72,
+      "x": 4981.09,
+      "y": 3099.56,
+      "name": "",
+      "degree": 6,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 73,
+      "x": 4797.27,
+      "y": 2883.4,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 74,
+      "x": 4812.59,
+      "y": 2709.79,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 75,
+      "x": 4688.35,
+      "y": 3077.43,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 76,
+      "x": 4593.03,
+      "y": 2842.55,
+      "name": "",
+      "degree": 3,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 77,
+      "x": 4465.38,
+      "y": 3075.73,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 78,
+      "x": 4363.26,
+      "y": 2776.17,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 79,
+      "x": 5309.58,
+      "y": 2662.14,
+      "name": "",
+      "degree": 4,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 80,
+      "x": 5141.08,
+      "y": 2420.45,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 81,
+      "x": 5507.02,
+      "y": 2398.32,
+      "name": "",
+      "degree": 5,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 82,
+      "x": 5524.04,
+      "y": 2757.45,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 83,
+      "x": 3687.56,
+      "y": 2566.82,
+      "name": "",
+      "degree": 5,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 84,
+      "x": 3595.65,
+      "y": 2893.61,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 85,
+      "x": 3568.41,
+      "y": 3074.03,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 86,
+      "x": 3350.56,
+      "y": 3062.11,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 87,
+      "x": 3403.32,
+      "y": 2859.57,
+      "name": "",
+      "degree": 3,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 88,
+      "x": 3537.78,
+      "y": 2752.35,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 89,
+      "x": 3544.59,
+      "y": 2563.42,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 90,
+      "x": 3379.49,
+      "y": 2575.33,
+      "name": "",
+      "degree": 4,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": null
+    },
+    {
+      "id": 91,
+      "x": 3236.52,
+      "y": 2650.22,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 92,
+      "x": 3188.86,
+      "y": 2854.47,
+      "name": "",
+      "degree": 5,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 93,
+      "x": 3066.32,
+      "y": 2726.82,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 94,
+      "x": 3251.84,
+      "y": 2367.69,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 95,
+      "x": 3408.42,
+      "y": 2277.48,
+      "name": "",
+      "degree": 2,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 96,
+      "x": 3452.68,
+      "y": 2097.07,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 97,
+      "x": 3108.87,
+      "y": 2236.63,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 98,
+      "x": 2914.84,
+      "y": 2197.49,
+      "name": "",
+      "degree": 3,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 99,
+      "x": 2748.04,
+      "y": 1991.54,
+      "name": "",
+      "degree": 2,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 103,
+      "x": 4674.47,
+      "y": 7210.36,
+      "name": "",
+      "degree": 6,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 3
+    },
+    {
+      "id": 104,
+      "x": 4805.7,
+      "y": 7398.68,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 10
+    },
+    {
+      "id": 105,
+      "x": 4529.97,
+      "y": 7414,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 11
+    },
+    {
+      "id": 106,
+      "x": 4460.19,
+      "y": 7174.02,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 12
+    },
+    {
+      "id": 107,
+      "x": 5042.28,
+      "y": 7174.02,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 13
+    },
+    {
+      "id": 108,
+      "x": 4838.04,
+      "y": 7024.24,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 14
+    },
+    {
+      "id": 109,
+      "x": 4567.42,
+      "y": 6917.01,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 15
+    },
+    {
+      "id": 110,
+      "x": 3760.66,
+      "y": 6990.2,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 16
+    },
+    {
+      "id": 111,
+      "x": 3350.47,
+      "y": 7213.16,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 17
+    },
+    {
+      "id": 112,
+      "x": 3180.27,
+      "y": 7320.39,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 18
+    },
+    {
+      "id": 113,
+      "x": 2887.52,
+      "y": 7282.95,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 19
+    },
+    {
+      "id": 114,
+      "x": 2870.5,
+      "y": 7036.15,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 20
+    },
+    {
+      "id": 115,
+      "x": 3103.68,
+      "y": 7083.81,
+      "name": "",
+      "degree": 6,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 21
+    },
+    {
+      "id": 116,
+      "x": 3001.56,
+      "y": 6891.48,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 22
+    },
+    {
+      "id": 117,
+      "x": 3221.12,
+      "y": 6954.46,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 23
+    },
+    {
+      "id": 118,
+      "x": 3381.11,
+      "y": 6882.97,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 24
+    },
+    {
+      "id": 119,
+      "x": 3100.27,
+      "y": 6743.4,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 25
+    },
+    {
+      "id": 120,
+      "x": 3125.81,
+      "y": 6537.46,
+      "name": "",
+      "degree": 6,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 26
+    },
+    {
+      "id": 121,
+      "x": 3597.27,
+      "y": 6562.99,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 27
+    },
+    {
+      "id": 122,
+      "x": 3973.41,
+      "y": 6770.64,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 28
+    },
+    {
+      "id": 123,
+      "x": 4521.46,
+      "y": 6685.54,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 29
+    },
+    {
+      "id": 124,
+      "x": 5013.35,
+      "y": 6840.42,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 30
+    },
+    {
+      "id": 125,
+      "x": 5415.03,
+      "y": 6787.66,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 31
+    },
+    {
+      "id": 126,
+      "x": 5038.88,
+      "y": 6591.92,
+      "name": "",
+      "degree": 5,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 32
+    },
+    {
+      "id": 127,
+      "x": 5559.7,
+      "y": 6469.38,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 33
+    },
+    {
+      "id": 128,
+      "x": 5324.82,
+      "y": 6385.98,
+      "name": "",
+      "degree": 3,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 34
+    },
+    {
+      "id": 129,
+      "x": 5100.15,
+      "y": 6191.95,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 35
+    },
+    {
+      "id": 130,
+      "x": 4877.19,
+      "y": 6231.1,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 36
+    },
+    {
+      "id": 131,
+      "x": 4696.77,
+      "y": 6362.15,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 37
+    },
+    {
+      "id": 132,
+      "x": 4735.92,
+      "y": 6518.74,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 38
+    },
+    {
+      "id": 133,
+      "x": 4482.32,
+      "y": 6193.65,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 39
+    },
+    {
+      "id": 134,
+      "x": 4201.48,
+      "y": 6397.89,
+      "name": "",
+      "degree": 5,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 40
+    },
+    {
+      "id": 135,
+      "x": 3912.14,
+      "y": 6539.16,
+      "name": "",
+      "degree": 2,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 41
+    },
+    {
+      "id": 136,
+      "x": 3811.72,
+      "y": 6379.17,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 42
+    },
+    {
+      "id": 137,
+      "x": 3284.09,
+      "y": 6392.79,
+      "name": "",
+      "degree": 2,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 43
+    },
+    {
+      "id": 138,
+      "x": 3229.63,
+      "y": 6224.29,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 44
+    },
+    {
+      "id": 139,
+      "x": 3372.6,
+      "y": 6128.97,
+      "name": "",
+      "degree": 3,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 45
+    },
+    {
+      "id": 140,
+      "x": 3479.83,
+      "y": 6260.03,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 46
+    },
+    {
+      "id": 141,
+      "x": 3627.9,
+      "y": 6134.08,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 47
+    },
+    {
+      "id": 142,
+      "x": 3684.07,
+      "y": 5940.05,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 48
+    },
+    {
+      "id": 143,
+      "x": 3413.45,
+      "y": 5892.39,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 49
+    },
+    {
+      "id": 144,
+      "x": 3280.69,
+      "y": 5989.41,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 50
+    },
+    {
+      "id": 145,
+      "x": 3282.39,
+      "y": 5649,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 51
+    },
+    {
+      "id": 146,
+      "x": 3476.42,
+      "y": 5620.07,
+      "name": "",
+      "degree": 4,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 52
+    },
+    {
+      "id": 147,
+      "x": 3602.37,
+      "y": 5637.09,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 53
+    },
+    {
+      "id": 148,
+      "x": 3777.68,
+      "y": 5599.64,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 54
+    },
+    {
+      "id": 149,
+      "x": 3987.03,
+      "y": 5604.75,
+      "name": "",
+      "degree": 5,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 55
+    },
+    {
+      "id": 150,
+      "x": 3975.12,
+      "y": 6130.68,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 56
+    },
+    {
+      "id": 151,
+      "x": 4225.31,
+      "y": 6144.29,
+      "name": "",
+      "degree": 4,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 57
+    },
+    {
+      "id": 152,
+      "x": 4247.44,
+      "y": 5853.25,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 58
+    },
+    {
+      "id": 153,
+      "x": 4240.63,
+      "y": 5587.73,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 59
+    },
+    {
+      "id": 154,
+      "x": 4123.19,
+      "y": 5759.64,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 60
+    },
+    {
+      "id": 155,
+      "x": 4206.59,
+      "y": 5437.95,
+      "name": "",
+      "degree": 2,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 61
+    },
+    {
+      "id": 156,
+      "x": 4186.17,
+      "y": 5160.52,
+      "name": "",
+      "degree": 7,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 62
+    },
+    {
+      "id": 162,
+      "x": 3210.91,
+      "y": 5092.44,
+      "name": "",
+      "degree": 6,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 72
+    },
+    {
+      "id": 163,
+      "x": 3394.73,
+      "y": 5308.6,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 73
+    },
+    {
+      "id": 164,
+      "x": 3379.41,
+      "y": 5482.21,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 74
+    },
+    {
+      "id": 165,
+      "x": 3503.65,
+      "y": 5114.57,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 75
+    },
+    {
+      "id": 166,
+      "x": 3598.97,
+      "y": 5349.45,
+      "name": "",
+      "degree": 3,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 76
+    },
+    {
+      "id": 167,
+      "x": 3726.62,
+      "y": 5116.27,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 77
+    },
+    {
+      "id": 168,
+      "x": 3828.74,
+      "y": 5415.83,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 78
+    },
+    {
+      "id": 169,
+      "x": 2882.42,
+      "y": 5529.86,
+      "name": "",
+      "degree": 4,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 79
+    },
+    {
+      "id": 170,
+      "x": 3050.92,
+      "y": 5771.55,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 80
+    },
+    {
+      "id": 171,
+      "x": 2684.98,
+      "y": 5793.68,
+      "name": "",
+      "degree": 5,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 81
+    },
+    {
+      "id": 172,
+      "x": 2667.96,
+      "y": 5434.55,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 82
+    },
+    {
+      "id": 173,
+      "x": 4504.44,
+      "y": 5625.18,
+      "name": "",
+      "degree": 5,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 83
+    },
+    {
+      "id": 174,
+      "x": 4596.35,
+      "y": 5298.39,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 84
+    },
+    {
+      "id": 175,
+      "x": 4623.59,
+      "y": 5117.97,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 85
+    },
+    {
+      "id": 176,
+      "x": 4841.44,
+      "y": 5129.89,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 86
+    },
+    {
+      "id": 177,
+      "x": 4788.68,
+      "y": 5332.43,
+      "name": "",
+      "degree": 3,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 87
+    },
+    {
+      "id": 178,
+      "x": 4654.22,
+      "y": 5439.65,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 88
+    },
+    {
+      "id": 179,
+      "x": 4647.41,
+      "y": 5628.58,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 89
+    },
+    {
+      "id": 180,
+      "x": 4812.51,
+      "y": 5616.67,
+      "name": "",
+      "degree": 4,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 90
+    },
+    {
+      "id": 181,
+      "x": 4955.48,
+      "y": 5541.78,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 91
+    },
+    {
+      "id": 182,
+      "x": 5003.14,
+      "y": 5337.53,
+      "name": "",
+      "degree": 5,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 92
+    },
+    {
+      "id": 183,
+      "x": 5125.68,
+      "y": 5465.18,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 93
+    },
+    {
+      "id": 184,
+      "x": 4940.16,
+      "y": 5824.31,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 94
+    },
+    {
+      "id": 185,
+      "x": 4783.58,
+      "y": 5914.52,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 95
+    },
+    {
+      "id": 186,
+      "x": 4739.32,
+      "y": 6094.93,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 96
+    },
+    {
+      "id": 187,
+      "x": 5083.13,
+      "y": 5955.37,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 97
+    },
+    {
+      "id": 188,
+      "x": 5277.16,
+      "y": 5994.51,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 98
+    },
+    {
+      "id": 189,
+      "x": 5443.96,
+      "y": 6200.46,
+      "name": "",
+      "degree": 2,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 99
+    },
+    {
+      "id": 192,
+      "x": 7210.36,
+      "y": 3517.53,
+      "name": "",
+      "degree": 6,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 3
+    },
+    {
+      "id": 193,
+      "x": 7398.68,
+      "y": 3386.3,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 10
+    },
+    {
+      "id": 194,
+      "x": 7414,
+      "y": 3662.03,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 11
+    },
+    {
+      "id": 195,
+      "x": 7174.02,
+      "y": 3731.81,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 12
+    },
+    {
+      "id": 196,
+      "x": 7174.02,
+      "y": 3149.72,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 13
+    },
+    {
+      "id": 197,
+      "x": 7024.24,
+      "y": 3353.96,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 14
+    },
+    {
+      "id": 198,
+      "x": 6917.01,
+      "y": 3624.58,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 15
+    },
+    {
+      "id": 199,
+      "x": 6990.2,
+      "y": 4431.34,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 16
+    },
+    {
+      "id": 200,
+      "x": 7213.16,
+      "y": 4841.53,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 17
+    },
+    {
+      "id": 201,
+      "x": 7320.39,
+      "y": 5011.73,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 18
+    },
+    {
+      "id": 202,
+      "x": 7282.95,
+      "y": 5304.48,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 19
+    },
+    {
+      "id": 203,
+      "x": 7036.15,
+      "y": 5321.5,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 20
+    },
+    {
+      "id": 204,
+      "x": 7083.81,
+      "y": 5088.32,
+      "name": "",
+      "degree": 6,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 21
+    },
+    {
+      "id": 205,
+      "x": 6891.48,
+      "y": 5190.44,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 22
+    },
+    {
+      "id": 206,
+      "x": 6954.46,
+      "y": 4970.88,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 23
+    },
+    {
+      "id": 207,
+      "x": 6882.97,
+      "y": 4810.89,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 24
+    },
+    {
+      "id": 208,
+      "x": 6743.4,
+      "y": 5091.73,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 25
+    },
+    {
+      "id": 209,
+      "x": 6537.46,
+      "y": 5066.19,
+      "name": "",
+      "degree": 6,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 26
+    },
+    {
+      "id": 210,
+      "x": 6562.99,
+      "y": 4594.73,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 27
+    },
+    {
+      "id": 211,
+      "x": 6770.64,
+      "y": 4218.59,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 28
+    },
+    {
+      "id": 212,
+      "x": 6685.54,
+      "y": 3670.54,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 29
+    },
+    {
+      "id": 213,
+      "x": 6840.42,
+      "y": 3178.65,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 30
+    },
+    {
+      "id": 214,
+      "x": 6787.66,
+      "y": 2776.97,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 31
+    },
+    {
+      "id": 215,
+      "x": 6591.92,
+      "y": 3153.12,
+      "name": "",
+      "degree": 5,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 32
+    },
+    {
+      "id": 216,
+      "x": 6469.38,
+      "y": 2632.3,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 33
+    },
+    {
+      "id": 217,
+      "x": 6385.98,
+      "y": 2867.18,
+      "name": "",
+      "degree": 3,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 34
+    },
+    {
+      "id": 218,
+      "x": 6191.95,
+      "y": 3091.85,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 35
+    },
+    {
+      "id": 219,
+      "x": 6231.1,
+      "y": 3314.81,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 36
+    },
+    {
+      "id": 220,
+      "x": 6362.15,
+      "y": 3495.23,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 37
+    },
+    {
+      "id": 221,
+      "x": 6518.74,
+      "y": 3456.08,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 38
+    },
+    {
+      "id": 222,
+      "x": 6193.65,
+      "y": 3709.68,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 39
+    },
+    {
+      "id": 223,
+      "x": 6397.89,
+      "y": 3990.52,
+      "name": "",
+      "degree": 5,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 40
+    },
+    {
+      "id": 224,
+      "x": 6539.16,
+      "y": 4279.86,
+      "name": "",
+      "degree": 2,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 41
+    },
+    {
+      "id": 225,
+      "x": 6379.17,
+      "y": 4380.28,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 42
+    },
+    {
+      "id": 226,
+      "x": 6392.79,
+      "y": 4907.91,
+      "name": "",
+      "degree": 2,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 43
+    },
+    {
+      "id": 227,
+      "x": 6224.29,
+      "y": 4962.37,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 44
+    },
+    {
+      "id": 228,
+      "x": 6128.97,
+      "y": 4819.4,
+      "name": "",
+      "degree": 3,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 45
+    },
+    {
+      "id": 229,
+      "x": 6260.03,
+      "y": 4712.17,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 46
+    },
+    {
+      "id": 230,
+      "x": 6134.08,
+      "y": 4564.1,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 47
+    },
+    {
+      "id": 231,
+      "x": 5940.05,
+      "y": 4507.93,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 48
+    },
+    {
+      "id": 232,
+      "x": 5892.39,
+      "y": 4778.55,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 49
+    },
+    {
+      "id": 233,
+      "x": 5989.41,
+      "y": 4911.31,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 50
+    },
+    {
+      "id": 234,
+      "x": 5649,
+      "y": 4909.61,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 51
+    },
+    {
+      "id": 235,
+      "x": 5620.07,
+      "y": 4715.58,
+      "name": "",
+      "degree": 4,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 52
+    },
+    {
+      "id": 236,
+      "x": 5637.09,
+      "y": 4589.63,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 53
+    },
+    {
+      "id": 237,
+      "x": 5599.64,
+      "y": 4414.32,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 54
+    },
+    {
+      "id": 238,
+      "x": 5604.75,
+      "y": 4204.97,
+      "name": "",
+      "degree": 5,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 55
+    },
+    {
+      "id": 239,
+      "x": 6130.68,
+      "y": 4216.88,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 56
+    },
+    {
+      "id": 240,
+      "x": 6144.29,
+      "y": 3966.69,
+      "name": "",
+      "degree": 4,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 57
+    },
+    {
+      "id": 241,
+      "x": 5853.25,
+      "y": 3944.56,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 58
+    },
+    {
+      "id": 242,
+      "x": 5587.73,
+      "y": 3951.37,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 59
+    },
+    {
+      "id": 243,
+      "x": 5759.64,
+      "y": 4068.81,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 60
+    },
+    {
+      "id": 244,
+      "x": 5437.95,
+      "y": 3985.41,
+      "name": "",
+      "degree": 2,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 61
+    },
+    {
+      "id": 245,
+      "x": 5160.52,
+      "y": 4005.83,
+      "name": "",
+      "degree": 7,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 62
+    },
+    {
+      "id": 255,
+      "x": 5092.44,
+      "y": 4981.09,
+      "name": "",
+      "degree": 6,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 72
+    },
+    {
+      "id": 256,
+      "x": 5308.6,
+      "y": 4797.27,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 73
+    },
+    {
+      "id": 257,
+      "x": 5482.21,
+      "y": 4812.59,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 74
+    },
+    {
+      "id": 258,
+      "x": 5114.57,
+      "y": 4688.35,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 75
+    },
+    {
+      "id": 259,
+      "x": 5349.45,
+      "y": 4593.03,
+      "name": "",
+      "degree": 3,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 76
+    },
+    {
+      "id": 260,
+      "x": 5116.27,
+      "y": 4465.38,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 77
+    },
+    {
+      "id": 261,
+      "x": 5415.83,
+      "y": 4363.26,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 78
+    },
+    {
+      "id": 262,
+      "x": 5529.86,
+      "y": 5309.58,
+      "name": "",
+      "degree": 4,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 79
+    },
+    {
+      "id": 263,
+      "x": 5771.55,
+      "y": 5141.08,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 80
+    },
+    {
+      "id": 264,
+      "x": 5793.68,
+      "y": 5507.02,
+      "name": "",
+      "degree": 5,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 81
+    },
+    {
+      "id": 265,
+      "x": 5434.55,
+      "y": 5524.04,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 82
+    },
+    {
+      "id": 266,
+      "x": 5625.18,
+      "y": 3687.56,
+      "name": "",
+      "degree": 5,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 83
+    },
+    {
+      "id": 267,
+      "x": 5298.39,
+      "y": 3595.65,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 84
+    },
+    {
+      "id": 268,
+      "x": 5117.97,
+      "y": 3568.41,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 85
+    },
+    {
+      "id": 269,
+      "x": 5129.89,
+      "y": 3350.56,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 86
+    },
+    {
+      "id": 270,
+      "x": 5332.43,
+      "y": 3403.32,
+      "name": "",
+      "degree": 3,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 87
+    },
+    {
+      "id": 271,
+      "x": 5439.65,
+      "y": 3537.78,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 88
+    },
+    {
+      "id": 272,
+      "x": 5628.58,
+      "y": 3544.59,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 89
+    },
+    {
+      "id": 273,
+      "x": 5616.67,
+      "y": 3379.49,
+      "name": "",
+      "degree": 4,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 90
+    },
+    {
+      "id": 274,
+      "x": 5541.78,
+      "y": 3236.52,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 91
+    },
+    {
+      "id": 275,
+      "x": 5337.53,
+      "y": 3188.86,
+      "name": "",
+      "degree": 5,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 92
+    },
+    {
+      "id": 276,
+      "x": 5465.18,
+      "y": 3066.32,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 93
+    },
+    {
+      "id": 277,
+      "x": 5824.31,
+      "y": 3251.84,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 94
+    },
+    {
+      "id": 278,
+      "x": 5914.52,
+      "y": 3408.42,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 95
+    },
+    {
+      "id": 279,
+      "x": 6094.93,
+      "y": 3452.68,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 96
+    },
+    {
+      "id": 280,
+      "x": 5955.37,
+      "y": 3108.87,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 97
+    },
+    {
+      "id": 281,
+      "x": 5994.51,
+      "y": 2914.84,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 98
+    },
+    {
+      "id": 282,
+      "x": 6200.46,
+      "y": 2748.04,
+      "name": "",
+      "degree": 2,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 99
+    },
+    {
+      "id": 286,
+      "x": 981.64,
+      "y": 4674.47,
+      "name": "",
+      "degree": 6,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 103
+    },
+    {
+      "id": 287,
+      "x": 793.32,
+      "y": 4805.7,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 104
+    },
+    {
+      "id": 288,
+      "x": 778,
+      "y": 4529.97,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 105
+    },
+    {
+      "id": 289,
+      "x": 1017.98,
+      "y": 4460.19,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 106
+    },
+    {
+      "id": 290,
+      "x": 1017.98,
+      "y": 5042.28,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 107
+    },
+    {
+      "id": 291,
+      "x": 1167.76,
+      "y": 4838.04,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 108
+    },
+    {
+      "id": 292,
+      "x": 1274.99,
+      "y": 4567.42,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 109
+    },
+    {
+      "id": 293,
+      "x": 1201.8,
+      "y": 3760.66,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 110
+    },
+    {
+      "id": 294,
+      "x": 978.84,
+      "y": 3350.47,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 111
+    },
+    {
+      "id": 295,
+      "x": 871.61,
+      "y": 3180.27,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 112
+    },
+    {
+      "id": 296,
+      "x": 909.05,
+      "y": 2887.52,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 113
+    },
+    {
+      "id": 297,
+      "x": 1155.85,
+      "y": 2870.5,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 114
+    },
+    {
+      "id": 298,
+      "x": 1108.19,
+      "y": 3103.68,
+      "name": "",
+      "degree": 6,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 115
+    },
+    {
+      "id": 299,
+      "x": 1300.52,
+      "y": 3001.56,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 116
+    },
+    {
+      "id": 300,
+      "x": 1237.54,
+      "y": 3221.12,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 117
+    },
+    {
+      "id": 301,
+      "x": 1309.03,
+      "y": 3381.11,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 118
+    },
+    {
+      "id": 302,
+      "x": 1448.6,
+      "y": 3100.27,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 119
+    },
+    {
+      "id": 303,
+      "x": 1654.54,
+      "y": 3125.81,
+      "name": "",
+      "degree": 6,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 120
+    },
+    {
+      "id": 304,
+      "x": 1629.01,
+      "y": 3597.27,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 121
+    },
+    {
+      "id": 305,
+      "x": 1421.36,
+      "y": 3973.41,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 122
+    },
+    {
+      "id": 306,
+      "x": 1506.46,
+      "y": 4521.46,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 123
+    },
+    {
+      "id": 307,
+      "x": 1351.58,
+      "y": 5013.35,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 124
+    },
+    {
+      "id": 308,
+      "x": 1404.34,
+      "y": 5415.03,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 125
+    },
+    {
+      "id": 309,
+      "x": 1600.08,
+      "y": 5038.88,
+      "name": "",
+      "degree": 5,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 126
+    },
+    {
+      "id": 310,
+      "x": 1722.62,
+      "y": 5559.7,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 127
+    },
+    {
+      "id": 311,
+      "x": 1806.02,
+      "y": 5324.82,
+      "name": "",
+      "degree": 3,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 128
+    },
+    {
+      "id": 312,
+      "x": 2000.05,
+      "y": 5100.15,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 129
+    },
+    {
+      "id": 313,
+      "x": 1960.9,
+      "y": 4877.19,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 130
+    },
+    {
+      "id": 314,
+      "x": 1829.85,
+      "y": 4696.77,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 131
+    },
+    {
+      "id": 315,
+      "x": 1673.26,
+      "y": 4735.92,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 132
+    },
+    {
+      "id": 316,
+      "x": 1998.35,
+      "y": 4482.32,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 133
+    },
+    {
+      "id": 317,
+      "x": 1794.11,
+      "y": 4201.48,
+      "name": "",
+      "degree": 5,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 134
+    },
+    {
+      "id": 318,
+      "x": 1652.84,
+      "y": 3912.14,
+      "name": "",
+      "degree": 2,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 135
+    },
+    {
+      "id": 319,
+      "x": 1812.83,
+      "y": 3811.72,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 136
+    },
+    {
+      "id": 320,
+      "x": 1799.21,
+      "y": 3284.09,
+      "name": "",
+      "degree": 2,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 137
+    },
+    {
+      "id": 321,
+      "x": 1967.71,
+      "y": 3229.63,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 138
+    },
+    {
+      "id": 322,
+      "x": 2063.03,
+      "y": 3372.6,
+      "name": "",
+      "degree": 3,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 139
+    },
+    {
+      "id": 323,
+      "x": 1931.97,
+      "y": 3479.83,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 140
+    },
+    {
+      "id": 324,
+      "x": 2057.92,
+      "y": 3627.9,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 141
+    },
+    {
+      "id": 325,
+      "x": 2251.95,
+      "y": 3684.07,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 142
+    },
+    {
+      "id": 326,
+      "x": 2299.61,
+      "y": 3413.45,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 143
+    },
+    {
+      "id": 327,
+      "x": 2202.59,
+      "y": 3280.69,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 144
+    },
+    {
+      "id": 328,
+      "x": 2543,
+      "y": 3282.39,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 145
+    },
+    {
+      "id": 329,
+      "x": 2571.93,
+      "y": 3476.42,
+      "name": "",
+      "degree": 4,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 146
+    },
+    {
+      "id": 330,
+      "x": 2554.91,
+      "y": 3602.37,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 147
+    },
+    {
+      "id": 331,
+      "x": 2592.36,
+      "y": 3777.68,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 148
+    },
+    {
+      "id": 332,
+      "x": 2587.25,
+      "y": 3987.03,
+      "name": "",
+      "degree": 5,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 149
+    },
+    {
+      "id": 333,
+      "x": 2061.32,
+      "y": 3975.12,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 150
+    },
+    {
+      "id": 334,
+      "x": 2047.71,
+      "y": 4225.31,
+      "name": "",
+      "degree": 4,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 151
+    },
+    {
+      "id": 335,
+      "x": 2338.75,
+      "y": 4247.44,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 152
+    },
+    {
+      "id": 336,
+      "x": 2604.27,
+      "y": 4240.63,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 153
+    },
+    {
+      "id": 337,
+      "x": 2432.36,
+      "y": 4123.19,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 154
+    },
+    {
+      "id": 338,
+      "x": 2754.05,
+      "y": 4206.59,
+      "name": "",
+      "degree": 2,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 155
+    },
+    {
+      "id": 339,
+      "x": 3031.48,
+      "y": 4186.17,
+      "name": "",
+      "degree": 7,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 156
+    },
+    {
+      "id": 345,
+      "x": 3099.56,
+      "y": 3210.91,
+      "name": "",
+      "degree": 6,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 162
+    },
+    {
+      "id": 346,
+      "x": 2883.4,
+      "y": 3394.73,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 163
+    },
+    {
+      "id": 347,
+      "x": 2709.79,
+      "y": 3379.41,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 164
+    },
+    {
+      "id": 348,
+      "x": 3077.43,
+      "y": 3503.65,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 165
+    },
+    {
+      "id": 349,
+      "x": 2842.55,
+      "y": 3598.97,
+      "name": "",
+      "degree": 3,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 166
+    },
+    {
+      "id": 350,
+      "x": 3075.73,
+      "y": 3726.62,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 167
+    },
+    {
+      "id": 351,
+      "x": 2776.17,
+      "y": 3828.74,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 168
+    },
+    {
+      "id": 352,
+      "x": 2662.14,
+      "y": 2882.42,
+      "name": "",
+      "degree": 4,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 169
+    },
+    {
+      "id": 353,
+      "x": 2420.45,
+      "y": 3050.92,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 170
+    },
+    {
+      "id": 354,
+      "x": 2398.32,
+      "y": 2684.98,
+      "name": "",
+      "degree": 5,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 171
+    },
+    {
+      "id": 355,
+      "x": 2757.45,
+      "y": 2667.96,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 172
+    },
+    {
+      "id": 356,
+      "x": 2566.82,
+      "y": 4504.44,
+      "name": "",
+      "degree": 5,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 173
+    },
+    {
+      "id": 357,
+      "x": 2893.61,
+      "y": 4596.35,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 174
+    },
+    {
+      "id": 358,
+      "x": 3074.03,
+      "y": 4623.59,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 175
+    },
+    {
+      "id": 359,
+      "x": 3062.11,
+      "y": 4841.44,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 176
+    },
+    {
+      "id": 360,
+      "x": 2859.57,
+      "y": 4788.68,
+      "name": "",
+      "degree": 3,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 177
+    },
+    {
+      "id": 361,
+      "x": 2752.35,
+      "y": 4654.22,
+      "name": "",
+      "degree": 4,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 178
+    },
+    {
+      "id": 362,
+      "x": 2563.42,
+      "y": 4647.41,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 179
+    },
+    {
+      "id": 363,
+      "x": 2575.33,
+      "y": 4812.51,
+      "name": "",
+      "degree": 4,
+      "kind": "resource",
+      "has_station": false,
+      "is_resource": true,
+      "mirrorOf": 180
+    },
+    {
+      "id": 364,
+      "x": 2650.22,
+      "y": 4955.48,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 181
+    },
+    {
+      "id": 365,
+      "x": 2854.47,
+      "y": 5003.14,
+      "name": "",
+      "degree": 5,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 182
+    },
+    {
+      "id": 366,
+      "x": 2726.82,
+      "y": 5125.68,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 183
+    },
+    {
+      "id": 367,
+      "x": 2367.69,
+      "y": 4940.16,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 184
+    },
+    {
+      "id": 368,
+      "x": 2277.48,
+      "y": 4783.58,
+      "name": "",
+      "degree": 2,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 185
+    },
+    {
+      "id": 369,
+      "x": 2097.07,
+      "y": 4739.32,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 186
+    },
+    {
+      "id": 370,
+      "x": 2236.63,
+      "y": 5083.13,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 187
+    },
+    {
+      "id": 371,
+      "x": 2197.49,
+      "y": 5277.16,
+      "name": "",
+      "degree": 3,
+      "kind": "mirror",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": 188
+    },
+    {
+      "id": 372,
+      "x": 1991.54,
+      "y": 5443.96,
+      "name": "",
+      "degree": 2,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": 189
+    },
+    {
+      "id": 380,
+      "x": 3475,
+      "y": 3425,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 381,
+      "x": 3875,
+      "y": 3308.33,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 382,
+      "x": 4341.67,
+      "y": 3350,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 383,
+      "x": 4725,
+      "y": 3525,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 384,
+      "x": 4775,
+      "y": 3800,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 385,
+      "x": 4816.67,
+      "y": 4175,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 388,
+      "x": 3875,
+      "y": 4708.33,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 389,
+      "x": 3408.33,
+      "y": 4491.67,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 390,
+      "x": 3341.67,
+      "y": 4075,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 391,
+      "x": 3308.33,
+      "y": 3691.67,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 392,
+      "x": 4000,
+      "y": 3700,
+      "name": "",
+      "degree": 5,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 393,
+      "x": 3766.67,
+      "y": 3783.33,
+      "name": "",
+      "degree": 5,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 394,
+      "x": 3725,
+      "y": 4133.33,
+      "name": "",
+      "degree": 5,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 395,
+      "x": 4066.67,
+      "y": 4333.33,
+      "name": "",
+      "degree": 5,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 396,
+      "x": 4358.33,
+      "y": 4158.33,
+      "name": "",
+      "degree": 5,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 397,
+      "x": 4283.33,
+      "y": 3816.67,
+      "name": "",
+      "degree": 5,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 398,
+      "x": 4375,
+      "y": 4666.67,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 399,
+      "x": 4641.67,
+      "y": 4466.67,
+      "name": "",
+      "degree": 4,
+      "kind": "normal",
+      "has_station": false,
+      "is_resource": false,
+      "mirrorOf": null
+    },
+    {
+      "id": 400,
+      "x": 4016.67,
+      "y": 3975,
+      "name": "",
+      "degree": 6,
+      "kind": "station",
+      "has_station": true,
+      "is_resource": false,
+      "mirrorOf": null
+    }
+  ],
+  "edges": [
+    {
+      "a": 31,
+      "b": 13,
+      "mirrored": false
+    },
+    {
+      "a": 13,
+      "b": 30,
+      "mirrored": false
+    },
+    {
+      "a": 30,
+      "b": 15,
+      "mirrored": false
+    },
+    {
+      "a": 15,
+      "b": 14,
+      "mirrored": false
+    },
+    {
+      "a": 14,
+      "b": 13,
+      "mirrored": false
+    },
+    {
+      "a": 13,
+      "b": 3,
+      "mirrored": false
+    },
+    {
+      "a": 3,
+      "b": 10,
+      "mirrored": false
+    },
+    {
+      "a": 10,
+      "b": 11,
+      "mirrored": false
+    },
+    {
+      "a": 11,
+      "b": 12,
+      "mirrored": false
+    },
+    {
+      "a": 12,
+      "b": 3,
+      "mirrored": false
+    },
+    {
+      "a": 3,
+      "b": 15,
+      "mirrored": false
+    },
+    {
+      "a": 15,
+      "b": 29,
+      "mirrored": false
+    },
+    {
+      "a": 31,
+      "b": 32,
+      "mirrored": false
+    },
+    {
+      "a": 32,
+      "b": 30,
+      "mirrored": false
+    },
+    {
+      "a": 32,
+      "b": 38,
+      "mirrored": false
+    },
+    {
+      "a": 38,
+      "b": 37,
+      "mirrored": false
+    },
+    {
+      "a": 37,
+      "b": 39,
+      "mirrored": false
+    },
+    {
+      "a": 39,
+      "b": 40,
+      "mirrored": false
+    },
+    {
+      "a": 40,
+      "b": 29,
+      "mirrored": false
+    },
+    {
+      "a": 29,
+      "b": 32,
+      "mirrored": false
+    },
+    {
+      "a": 32,
+      "b": 34,
+      "mirrored": false
+    },
+    {
+      "a": 34,
+      "b": 33,
+      "mirrored": false
+    },
+    {
+      "a": 33,
+      "b": 31,
+      "mirrored": false
+    },
+    {
+      "a": 33,
+      "b": 99,
+      "mirrored": false
+    },
+    {
+      "a": 99,
+      "b": 98,
+      "mirrored": false
+    },
+    {
+      "a": 98,
+      "b": 97,
+      "mirrored": false
+    },
+    {
+      "a": 97,
+      "b": 35,
+      "mirrored": false
+    },
+    {
+      "a": 35,
+      "b": 34,
+      "mirrored": false
+    },
+    {
+      "a": 35,
+      "b": 36,
+      "mirrored": false
+    },
+    {
+      "a": 36,
+      "b": 96,
+      "mirrored": false
+    },
+    {
+      "a": 36,
+      "b": 37,
+      "mirrored": false
+    },
+    {
+      "a": 39,
+      "b": 57,
+      "mirrored": false
+    },
+    {
+      "a": 57,
+      "b": 56,
+      "mirrored": false
+    },
+    {
+      "a": 56,
+      "b": 40,
+      "mirrored": false
+    },
+    {
+      "a": 96,
+      "b": 95,
+      "mirrored": false
+    },
+    {
+      "a": 95,
+      "b": 94,
+      "mirrored": false
+    },
+    {
+      "a": 94,
+      "b": 97,
+      "mirrored": false
+    },
+    {
+      "a": 94,
+      "b": 90,
+      "mirrored": false
+    },
+    {
+      "a": 90,
+      "b": 89,
+      "mirrored": false
+    },
+    {
+      "a": 89,
+      "b": 88,
+      "mirrored": false
+    },
+    {
+      "a": 88,
+      "b": 90,
+      "mirrored": false
+    },
+    {
+      "a": 90,
+      "b": 91,
+      "mirrored": false
+    },
+    {
+      "a": 91,
+      "b": 93,
+      "mirrored": false
+    },
+    {
+      "a": 93,
+      "b": 92,
+      "mirrored": false
+    },
+    {
+      "a": 92,
+      "b": 91,
+      "mirrored": false
+    },
+    {
+      "a": 92,
+      "b": 86,
+      "mirrored": false
+    },
+    {
+      "a": 86,
+      "b": 87,
+      "mirrored": false
+    },
+    {
+      "a": 87,
+      "b": 92,
+      "mirrored": false
+    },
+    {
+      "a": 87,
+      "b": 88,
+      "mirrored": false
+    },
+    {
+      "a": 88,
+      "b": 84,
+      "mirrored": false
+    },
+    {
+      "a": 84,
+      "b": 85,
+      "mirrored": false
+    },
+    {
+      "a": 85,
+      "b": 86,
+      "mirrored": false
+    },
+    {
+      "a": 85,
+      "b": 62,
+      "mirrored": false
+    },
+    {
+      "a": 62,
+      "b": 83,
+      "mirrored": false
+    },
+    {
+      "a": 83,
+      "b": 59,
+      "mirrored": false
+    },
+    {
+      "a": 59,
+      "b": 60,
+      "mirrored": false
+    },
+    {
+      "a": 60,
+      "b": 55,
+      "mirrored": false
+    },
+    {
+      "a": 55,
+      "b": 61,
+      "mirrored": false
+    },
+    {
+      "a": 61,
+      "b": 62,
+      "mirrored": false
+    },
+    {
+      "a": 62,
+      "b": 55,
+      "mirrored": false
+    },
+    {
+      "a": 55,
+      "b": 56,
+      "mirrored": false
+    },
+    {
+      "a": 57,
+      "b": 58,
+      "mirrored": false
+    },
+    {
+      "a": 58,
+      "b": 83,
+      "mirrored": false
+    },
+    {
+      "a": 59,
+      "b": 58,
+      "mirrored": false
+    },
+    {
+      "a": 83,
+      "b": 39,
+      "mirrored": false
+    },
+    {
+      "a": 83,
+      "b": 96,
+      "mirrored": false
+    },
+    {
+      "a": 55,
+      "b": 48,
+      "mirrored": false
+    },
+    {
+      "a": 48,
+      "b": 47,
+      "mirrored": false
+    },
+    {
+      "a": 47,
+      "b": 42,
+      "mirrored": false
+    },
+    {
+      "a": 42,
+      "b": 56,
+      "mirrored": false
+    },
+    {
+      "a": 40,
+      "b": 28,
+      "mirrored": false
+    },
+    {
+      "a": 28,
+      "b": 41,
+      "mirrored": false
+    },
+    {
+      "a": 41,
+      "b": 42,
+      "mirrored": false
+    },
+    {
+      "a": 47,
+      "b": 46,
+      "mirrored": false
+    },
+    {
+      "a": 46,
+      "b": 27,
+      "mirrored": false
+    },
+    {
+      "a": 27,
+      "b": 28,
+      "mirrored": false
+    },
+    {
+      "a": 28,
+      "b": 16,
+      "mirrored": false
+    },
+    {
+      "a": 16,
+      "b": 17,
+      "mirrored": false
+    },
+    {
+      "a": 17,
+      "b": 24,
+      "mirrored": false
+    },
+    {
+      "a": 24,
+      "b": 26,
+      "mirrored": false
+    },
+    {
+      "a": 26,
+      "b": 16,
+      "mirrored": false
+    },
+    {
+      "a": 27,
+      "b": 26,
+      "mirrored": false
+    },
+    {
+      "a": 26,
+      "b": 25,
+      "mirrored": false
+    },
+    {
+      "a": 25,
+      "b": 22,
+      "mirrored": false
+    },
+    {
+      "a": 22,
+      "b": 24,
+      "mirrored": false
+    },
+    {
+      "a": 17,
+      "b": 23,
+      "mirrored": false
+    },
+    {
+      "a": 23,
+      "b": 21,
+      "mirrored": false
+    },
+    {
+      "a": 21,
+      "b": 22,
+      "mirrored": false
+    },
+    {
+      "a": 22,
+      "b": 23,
+      "mirrored": false
+    },
+    {
+      "a": 21,
+      "b": 17,
+      "mirrored": false
+    },
+    {
+      "a": 21,
+      "b": 18,
+      "mirrored": false
+    },
+    {
+      "a": 18,
+      "b": 19,
+      "mirrored": false
+    },
+    {
+      "a": 19,
+      "b": 21,
+      "mirrored": false
+    },
+    {
+      "a": 21,
+      "b": 20,
+      "mirrored": false
+    },
+    {
+      "a": 20,
+      "b": 19,
+      "mirrored": false
+    },
+    {
+      "a": 26,
+      "b": 43,
+      "mirrored": false
+    },
+    {
+      "a": 43,
+      "b": 44,
+      "mirrored": false
+    },
+    {
+      "a": 44,
+      "b": 45,
+      "mirrored": false
+    },
+    {
+      "a": 45,
+      "b": 46,
+      "mirrored": false
+    },
+    {
+      "a": 45,
+      "b": 50,
+      "mirrored": false
+    },
+    {
+      "a": 50,
+      "b": 49,
+      "mirrored": false
+    },
+    {
+      "a": 49,
+      "b": 48,
+      "mirrored": false
+    },
+    {
+      "a": 48,
+      "b": 52,
+      "mirrored": false
+    },
+    {
+      "a": 52,
+      "b": 51,
+      "mirrored": false
+    },
+    {
+      "a": 51,
+      "b": 49,
+      "mirrored": false
+    },
+    {
+      "a": 52,
+      "b": 53,
+      "mirrored": false
+    },
+    {
+      "a": 53,
+      "b": 78,
+      "mirrored": false
+    },
+    {
+      "a": 78,
+      "b": 54,
+      "mirrored": false
+    },
+    {
+      "a": 54,
+      "b": 53,
+      "mirrored": false
+    },
+    {
+      "a": 78,
+      "b": 76,
+      "mirrored": false
+    },
+    {
+      "a": 76,
+      "b": 74,
+      "mirrored": false
+    },
+    {
+      "a": 74,
+      "b": 52,
+      "mirrored": false
+    },
+    {
+      "a": 74,
+      "b": 73,
+      "mirrored": false
+    },
+    {
+      "a": 73,
+      "b": 75,
+      "mirrored": false
+    },
+    {
+      "a": 75,
+      "b": 77,
+      "mirrored": false
+    },
+    {
+      "a": 77,
+      "b": 76,
+      "mirrored": false
+    },
+    {
+      "a": 78,
+      "b": 77,
+      "mirrored": false
+    },
+    {
+      "a": 77,
+      "b": 62,
+      "mirrored": false
+    },
+    {
+      "a": 73,
+      "b": 72,
+      "mirrored": false
+    },
+    {
+      "a": 72,
+      "b": 82,
+      "mirrored": false
+    },
+    {
+      "a": 82,
+      "b": 79,
+      "mirrored": false
+    },
+    {
+      "a": 79,
+      "b": 72,
+      "mirrored": false
+    },
+    {
+      "a": 72,
+      "b": 80,
+      "mirrored": false
+    },
+    {
+      "a": 80,
+      "b": 79,
+      "mirrored": false
+    },
+    {
+      "a": 79,
+      "b": 81,
+      "mirrored": false
+    },
+    {
+      "a": 81,
+      "b": 82,
+      "mirrored": false
+    },
+    {
+      "a": 81,
+      "b": 80,
+      "mirrored": false
+    },
+    {
+      "a": 80,
+      "b": 44,
+      "mirrored": false
+    },
+    {
+      "a": 81,
+      "b": 26,
+      "mirrored": false
+    },
+    {
+      "a": 57,
+      "b": 40,
+      "mirrored": false
+    },
+    {
+      "a": 125,
+      "b": 107,
+      "mirrored": true
+    },
+    {
+      "a": 107,
+      "b": 124,
+      "mirrored": true
+    },
+    {
+      "a": 124,
+      "b": 109,
+      "mirrored": true
+    },
+    {
+      "a": 109,
+      "b": 108,
+      "mirrored": true
+    },
+    {
+      "a": 108,
+      "b": 107,
+      "mirrored": true
+    },
+    {
+      "a": 107,
+      "b": 103,
+      "mirrored": true
+    },
+    {
+      "a": 103,
+      "b": 104,
+      "mirrored": true
+    },
+    {
+      "a": 104,
+      "b": 105,
+      "mirrored": true
+    },
+    {
+      "a": 105,
+      "b": 106,
+      "mirrored": true
+    },
+    {
+      "a": 106,
+      "b": 103,
+      "mirrored": true
+    },
+    {
+      "a": 103,
+      "b": 109,
+      "mirrored": true
+    },
+    {
+      "a": 109,
+      "b": 123,
+      "mirrored": true
+    },
+    {
+      "a": 125,
+      "b": 126,
+      "mirrored": true
+    },
+    {
+      "a": 126,
+      "b": 124,
+      "mirrored": true
+    },
+    {
+      "a": 126,
+      "b": 132,
+      "mirrored": true
+    },
+    {
+      "a": 132,
+      "b": 131,
+      "mirrored": true
+    },
+    {
+      "a": 131,
+      "b": 133,
+      "mirrored": true
+    },
+    {
+      "a": 133,
+      "b": 134,
+      "mirrored": true
+    },
+    {
+      "a": 134,
+      "b": 123,
+      "mirrored": true
+    },
+    {
+      "a": 123,
+      "b": 126,
+      "mirrored": true
+    },
+    {
+      "a": 126,
+      "b": 128,
+      "mirrored": true
+    },
+    {
+      "a": 128,
+      "b": 127,
+      "mirrored": true
+    },
+    {
+      "a": 127,
+      "b": 125,
+      "mirrored": true
+    },
+    {
+      "a": 127,
+      "b": 189,
+      "mirrored": true
+    },
+    {
+      "a": 189,
+      "b": 188,
+      "mirrored": true
+    },
+    {
+      "a": 188,
+      "b": 187,
+      "mirrored": true
+    },
+    {
+      "a": 187,
+      "b": 129,
+      "mirrored": true
+    },
+    {
+      "a": 129,
+      "b": 128,
+      "mirrored": true
+    },
+    {
+      "a": 129,
+      "b": 130,
+      "mirrored": true
+    },
+    {
+      "a": 130,
+      "b": 186,
+      "mirrored": true
+    },
+    {
+      "a": 130,
+      "b": 131,
+      "mirrored": true
+    },
+    {
+      "a": 133,
+      "b": 151,
+      "mirrored": true
+    },
+    {
+      "a": 151,
+      "b": 150,
+      "mirrored": true
+    },
+    {
+      "a": 150,
+      "b": 134,
+      "mirrored": true
+    },
+    {
+      "a": 186,
+      "b": 185,
+      "mirrored": true
+    },
+    {
+      "a": 185,
+      "b": 184,
+      "mirrored": true
+    },
+    {
+      "a": 184,
+      "b": 187,
+      "mirrored": true
+    },
+    {
+      "a": 184,
+      "b": 180,
+      "mirrored": true
+    },
+    {
+      "a": 180,
+      "b": 179,
+      "mirrored": true
+    },
+    {
+      "a": 179,
+      "b": 178,
+      "mirrored": true
+    },
+    {
+      "a": 178,
+      "b": 180,
+      "mirrored": true
+    },
+    {
+      "a": 180,
+      "b": 181,
+      "mirrored": true
+    },
+    {
+      "a": 181,
+      "b": 183,
+      "mirrored": true
+    },
+    {
+      "a": 183,
+      "b": 182,
+      "mirrored": true
+    },
+    {
+      "a": 182,
+      "b": 181,
+      "mirrored": true
+    },
+    {
+      "a": 182,
+      "b": 176,
+      "mirrored": true
+    },
+    {
+      "a": 176,
+      "b": 177,
+      "mirrored": true
+    },
+    {
+      "a": 177,
+      "b": 182,
+      "mirrored": true
+    },
+    {
+      "a": 177,
+      "b": 178,
+      "mirrored": true
+    },
+    {
+      "a": 178,
+      "b": 174,
+      "mirrored": true
+    },
+    {
+      "a": 174,
+      "b": 175,
+      "mirrored": true
+    },
+    {
+      "a": 175,
+      "b": 176,
+      "mirrored": true
+    },
+    {
+      "a": 175,
+      "b": 156,
+      "mirrored": true
+    },
+    {
+      "a": 156,
+      "b": 173,
+      "mirrored": true
+    },
+    {
+      "a": 173,
+      "b": 153,
+      "mirrored": true
+    },
+    {
+      "a": 153,
+      "b": 154,
+      "mirrored": true
+    },
+    {
+      "a": 154,
+      "b": 149,
+      "mirrored": true
+    },
+    {
+      "a": 149,
+      "b": 155,
+      "mirrored": true
+    },
+    {
+      "a": 155,
+      "b": 156,
+      "mirrored": true
+    },
+    {
+      "a": 156,
+      "b": 149,
+      "mirrored": true
+    },
+    {
+      "a": 149,
+      "b": 150,
+      "mirrored": true
+    },
+    {
+      "a": 151,
+      "b": 152,
+      "mirrored": true
+    },
+    {
+      "a": 152,
+      "b": 173,
+      "mirrored": true
+    },
+    {
+      "a": 153,
+      "b": 152,
+      "mirrored": true
+    },
+    {
+      "a": 173,
+      "b": 133,
+      "mirrored": true
+    },
+    {
+      "a": 173,
+      "b": 186,
+      "mirrored": true
+    },
+    {
+      "a": 149,
+      "b": 142,
+      "mirrored": true
+    },
+    {
+      "a": 142,
+      "b": 141,
+      "mirrored": true
+    },
+    {
+      "a": 141,
+      "b": 136,
+      "mirrored": true
+    },
+    {
+      "a": 136,
+      "b": 150,
+      "mirrored": true
+    },
+    {
+      "a": 134,
+      "b": 122,
+      "mirrored": true
+    },
+    {
+      "a": 122,
+      "b": 135,
+      "mirrored": true
+    },
+    {
+      "a": 135,
+      "b": 136,
+      "mirrored": true
+    },
+    {
+      "a": 141,
+      "b": 140,
+      "mirrored": true
+    },
+    {
+      "a": 140,
+      "b": 121,
+      "mirrored": true
+    },
+    {
+      "a": 121,
+      "b": 122,
+      "mirrored": true
+    },
+    {
+      "a": 122,
+      "b": 110,
+      "mirrored": true
+    },
+    {
+      "a": 110,
+      "b": 111,
+      "mirrored": true
+    },
+    {
+      "a": 111,
+      "b": 118,
+      "mirrored": true
+    },
+    {
+      "a": 118,
+      "b": 120,
+      "mirrored": true
+    },
+    {
+      "a": 120,
+      "b": 110,
+      "mirrored": true
+    },
+    {
+      "a": 121,
+      "b": 120,
+      "mirrored": true
+    },
+    {
+      "a": 120,
+      "b": 119,
+      "mirrored": true
+    },
+    {
+      "a": 119,
+      "b": 116,
+      "mirrored": true
+    },
+    {
+      "a": 116,
+      "b": 118,
+      "mirrored": true
+    },
+    {
+      "a": 111,
+      "b": 117,
+      "mirrored": true
+    },
+    {
+      "a": 117,
+      "b": 115,
+      "mirrored": true
+    },
+    {
+      "a": 115,
+      "b": 116,
+      "mirrored": true
+    },
+    {
+      "a": 116,
+      "b": 117,
+      "mirrored": true
+    },
+    {
+      "a": 115,
+      "b": 111,
+      "mirrored": true
+    },
+    {
+      "a": 115,
+      "b": 112,
+      "mirrored": true
+    },
+    {
+      "a": 112,
+      "b": 113,
+      "mirrored": true
+    },
+    {
+      "a": 113,
+      "b": 115,
+      "mirrored": true
+    },
+    {
+      "a": 115,
+      "b": 114,
+      "mirrored": true
+    },
+    {
+      "a": 114,
+      "b": 113,
+      "mirrored": true
+    },
+    {
+      "a": 120,
+      "b": 137,
+      "mirrored": true
+    },
+    {
+      "a": 137,
+      "b": 138,
+      "mirrored": true
+    },
+    {
+      "a": 138,
+      "b": 139,
+      "mirrored": true
+    },
+    {
+      "a": 139,
+      "b": 140,
+      "mirrored": true
+    },
+    {
+      "a": 139,
+      "b": 144,
+      "mirrored": true
+    },
+    {
+      "a": 144,
+      "b": 143,
+      "mirrored": true
+    },
+    {
+      "a": 143,
+      "b": 142,
+      "mirrored": true
+    },
+    {
+      "a": 142,
+      "b": 146,
+      "mirrored": true
+    },
+    {
+      "a": 146,
+      "b": 145,
+      "mirrored": true
+    },
+    {
+      "a": 145,
+      "b": 143,
+      "mirrored": true
+    },
+    {
+      "a": 146,
+      "b": 147,
+      "mirrored": true
+    },
+    {
+      "a": 147,
+      "b": 168,
+      "mirrored": true
+    },
+    {
+      "a": 168,
+      "b": 148,
+      "mirrored": true
+    },
+    {
+      "a": 148,
+      "b": 147,
+      "mirrored": true
+    },
+    {
+      "a": 168,
+      "b": 166,
+      "mirrored": true
+    },
+    {
+      "a": 166,
+      "b": 164,
+      "mirrored": true
+    },
+    {
+      "a": 164,
+      "b": 146,
+      "mirrored": true
+    },
+    {
+      "a": 164,
+      "b": 163,
+      "mirrored": true
+    },
+    {
+      "a": 163,
+      "b": 165,
+      "mirrored": true
+    },
+    {
+      "a": 165,
+      "b": 167,
+      "mirrored": true
+    },
+    {
+      "a": 167,
+      "b": 166,
+      "mirrored": true
+    },
+    {
+      "a": 168,
+      "b": 167,
+      "mirrored": true
+    },
+    {
+      "a": 167,
+      "b": 156,
+      "mirrored": true
+    },
+    {
+      "a": 163,
+      "b": 162,
+      "mirrored": true
+    },
+    {
+      "a": 162,
+      "b": 172,
+      "mirrored": true
+    },
+    {
+      "a": 172,
+      "b": 169,
+      "mirrored": true
+    },
+    {
+      "a": 169,
+      "b": 162,
+      "mirrored": true
+    },
+    {
+      "a": 162,
+      "b": 170,
+      "mirrored": true
+    },
+    {
+      "a": 170,
+      "b": 169,
+      "mirrored": true
+    },
+    {
+      "a": 169,
+      "b": 171,
+      "mirrored": true
+    },
+    {
+      "a": 171,
+      "b": 172,
+      "mirrored": true
+    },
+    {
+      "a": 171,
+      "b": 170,
+      "mirrored": true
+    },
+    {
+      "a": 170,
+      "b": 138,
+      "mirrored": true
+    },
+    {
+      "a": 171,
+      "b": 120,
+      "mirrored": true
+    },
+    {
+      "a": 151,
+      "b": 134,
+      "mirrored": true
+    },
+    {
+      "a": 214,
+      "b": 196,
+      "mirrored": true
+    },
+    {
+      "a": 196,
+      "b": 213,
+      "mirrored": true
+    },
+    {
+      "a": 213,
+      "b": 198,
+      "mirrored": true
+    },
+    {
+      "a": 198,
+      "b": 197,
+      "mirrored": true
+    },
+    {
+      "a": 197,
+      "b": 196,
+      "mirrored": true
+    },
+    {
+      "a": 196,
+      "b": 192,
+      "mirrored": true
+    },
+    {
+      "a": 192,
+      "b": 193,
+      "mirrored": true
+    },
+    {
+      "a": 193,
+      "b": 194,
+      "mirrored": true
+    },
+    {
+      "a": 194,
+      "b": 195,
+      "mirrored": true
+    },
+    {
+      "a": 195,
+      "b": 192,
+      "mirrored": true
+    },
+    {
+      "a": 192,
+      "b": 198,
+      "mirrored": true
+    },
+    {
+      "a": 198,
+      "b": 212,
+      "mirrored": true
+    },
+    {
+      "a": 214,
+      "b": 215,
+      "mirrored": true
+    },
+    {
+      "a": 215,
+      "b": 213,
+      "mirrored": true
+    },
+    {
+      "a": 215,
+      "b": 221,
+      "mirrored": true
+    },
+    {
+      "a": 221,
+      "b": 220,
+      "mirrored": true
+    },
+    {
+      "a": 220,
+      "b": 222,
+      "mirrored": true
+    },
+    {
+      "a": 222,
+      "b": 223,
+      "mirrored": true
+    },
+    {
+      "a": 223,
+      "b": 212,
+      "mirrored": true
+    },
+    {
+      "a": 212,
+      "b": 215,
+      "mirrored": true
+    },
+    {
+      "a": 215,
+      "b": 217,
+      "mirrored": true
+    },
+    {
+      "a": 217,
+      "b": 216,
+      "mirrored": true
+    },
+    {
+      "a": 216,
+      "b": 214,
+      "mirrored": true
+    },
+    {
+      "a": 216,
+      "b": 282,
+      "mirrored": true
+    },
+    {
+      "a": 282,
+      "b": 281,
+      "mirrored": true
+    },
+    {
+      "a": 281,
+      "b": 280,
+      "mirrored": true
+    },
+    {
+      "a": 280,
+      "b": 218,
+      "mirrored": true
+    },
+    {
+      "a": 218,
+      "b": 217,
+      "mirrored": true
+    },
+    {
+      "a": 218,
+      "b": 219,
+      "mirrored": true
+    },
+    {
+      "a": 219,
+      "b": 279,
+      "mirrored": true
+    },
+    {
+      "a": 219,
+      "b": 220,
+      "mirrored": true
+    },
+    {
+      "a": 222,
+      "b": 240,
+      "mirrored": true
+    },
+    {
+      "a": 240,
+      "b": 239,
+      "mirrored": true
+    },
+    {
+      "a": 239,
+      "b": 223,
+      "mirrored": true
+    },
+    {
+      "a": 279,
+      "b": 278,
+      "mirrored": true
+    },
+    {
+      "a": 278,
+      "b": 277,
+      "mirrored": true
+    },
+    {
+      "a": 277,
+      "b": 280,
+      "mirrored": true
+    },
+    {
+      "a": 277,
+      "b": 273,
+      "mirrored": true
+    },
+    {
+      "a": 273,
+      "b": 272,
+      "mirrored": true
+    },
+    {
+      "a": 272,
+      "b": 271,
+      "mirrored": true
+    },
+    {
+      "a": 271,
+      "b": 273,
+      "mirrored": true
+    },
+    {
+      "a": 273,
+      "b": 274,
+      "mirrored": true
+    },
+    {
+      "a": 274,
+      "b": 276,
+      "mirrored": true
+    },
+    {
+      "a": 276,
+      "b": 275,
+      "mirrored": true
+    },
+    {
+      "a": 275,
+      "b": 274,
+      "mirrored": true
+    },
+    {
+      "a": 275,
+      "b": 269,
+      "mirrored": true
+    },
+    {
+      "a": 269,
+      "b": 270,
+      "mirrored": true
+    },
+    {
+      "a": 270,
+      "b": 275,
+      "mirrored": true
+    },
+    {
+      "a": 270,
+      "b": 271,
+      "mirrored": true
+    },
+    {
+      "a": 271,
+      "b": 267,
+      "mirrored": true
+    },
+    {
+      "a": 267,
+      "b": 268,
+      "mirrored": true
+    },
+    {
+      "a": 268,
+      "b": 269,
+      "mirrored": true
+    },
+    {
+      "a": 268,
+      "b": 245,
+      "mirrored": true
+    },
+    {
+      "a": 245,
+      "b": 266,
+      "mirrored": true
+    },
+    {
+      "a": 266,
+      "b": 242,
+      "mirrored": true
+    },
+    {
+      "a": 242,
+      "b": 243,
+      "mirrored": true
+    },
+    {
+      "a": 243,
+      "b": 238,
+      "mirrored": true
+    },
+    {
+      "a": 238,
+      "b": 244,
+      "mirrored": true
+    },
+    {
+      "a": 244,
+      "b": 245,
+      "mirrored": true
+    },
+    {
+      "a": 245,
+      "b": 238,
+      "mirrored": true
+    },
+    {
+      "a": 238,
+      "b": 239,
+      "mirrored": true
+    },
+    {
+      "a": 240,
+      "b": 241,
+      "mirrored": true
+    },
+    {
+      "a": 241,
+      "b": 266,
+      "mirrored": true
+    },
+    {
+      "a": 242,
+      "b": 241,
+      "mirrored": true
+    },
+    {
+      "a": 266,
+      "b": 222,
+      "mirrored": true
+    },
+    {
+      "a": 266,
+      "b": 279,
+      "mirrored": true
+    },
+    {
+      "a": 238,
+      "b": 231,
+      "mirrored": true
+    },
+    {
+      "a": 231,
+      "b": 230,
+      "mirrored": true
+    },
+    {
+      "a": 230,
+      "b": 225,
+      "mirrored": true
+    },
+    {
+      "a": 225,
+      "b": 239,
+      "mirrored": true
+    },
+    {
+      "a": 223,
+      "b": 211,
+      "mirrored": true
+    },
+    {
+      "a": 211,
+      "b": 224,
+      "mirrored": true
+    },
+    {
+      "a": 224,
+      "b": 225,
+      "mirrored": true
+    },
+    {
+      "a": 230,
+      "b": 229,
+      "mirrored": true
+    },
+    {
+      "a": 229,
+      "b": 210,
+      "mirrored": true
+    },
+    {
+      "a": 210,
+      "b": 211,
+      "mirrored": true
+    },
+    {
+      "a": 211,
+      "b": 199,
+      "mirrored": true
+    },
+    {
+      "a": 199,
+      "b": 200,
+      "mirrored": true
+    },
+    {
+      "a": 200,
+      "b": 207,
+      "mirrored": true
+    },
+    {
+      "a": 207,
+      "b": 209,
+      "mirrored": true
+    },
+    {
+      "a": 209,
+      "b": 199,
+      "mirrored": true
+    },
+    {
+      "a": 210,
+      "b": 209,
+      "mirrored": true
+    },
+    {
+      "a": 209,
+      "b": 208,
+      "mirrored": true
+    },
+    {
+      "a": 208,
+      "b": 205,
+      "mirrored": true
+    },
+    {
+      "a": 205,
+      "b": 207,
+      "mirrored": true
+    },
+    {
+      "a": 200,
+      "b": 206,
+      "mirrored": true
+    },
+    {
+      "a": 206,
+      "b": 204,
+      "mirrored": true
+    },
+    {
+      "a": 204,
+      "b": 205,
+      "mirrored": true
+    },
+    {
+      "a": 205,
+      "b": 206,
+      "mirrored": true
+    },
+    {
+      "a": 204,
+      "b": 200,
+      "mirrored": true
+    },
+    {
+      "a": 204,
+      "b": 201,
+      "mirrored": true
+    },
+    {
+      "a": 201,
+      "b": 202,
+      "mirrored": true
+    },
+    {
+      "a": 202,
+      "b": 204,
+      "mirrored": true
+    },
+    {
+      "a": 204,
+      "b": 203,
+      "mirrored": true
+    },
+    {
+      "a": 203,
+      "b": 202,
+      "mirrored": true
+    },
+    {
+      "a": 209,
+      "b": 226,
+      "mirrored": true
+    },
+    {
+      "a": 226,
+      "b": 227,
+      "mirrored": true
+    },
+    {
+      "a": 227,
+      "b": 228,
+      "mirrored": true
+    },
+    {
+      "a": 228,
+      "b": 229,
+      "mirrored": true
+    },
+    {
+      "a": 228,
+      "b": 233,
+      "mirrored": true
+    },
+    {
+      "a": 233,
+      "b": 232,
+      "mirrored": true
+    },
+    {
+      "a": 232,
+      "b": 231,
+      "mirrored": true
+    },
+    {
+      "a": 231,
+      "b": 235,
+      "mirrored": true
+    },
+    {
+      "a": 235,
+      "b": 234,
+      "mirrored": true
+    },
+    {
+      "a": 234,
+      "b": 232,
+      "mirrored": true
+    },
+    {
+      "a": 235,
+      "b": 236,
+      "mirrored": true
+    },
+    {
+      "a": 236,
+      "b": 261,
+      "mirrored": true
+    },
+    {
+      "a": 261,
+      "b": 237,
+      "mirrored": true
+    },
+    {
+      "a": 237,
+      "b": 236,
+      "mirrored": true
+    },
+    {
+      "a": 261,
+      "b": 259,
+      "mirrored": true
+    },
+    {
+      "a": 259,
+      "b": 257,
+      "mirrored": true
+    },
+    {
+      "a": 257,
+      "b": 235,
+      "mirrored": true
+    },
+    {
+      "a": 257,
+      "b": 256,
+      "mirrored": true
+    },
+    {
+      "a": 256,
+      "b": 258,
+      "mirrored": true
+    },
+    {
+      "a": 258,
+      "b": 260,
+      "mirrored": true
+    },
+    {
+      "a": 260,
+      "b": 259,
+      "mirrored": true
+    },
+    {
+      "a": 261,
+      "b": 260,
+      "mirrored": true
+    },
+    {
+      "a": 260,
+      "b": 245,
+      "mirrored": true
+    },
+    {
+      "a": 256,
+      "b": 255,
+      "mirrored": true
+    },
+    {
+      "a": 255,
+      "b": 265,
+      "mirrored": true
+    },
+    {
+      "a": 265,
+      "b": 262,
+      "mirrored": true
+    },
+    {
+      "a": 262,
+      "b": 255,
+      "mirrored": true
+    },
+    {
+      "a": 255,
+      "b": 263,
+      "mirrored": true
+    },
+    {
+      "a": 263,
+      "b": 262,
+      "mirrored": true
+    },
+    {
+      "a": 262,
+      "b": 264,
+      "mirrored": true
+    },
+    {
+      "a": 264,
+      "b": 265,
+      "mirrored": true
+    },
+    {
+      "a": 264,
+      "b": 263,
+      "mirrored": true
+    },
+    {
+      "a": 263,
+      "b": 227,
+      "mirrored": true
+    },
+    {
+      "a": 264,
+      "b": 209,
+      "mirrored": true
+    },
+    {
+      "a": 240,
+      "b": 223,
+      "mirrored": true
+    },
+    {
+      "a": 308,
+      "b": 290,
+      "mirrored": true
+    },
+    {
+      "a": 290,
+      "b": 307,
+      "mirrored": true
+    },
+    {
+      "a": 307,
+      "b": 292,
+      "mirrored": true
+    },
+    {
+      "a": 292,
+      "b": 291,
+      "mirrored": true
+    },
+    {
+      "a": 291,
+      "b": 290,
+      "mirrored": true
+    },
+    {
+      "a": 290,
+      "b": 286,
+      "mirrored": true
+    },
+    {
+      "a": 286,
+      "b": 287,
+      "mirrored": true
+    },
+    {
+      "a": 287,
+      "b": 288,
+      "mirrored": true
+    },
+    {
+      "a": 288,
+      "b": 289,
+      "mirrored": true
+    },
+    {
+      "a": 289,
+      "b": 286,
+      "mirrored": true
+    },
+    {
+      "a": 286,
+      "b": 292,
+      "mirrored": true
+    },
+    {
+      "a": 292,
+      "b": 306,
+      "mirrored": true
+    },
+    {
+      "a": 308,
+      "b": 309,
+      "mirrored": true
+    },
+    {
+      "a": 309,
+      "b": 307,
+      "mirrored": true
+    },
+    {
+      "a": 309,
+      "b": 315,
+      "mirrored": true
+    },
+    {
+      "a": 315,
+      "b": 314,
+      "mirrored": true
+    },
+    {
+      "a": 314,
+      "b": 316,
+      "mirrored": true
+    },
+    {
+      "a": 316,
+      "b": 317,
+      "mirrored": true
+    },
+    {
+      "a": 317,
+      "b": 306,
+      "mirrored": true
+    },
+    {
+      "a": 306,
+      "b": 309,
+      "mirrored": true
+    },
+    {
+      "a": 309,
+      "b": 311,
+      "mirrored": true
+    },
+    {
+      "a": 311,
+      "b": 310,
+      "mirrored": true
+    },
+    {
+      "a": 310,
+      "b": 308,
+      "mirrored": true
+    },
+    {
+      "a": 310,
+      "b": 372,
+      "mirrored": true
+    },
+    {
+      "a": 372,
+      "b": 371,
+      "mirrored": true
+    },
+    {
+      "a": 371,
+      "b": 370,
+      "mirrored": true
+    },
+    {
+      "a": 370,
+      "b": 312,
+      "mirrored": true
+    },
+    {
+      "a": 312,
+      "b": 311,
+      "mirrored": true
+    },
+    {
+      "a": 312,
+      "b": 313,
+      "mirrored": true
+    },
+    {
+      "a": 313,
+      "b": 369,
+      "mirrored": true
+    },
+    {
+      "a": 313,
+      "b": 314,
+      "mirrored": true
+    },
+    {
+      "a": 316,
+      "b": 334,
+      "mirrored": true
+    },
+    {
+      "a": 334,
+      "b": 333,
+      "mirrored": true
+    },
+    {
+      "a": 333,
+      "b": 317,
+      "mirrored": true
+    },
+    {
+      "a": 369,
+      "b": 368,
+      "mirrored": true
+    },
+    {
+      "a": 368,
+      "b": 367,
+      "mirrored": true
+    },
+    {
+      "a": 367,
+      "b": 370,
+      "mirrored": true
+    },
+    {
+      "a": 367,
+      "b": 363,
+      "mirrored": true
+    },
+    {
+      "a": 363,
+      "b": 362,
+      "mirrored": true
+    },
+    {
+      "a": 362,
+      "b": 361,
+      "mirrored": true
+    },
+    {
+      "a": 361,
+      "b": 363,
+      "mirrored": true
+    },
+    {
+      "a": 363,
+      "b": 364,
+      "mirrored": true
+    },
+    {
+      "a": 364,
+      "b": 366,
+      "mirrored": true
+    },
+    {
+      "a": 366,
+      "b": 365,
+      "mirrored": true
+    },
+    {
+      "a": 365,
+      "b": 364,
+      "mirrored": true
+    },
+    {
+      "a": 365,
+      "b": 359,
+      "mirrored": true
+    },
+    {
+      "a": 359,
+      "b": 360,
+      "mirrored": true
+    },
+    {
+      "a": 360,
+      "b": 365,
+      "mirrored": true
+    },
+    {
+      "a": 360,
+      "b": 361,
+      "mirrored": true
+    },
+    {
+      "a": 361,
+      "b": 357,
+      "mirrored": true
+    },
+    {
+      "a": 357,
+      "b": 358,
+      "mirrored": true
+    },
+    {
+      "a": 358,
+      "b": 359,
+      "mirrored": true
+    },
+    {
+      "a": 358,
+      "b": 339,
+      "mirrored": true
+    },
+    {
+      "a": 339,
+      "b": 356,
+      "mirrored": true
+    },
+    {
+      "a": 356,
+      "b": 336,
+      "mirrored": true
+    },
+    {
+      "a": 336,
+      "b": 337,
+      "mirrored": true
+    },
+    {
+      "a": 337,
+      "b": 332,
+      "mirrored": true
+    },
+    {
+      "a": 332,
+      "b": 338,
+      "mirrored": true
+    },
+    {
+      "a": 338,
+      "b": 339,
+      "mirrored": true
+    },
+    {
+      "a": 339,
+      "b": 332,
+      "mirrored": true
+    },
+    {
+      "a": 332,
+      "b": 333,
+      "mirrored": true
+    },
+    {
+      "a": 334,
+      "b": 335,
+      "mirrored": true
+    },
+    {
+      "a": 335,
+      "b": 356,
+      "mirrored": true
+    },
+    {
+      "a": 336,
+      "b": 335,
+      "mirrored": true
+    },
+    {
+      "a": 356,
+      "b": 316,
+      "mirrored": true
+    },
+    {
+      "a": 356,
+      "b": 369,
+      "mirrored": true
+    },
+    {
+      "a": 332,
+      "b": 325,
+      "mirrored": true
+    },
+    {
+      "a": 325,
+      "b": 324,
+      "mirrored": true
+    },
+    {
+      "a": 324,
+      "b": 319,
+      "mirrored": true
+    },
+    {
+      "a": 319,
+      "b": 333,
+      "mirrored": true
+    },
+    {
+      "a": 317,
+      "b": 305,
+      "mirrored": true
+    },
+    {
+      "a": 305,
+      "b": 318,
+      "mirrored": true
+    },
+    {
+      "a": 318,
+      "b": 319,
+      "mirrored": true
+    },
+    {
+      "a": 324,
+      "b": 323,
+      "mirrored": true
+    },
+    {
+      "a": 323,
+      "b": 304,
+      "mirrored": true
+    },
+    {
+      "a": 304,
+      "b": 305,
+      "mirrored": true
+    },
+    {
+      "a": 305,
+      "b": 293,
+      "mirrored": true
+    },
+    {
+      "a": 293,
+      "b": 294,
+      "mirrored": true
+    },
+    {
+      "a": 294,
+      "b": 301,
+      "mirrored": true
+    },
+    {
+      "a": 301,
+      "b": 303,
+      "mirrored": true
+    },
+    {
+      "a": 303,
+      "b": 293,
+      "mirrored": true
+    },
+    {
+      "a": 304,
+      "b": 303,
+      "mirrored": true
+    },
+    {
+      "a": 303,
+      "b": 302,
+      "mirrored": true
+    },
+    {
+      "a": 302,
+      "b": 299,
+      "mirrored": true
+    },
+    {
+      "a": 299,
+      "b": 301,
+      "mirrored": true
+    },
+    {
+      "a": 294,
+      "b": 300,
+      "mirrored": true
+    },
+    {
+      "a": 300,
+      "b": 298,
+      "mirrored": true
+    },
+    {
+      "a": 298,
+      "b": 299,
+      "mirrored": true
+    },
+    {
+      "a": 299,
+      "b": 300,
+      "mirrored": true
+    },
+    {
+      "a": 298,
+      "b": 294,
+      "mirrored": true
+    },
+    {
+      "a": 298,
+      "b": 295,
+      "mirrored": true
+    },
+    {
+      "a": 295,
+      "b": 296,
+      "mirrored": true
+    },
+    {
+      "a": 296,
+      "b": 298,
+      "mirrored": true
+    },
+    {
+      "a": 298,
+      "b": 297,
+      "mirrored": true
+    },
+    {
+      "a": 297,
+      "b": 296,
+      "mirrored": true
+    },
+    {
+      "a": 303,
+      "b": 320,
+      "mirrored": true
+    },
+    {
+      "a": 320,
+      "b": 321,
+      "mirrored": true
+    },
+    {
+      "a": 321,
+      "b": 322,
+      "mirrored": true
+    },
+    {
+      "a": 322,
+      "b": 323,
+      "mirrored": true
+    },
+    {
+      "a": 322,
+      "b": 327,
+      "mirrored": true
+    },
+    {
+      "a": 327,
+      "b": 326,
+      "mirrored": true
+    },
+    {
+      "a": 326,
+      "b": 325,
+      "mirrored": true
+    },
+    {
+      "a": 325,
+      "b": 329,
+      "mirrored": true
+    },
+    {
+      "a": 329,
+      "b": 328,
+      "mirrored": true
+    },
+    {
+      "a": 328,
+      "b": 326,
+      "mirrored": true
+    },
+    {
+      "a": 329,
+      "b": 330,
+      "mirrored": true
+    },
+    {
+      "a": 330,
+      "b": 351,
+      "mirrored": true
+    },
+    {
+      "a": 351,
+      "b": 331,
+      "mirrored": true
+    },
+    {
+      "a": 331,
+      "b": 330,
+      "mirrored": true
+    },
+    {
+      "a": 351,
+      "b": 349,
+      "mirrored": true
+    },
+    {
+      "a": 349,
+      "b": 347,
+      "mirrored": true
+    },
+    {
+      "a": 347,
+      "b": 329,
+      "mirrored": true
+    },
+    {
+      "a": 347,
+      "b": 346,
+      "mirrored": true
+    },
+    {
+      "a": 346,
+      "b": 348,
+      "mirrored": true
+    },
+    {
+      "a": 348,
+      "b": 350,
+      "mirrored": true
+    },
+    {
+      "a": 350,
+      "b": 349,
+      "mirrored": true
+    },
+    {
+      "a": 351,
+      "b": 350,
+      "mirrored": true
+    },
+    {
+      "a": 350,
+      "b": 339,
+      "mirrored": true
+    },
+    {
+      "a": 346,
+      "b": 345,
+      "mirrored": true
+    },
+    {
+      "a": 345,
+      "b": 355,
+      "mirrored": true
+    },
+    {
+      "a": 355,
+      "b": 352,
+      "mirrored": true
+    },
+    {
+      "a": 352,
+      "b": 345,
+      "mirrored": true
+    },
+    {
+      "a": 345,
+      "b": 353,
+      "mirrored": true
+    },
+    {
+      "a": 353,
+      "b": 352,
+      "mirrored": true
+    },
+    {
+      "a": 352,
+      "b": 354,
+      "mirrored": true
+    },
+    {
+      "a": 354,
+      "b": 355,
+      "mirrored": true
+    },
+    {
+      "a": 354,
+      "b": 353,
+      "mirrored": true
+    },
+    {
+      "a": 353,
+      "b": 321,
+      "mirrored": true
+    },
+    {
+      "a": 354,
+      "b": 303,
+      "mirrored": true
+    },
+    {
+      "a": 334,
+      "b": 317,
+      "mirrored": true
+    },
+    {
+      "a": 33,
+      "b": 354,
+      "mirrored": false
+    },
+    {
+      "a": 355,
+      "b": 98,
+      "mirrored": false
+    },
+    {
+      "a": 345,
+      "b": 92,
+      "mirrored": false
+    },
+    {
+      "a": 365,
+      "b": 162,
+      "mirrored": false
+    },
+    {
+      "a": 172,
+      "b": 371,
+      "mirrored": false
+    },
+    {
+      "a": 171,
+      "b": 310,
+      "mirrored": false
+    },
+    {
+      "a": 81,
+      "b": 216,
+      "mirrored": false
+    },
+    {
+      "a": 281,
+      "b": 82,
+      "mirrored": false
+    },
+    {
+      "a": 72,
+      "b": 275,
+      "mirrored": false
+    },
+    {
+      "a": 182,
+      "b": 255,
+      "mirrored": false
+    },
+    {
+      "a": 265,
+      "b": 188,
+      "mirrored": false
+    },
+    {
+      "a": 127,
+      "b": 264,
+      "mirrored": false
+    },
+    {
+      "a": 339,
+      "b": 391,
+      "mirrored": false
+    },
+    {
+      "a": 391,
+      "b": 390,
+      "mirrored": false
+    },
+    {
+      "a": 390,
+      "b": 339,
+      "mirrored": false
+    },
+    {
+      "a": 390,
+      "b": 389,
+      "mirrored": false
+    },
+    {
+      "a": 389,
+      "b": 162,
+      "mirrored": false
+    },
+    {
+      "a": 389,
+      "b": 388,
+      "mirrored": false
+    },
+    {
+      "a": 388,
+      "b": 156,
+      "mirrored": false
+    },
+    {
+      "a": 156,
+      "b": 398,
+      "mirrored": false
+    },
+    {
+      "a": 398,
+      "b": 388,
+      "mirrored": false
+    },
+    {
+      "a": 388,
+      "b": 395,
+      "mirrored": false
+    },
+    {
+      "a": 395,
+      "b": 398,
+      "mirrored": false
+    },
+    {
+      "a": 398,
+      "b": 399,
+      "mirrored": false
+    },
+    {
+      "a": 399,
+      "b": 255,
+      "mirrored": false
+    },
+    {
+      "a": 399,
+      "b": 385,
+      "mirrored": false
+    },
+    {
+      "a": 385,
+      "b": 245,
+      "mirrored": false
+    },
+    {
+      "a": 245,
+      "b": 384,
+      "mirrored": false
+    },
+    {
+      "a": 384,
+      "b": 383,
+      "mirrored": false
+    },
+    {
+      "a": 383,
+      "b": 72,
+      "mirrored": false
+    },
+    {
+      "a": 383,
+      "b": 382,
+      "mirrored": false
+    },
+    {
+      "a": 382,
+      "b": 381,
+      "mirrored": false
+    },
+    {
+      "a": 381,
+      "b": 62,
+      "mirrored": false
+    },
+    {
+      "a": 62,
+      "b": 382,
+      "mirrored": false
+    },
+    {
+      "a": 381,
+      "b": 380,
+      "mirrored": false
+    },
+    {
+      "a": 380,
+      "b": 391,
+      "mirrored": false
+    },
+    {
+      "a": 380,
+      "b": 345,
+      "mirrored": false
+    },
+    {
+      "a": 380,
+      "b": 393,
+      "mirrored": false
+    },
+    {
+      "a": 393,
+      "b": 392,
+      "mirrored": false
+    },
+    {
+      "a": 392,
+      "b": 397,
+      "mirrored": false
+    },
+    {
+      "a": 397,
+      "b": 396,
+      "mirrored": false
+    },
+    {
+      "a": 396,
+      "b": 395,
+      "mirrored": false
+    },
+    {
+      "a": 395,
+      "b": 394,
+      "mirrored": false
+    },
+    {
+      "a": 394,
+      "b": 389,
+      "mirrored": false
+    },
+    {
+      "a": 390,
+      "b": 394,
+      "mirrored": false
+    },
+    {
+      "a": 394,
+      "b": 393,
+      "mirrored": false
+    },
+    {
+      "a": 393,
+      "b": 391,
+      "mirrored": false
+    },
+    {
+      "a": 381,
+      "b": 392,
+      "mirrored": false
+    },
+    {
+      "a": 392,
+      "b": 382,
+      "mirrored": false
+    },
+    {
+      "a": 384,
+      "b": 397,
+      "mirrored": false
+    },
+    {
+      "a": 396,
+      "b": 385,
+      "mirrored": false
+    },
+    {
+      "a": 385,
+      "b": 384,
+      "mirrored": false
+    },
+    {
+      "a": 399,
+      "b": 396,
+      "mirrored": false
+    },
+    {
+      "a": 397,
+      "b": 383,
+      "mirrored": false
+    },
+    {
+      "a": 393,
+      "b": 400,
+      "mirrored": false
+    },
+    {
+      "a": 400,
+      "b": 395,
+      "mirrored": false
+    },
+    {
+      "a": 394,
+      "b": 400,
+      "mirrored": false
+    },
+    {
+      "a": 400,
+      "b": 392,
+      "mirrored": false
+    },
+    {
+      "a": 397,
+      "b": 400,
+      "mirrored": false
+    },
+    {
+      "a": 400,
+      "b": 396,
+      "mirrored": false
+    },
+    {
+      "a": 3,
+      "b": 14,
+      "mirrored": false
+    },
+    {
+      "a": 286,
+      "b": 291,
+      "mirrored": false
+    },
+    {
+      "a": 103,
+      "b": 108,
+      "mirrored": false
+    },
+    {
+      "a": 192,
+      "b": 197,
+      "mirrored": false
+    },
+    {
+      "a": 11,
+      "b": 3,
+      "mirrored": false
+    },
+    {
+      "a": 288,
+      "b": 286,
+      "mirrored": false
+    },
+    {
+      "a": 105,
+      "b": 103,
+      "mirrored": false
+    },
+    {
+      "a": 194,
+      "b": 192,
+      "mirrored": false
+    }
+  ],
+  "tag": "topology_correct_annot_complete_v1",
+  "note": "Topology correct + station/resource annotation complete (15*4 via 90deg sym)",
+  "station_count": 37,
+  "resource_count": 24
+}

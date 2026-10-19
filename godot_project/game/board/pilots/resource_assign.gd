@@ -13,6 +13,8 @@ static func reduction_per_point(data: BoardData) -> float:
 static func reduction_cap(data: BoardData) -> float:
 	return float(data.equipment.get("build_time_reduction_cap", 0.99))
 
+const DevBalance := preload("res://game/board/dev_balance.gd")
+
 static func pilot_held_count(map: BoardMapModel, pilot_id: String) -> int:
 	var n := 0
 	for sid in map.systems.keys():
@@ -21,7 +23,7 @@ static func pilot_held_count(map: BoardMapModel, pilot_id: String) -> int:
 				continue
 			if str(c.get("assigned_pilot_id", "")) == pilot_id:
 				n += 1
-	return n
+	return n + DevBalance.resource_extra(pilot_id)
 
 static func list_held_cells(map: BoardMapModel, pilot_id: String) -> Array:
 	var out: Array = []
@@ -300,3 +302,84 @@ static func rebalance_yang(map: BoardMapModel, pilot_rows: Array) -> void:
 		c2["last_assignee"] = pid
 		c2["auto_assigned"] = true
 		counts[pid] = int(counts.get(pid, 0)) + 1
+
+static func _pool_for_ids(map: BoardMapModel, ids: Array) -> Array:
+	var pool: Array = []
+	for sid in map.systems.keys():
+		for c in map.systems[sid]["cells"]:
+			if int(c["kind"]) != BoardTypes.CellKind.RESOURCE:
+				continue
+			var ap := str(c.get("assigned_pilot_id", ""))
+			if not ids.has(ap):
+				continue
+			pool.append(c)
+			c["assigned_pilot_id"] = ""
+			c["auto_assigned"] = false
+	return pool
+
+static func _give(c: Dictionary, pid: String) -> void:
+	c["assigned_pilot_id"] = pid
+	c["last_assignee"] = pid
+	c["auto_assigned"] = true
+
+static func rebalance_six(map: BoardMapModel, pilot_rows: Array) -> void:
+	## Shield pilots to 4 each, then the rest round-robin across everyone commanded.
+	var ids: Array = []
+	var shields: Array = []
+	for row in pilot_rows:
+		var pid := str(row.get("id", ""))
+		if pid == "" or ids.has(pid):
+			continue
+		ids.append(pid)
+		if bool(row.get("shield", false)):
+			shields.append(pid)
+	if ids.is_empty():
+		return
+	var pool := _pool_for_ids(map, ids)
+	var counts: Dictionary = {}
+	var guard_i := 0
+	var rest: Array = []
+	for c2 in pool:
+		var placed := false
+		while guard_i < shields.size() and int(counts.get(str(shields[guard_i]), 0)) >= 4:
+			guard_i += 1
+		if guard_i < shields.size():
+			var sp := str(shields[guard_i])
+			_give(c2, sp)
+			counts[sp] = int(counts.get(sp, 0)) + 1
+			placed = true
+		if not placed:
+			rest.append(c2)
+	for i in rest.size():
+		var pid2 := str(ids[i % ids.size()])
+		_give(rest[i], pid2)
+
+static func rebalance_bei(map: BoardMapModel, pilot_rows: Array) -> void:
+	## Each raid pilot gets 1. Leftovers go only to non-raid pilots.
+	var raid: Array = []
+	var other: Array = []
+	var ids: Array = []
+	for row in pilot_rows:
+		var pid := str(row.get("id", ""))
+		if pid == "" or ids.has(pid):
+			continue
+		ids.append(pid)
+		if bool(row.get("raid", false)):
+			raid.append(pid)
+		else:
+			other.append(pid)
+	if ids.is_empty():
+		return
+	var pool := _pool_for_ids(map, ids)
+	var ri := 0
+	var rest: Array = []
+	for c2 in pool:
+		if ri < raid.size():
+			_give(c2, str(raid[ri]))
+			ri += 1
+		else:
+			rest.append(c2)
+	if other.is_empty():
+		return
+	for i in rest.size():
+		_give(rest[i], str(other[i % other.size()]))

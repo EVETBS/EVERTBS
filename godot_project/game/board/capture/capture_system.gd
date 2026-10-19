@@ -1,6 +1,8 @@
 extends RefCounted
 class_name BoardCaptureSystem
 
+const DevBalance := preload("res://game/board/dev_balance.gd")
+
 var admin: BoardAdminProxy
 var _admin_acc := 0.0
 ## First time captured progress hits 100, freeze deduction for this long.
@@ -21,6 +23,7 @@ func tick(map: BoardMapModel, units: Array, delta: float) -> Array:
 			var kind: int = c["kind"]
 			if kind == BoardTypes.CellKind.EMPTY:
 				continue
+			var cap := DevBalance.work_cap(kind)
 			var occupants: Dictionary = {} # faction -> work_rate sum
 			for u in units:
 				if not u.get("alive", false):
@@ -31,7 +34,8 @@ func tick(map: BoardMapModel, units: Array, delta: float) -> Array:
 				if u.get("phase", BoardTypes.MovePhase.IDLE) == BoardTypes.MovePhase.INVULN:
 					continue
 				var fac: int = u["faction"]
-				occupants[fac] = float(occupants.get(fac, 0.0)) + float(u.get("work_rate", 0.0))
+				var ton := str(u.get("tonnage", ""))
+				occupants[fac] = float(occupants.get(fac, 0.0)) + DevBalance.work_rate(ton, float(u.get("work_rate", 0.0)))
 			# 0 factions: abandoned clear below. 2+: pause (keep work + capturing for rim).
 			if occupants.is_empty():
 				continue
@@ -53,10 +57,11 @@ func tick(map: BoardMapModel, units: Array, delta: float) -> Array:
 			if stall_left > 0.0:
 				c["cap_stall"] = maxf(0.0, stall_left - delta)
 				continue
-			var progress := BoardTypes.WORK_MAX - before
+			var progress := cap - before
 			var step := rate * delta
-			if not bool(c.get("cap_stall_done", false)) and progress < STALL_PROGRESS and progress + step >= STALL_PROGRESS - 0.0001:
-				c["work"] = BoardTypes.WORK_MAX - STALL_PROGRESS
+			var stall_at := minf(STALL_PROGRESS, cap)
+			if not bool(c.get("cap_stall_done", false)) and progress < stall_at and progress + step >= stall_at - 0.0001:
+				c["work"] = cap - stall_at
 				c["cap_stall"] = STALL_SEC
 				c["cap_stall_done"] = true
 				work_dirty = true
@@ -75,7 +80,8 @@ func tick(map: BoardMapModel, units: Array, delta: float) -> Array:
 				c["auto_assigned"] = false
 				c["owner"] = fac2
 				c["capturing"] = 0
-				c["work"] = BoardTypes.WORK_MAX
+				c["work"] = cap
+				c["dev_cap"] = cap
 				c["cap_stall"] = 0.0
 				c["cap_stall_done"] = false
 				work_dirty = true
@@ -97,7 +103,7 @@ func _clear_abandoned(map: BoardMapModel, units: Array) -> void:
 		for c in map.systems[sid]["cells"]:
 			if int(c["kind"]) == BoardTypes.CellKind.EMPTY:
 				continue
-			if float(c["work"]) >= BoardTypes.WORK_MAX - 0.01:
+			if float(c["work"]) >= DevBalance.work_cap(int(c["kind"])) - 0.01:
 				c["capturing"] = 0
 				continue
 			var present: Dictionary = {}
@@ -110,7 +116,9 @@ func _clear_abandoned(map: BoardMapModel, units: Array) -> void:
 					continue
 				present[u["faction"]] = true
 			if present.is_empty():
-				c["work"] = BoardTypes.WORK_MAX
+				var full := DevBalance.work_cap(int(c["kind"]))
+				c["work"] = full
+				c["dev_cap"] = full
 				c["capturing"] = 0
 				c["cap_stall"] = 0.0
 				c["cap_stall_done"] = false

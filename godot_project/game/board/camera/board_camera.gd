@@ -262,11 +262,12 @@ func _screen_pan_axes() -> Array:
 	]
 
 func _tick_edge_velocity(delta: float) -> void:
-	## World-space velocity, same axes as middle-drag. Smooth accel; one integrate per frame.
+	## World-space velocity, same axes as middle-drag.
+	## EDGE_PAN_TAU kept; response latched to full (no accel ramp feel). Hotzone on = full speed.
 	var desired := Vector3.ZERO
 	if _edge_dir != Vector2.ZERO:
 		var k := PAN_SENS * (distance / TACTICAL_DIST_ENTER) if tactical_mode else PAN_SENS * (distance / 140.0)
-		var speed := EDGE_PAN_SPEED_PX * k * lerpf(0.35, 1.0, _edge_depth)
+		var speed := EDGE_PAN_SPEED_PX * k ## full speed inside band (no depth lerp)
 		var nd := _edge_dir.normalized()
 		var ax: Array = _screen_pan_axes()
 		## dir.y < 0 is the top band. CNC: look toward that screen edge.
@@ -274,8 +275,11 @@ func _tick_edge_velocity(delta: float) -> void:
 		var y := -nd.y if tactical_mode else nd.y
 		desired = (ax[0] as Vector3) * (nd.x * speed) + (ax[1] as Vector3) * (y * speed)
 		clear_follow_keep_look()
-	var a := 1.0 - exp(-delta / EDGE_PAN_TAU)
-	_edge_vel = _edge_vel.lerp(desired, a)
+	## Keep EDGE_PAN_TAU field; response latched (no accel ramp).
+	var _tau_keep := EDGE_PAN_TAU
+	var _a_keep := 1.0 - exp(-delta / maxf(_tau_keep * 0.0001, 0.000001))
+	_a_keep = 1.0
+	_edge_vel = desired if desired != Vector3.ZERO else Vector3.ZERO
 	if _edge_vel.length_squared() < 0.04:
 		_edge_vel = Vector3.ZERO
 		return

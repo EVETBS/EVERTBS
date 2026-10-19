@@ -1,0 +1,33 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://game/menu_bg/menu_backdrop.gd" id="1_backdrop"]
+
+[sub_resource type="Environment" id="Environment_black"]
+background_mode = 1
+background_color = Color(0, 0, 0, 1)
+ambient_light_source = 1
+ambient_light_color = Color(0.55, 0.58, 0.62, 1)
+ambient_light_energy = 0.45
+
+[node name="MenuBackdrop" type="Node3D"]
+script = ExtResource("1_backdrop")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_black")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.354, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 0, 0)
+light_energy = 0.85
+shadow_enabled = false
+
+[node name="PreviewCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -85.2876, 216.1264, 1921.6818)
+current = true
+fov = 42.0
+far = 8000.0
+
+[node name="Territory" type="Node3D" parent="."]
+
+[node name="Rings" type="Node3D" parent="."]
+
+[node name="Graph" type="Node3D" parent="."]

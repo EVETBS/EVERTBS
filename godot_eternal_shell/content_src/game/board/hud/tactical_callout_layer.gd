@@ -692,6 +692,54 @@ func _present_callouts(delta: float) -> void:
 			slots[str(ids[si])] = _slot_world_axes(shown, si, ncols, nrows, bw, bh, s_right, s_up)
 		d["slots"] = slots
 
+func hit_frame(cam: Camera3D, screen: Vector2) -> Dictionary:
+	if not _active or cam == null:
+		return {}
+	var best: Dictionary = {}
+	var best_d := 1.0e20
+	for _key in _cells.keys():
+		var d: Dictionary = _cells[_key]
+		var shown: Vector3 = d.get("shown_pos", Vector3.ZERO)
+		var syaw := float(d.get("shown_yaw", -view_yaw))
+		var vy := -syaw
+		var s_right := Vector3(cos(vy), 0.0, sin(vy))
+		var s_up := Vector3(sin(vy), 0.0, -cos(vy))
+		var hx := float(d.get("half_x", 4.0))
+		var hz := float(d.get("half_z", 4.0))
+		var corners: Array[Vector3] = [
+			shown + s_right * hx + s_up * hz,
+			shown + s_right * hx - s_up * hz,
+			shown - s_right * hx + s_up * hz,
+			shown - s_right * hx - s_up * hz,
+		]
+		var min_p := Vector2(1.0e9, 1.0e9)
+		var max_p := Vector2(-1.0e9, -1.0e9)
+		var ok := true
+		for c in corners:
+			if cam.is_position_behind(c):
+				ok = false
+				break
+			var sp: Vector2 = cam.unproject_position(c)
+			min_p.x = minf(min_p.x, sp.x)
+			min_p.y = minf(min_p.y, sp.y)
+			max_p.x = maxf(max_p.x, sp.x)
+			max_p.y = maxf(max_p.y, sp.y)
+		if not ok:
+			continue
+		if screen.x < min_p.x or screen.x > max_p.x or screen.y < min_p.y or screen.y > max_p.y:
+			continue
+		var center := (min_p + max_p) * 0.5
+		var dist := screen.distance_squared_to(center)
+		if dist < best_d:
+			best_d = dist
+			best = {
+				"sys": str(d.get("sid", "")),
+				"cell": int(d.get("cell", -1)),
+				"unit_ids": (d.get("unit_ids", []) as Array).duplicate(),
+			}
+	return best
+
+
 func slot_pos_for(unit_id: String, sys: String, cell: int) -> Vector3:
 	var key := "%s:%d" % [sys, cell]
 	if not _cells.has(key):

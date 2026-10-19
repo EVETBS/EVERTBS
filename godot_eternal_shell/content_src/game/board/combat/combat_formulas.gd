@@ -31,7 +31,8 @@ static func apply_layer_damage(
 	shield: float, armor: float, structure: float,
 	max_s: float, max_a: float, max_h: float,
 	raw: float, resist: int,
-	skip_max_loss: bool = false
+	skip_max_loss: bool = false,
+	max_loss_ratio: float = 0.1
 ) -> Dictionary:
 	var taken = raw * (1.0 - clampf(float(resist), 0.0, 100.0) / 100.0)
 	var rem = taken
@@ -50,11 +51,12 @@ static func apply_layer_damage(
 		dh = minf(structure, rem)
 		structure -= dh
 		rem -= dh
-	# capital-style 10% max loss on absorbed (guard redirect skips on bearer)
+	# capital-style max loss on absorbed (guard redirect skips on bearer). Base ratio 0.1.
+	var loss_ratio := maxf(0.0, max_loss_ratio)
 	if not skip_max_loss:
-		max_s = maxf(1.0, max_s - ds * 0.1)
-		max_a = maxf(1.0, max_a - da * 0.1)
-		max_h = maxf(1.0, max_h - dh * 0.1)
+		max_s = maxf(1.0, max_s - ds * loss_ratio)
+		max_a = maxf(1.0, max_a - da * loss_ratio)
+		max_h = maxf(1.0, max_h - dh * loss_ratio)
 	shield = minf(shield, max_s)
 	armor = minf(armor, max_a)
 	structure = minf(structure, max_h)

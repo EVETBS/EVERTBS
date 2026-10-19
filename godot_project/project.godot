@@ -12,12 +12,14 @@ config_version=5
 
 config/name="eve战棋"
 config/description="EVETBS content foundation"
-run/main_scene="res://game/board_test.tscn"
+run/main_scene="res://game/main_menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
+GameSession="*res://scripts/core/game_session.gd"
+DataStore="*res://scripts/core/data_store.gd"
 MCPRuntime="*res://addons/godot_mcp/runtime/mcp_runtime.gd"
 
 [debug]

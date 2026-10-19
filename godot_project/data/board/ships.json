@@ -260,7 +260,7 @@
           },
           {
             "kind": "weapon",
-            "ref": "weapon_large_cannon_ljf",
+            "ref": "weapon_large_cannon",
             "range_cells": 2
           },
           {
@@ -297,12 +297,30 @@
       "work_rate": 8.0,
       "npc_hull": true,
       "fit": {
-        "slots": [null, null, null, null],
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
         "hidden": [
-          { "kind": "pd", "ref": "pd_small_kinetic", "count": 1 },
-          { "kind": "self_rep", "ref": "armor_repairer_s_sleeper" },
-          { "kind": "cap_regen", "recharge_s": 500 },
-          { "kind": "pd_repair_max_loss", "ref": "sleeper_pd_max_restore" }
+          {
+            "kind": "pd",
+            "ref": "pd_small_kinetic",
+            "count": 1
+          },
+          {
+            "kind": "self_rep",
+            "ref": "armor_repairer_s_sleeper"
+          },
+          {
+            "kind": "cap_regen",
+            "recharge_s": 500
+          },
+          {
+            "kind": "pd_repair_max_loss",
+            "ref": "sleeper_pd_max_restore"
+          }
         ]
       }
     },
@@ -326,12 +344,30 @@
       "work_rate": 8.0,
       "npc_hull": true,
       "fit": {
-        "slots": [null, null, null, null],
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
         "hidden": [
-          { "kind": "pd", "ref": "pd_small_kinetic", "count": 1 },
-          { "kind": "self_rep", "ref": "armor_repairer_s_sleeper" },
-          { "kind": "cap_regen", "recharge_s": 500 },
-          { "kind": "pd_repair_max_loss", "ref": "sleeper_pd_max_restore" }
+          {
+            "kind": "pd",
+            "ref": "pd_small_kinetic",
+            "count": 1
+          },
+          {
+            "kind": "self_rep",
+            "ref": "armor_repairer_s_sleeper"
+          },
+          {
+            "kind": "cap_regen",
+            "recharge_s": 500
+          },
+          {
+            "kind": "pd_repair_max_loss",
+            "ref": "sleeper_pd_max_restore"
+          }
         ]
       }
     },
@@ -355,12 +391,30 @@
       "work_rate": 12.0,
       "npc_hull": true,
       "fit": {
-        "slots": [null, null, null, null],
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
         "hidden": [
-          { "kind": "pd", "ref": "pd_medium_thermal", "count": 1 },
-          { "kind": "self_rep", "ref": "armor_repairer_s_sleeper" },
-          { "kind": "cap_regen", "recharge_s": 1000 },
-          { "kind": "pd_repair_max_loss", "ref": "sleeper_pd_max_restore" }
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "self_rep",
+            "ref": "armor_repairer_s_sleeper"
+          },
+          {
+            "kind": "cap_regen",
+            "recharge_s": 1000
+          },
+          {
+            "kind": "pd_repair_max_loss",
+            "ref": "sleeper_pd_max_restore"
+          }
         ]
       }
     },
@@ -384,12 +438,2199 @@
       "work_rate": 16.0,
       "npc_hull": true,
       "fit": {
-        "slots": [null, null, null, null],
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
         "hidden": [
-          { "kind": "pd", "ref": "pd_medium_thermal", "count": 2 },
-          { "kind": "self_rep", "ref": "armor_repairer_s_sleeper" },
-          { "kind": "cap_regen", "recharge_s": 1000 },
-          { "kind": "pd_repair_max_loss", "ref": "sleeper_pd_max_restore" }
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 2
+          },
+          {
+            "kind": "self_rep",
+            "ref": "armor_repairer_s_sleeper"
+          },
+          {
+            "kind": "cap_regen",
+            "recharge_s": 1000
+          },
+          {
+            "kind": "pd_repair_max_loss",
+            "ref": "sleeper_pd_max_restore"
+          }
+        ]
+      }
+    },
+    {
+      "id": "am_xianzhi",
+      "name": "先知级",
+      "tonnage": "battlecruiser",
+      "model": "am_xianzhi",
+      "portrait": "res://assets/ui/portraits/am_xianzhi.png",
+      "mass": 10000000.0,
+      "inertia": 0.5,
+      "prep_s": 8.2,
+      "move_s": 4.8,
+      "jump_s": 3.6,
+      "landing_s": 3.6,
+      "shield": 1200.0,
+      "armor": 1800.0,
+      "structure": 900.0,
+      "cap": 3000.0,
+      "recharge_s": 500.0,
+      "speed": 200.0,
+      "signature_radius": 150.0,
+      "scan_res": 200.0,
+      "resist": 34,
+      "work_rate": 12.5,
+      "build_s": 750.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_large_kinetic",
+            "count": 4,
+            "range_cells": 1
+          },
+          {
+            "kind": "pd_damage_mul",
+            "value": 0.5
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_medium_laser",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_focus_crystal"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "am_yuyan",
+      "name": "预言级",
+      "tonnage": "battlecruiser",
+      "model": "am_yuyan",
+      "portrait": "res://assets/ui/portraits/am_yuyan.png",
+      "mass": 10000000.0,
+      "inertia": 0.5,
+      "prep_s": 8.2,
+      "move_s": 4.8,
+      "jump_s": 3.6,
+      "landing_s": 3.6,
+      "shield": 1938.63211262012,
+      "armor": 3916.1017409881,
+      "structure": 3668.39905878033,
+      "cap": 3000.0,
+      "recharge_s": 500.0,
+      "speed": 200.0,
+      "signature_radius": 150.0,
+      "scan_res": 200.0,
+      "resist": 34,
+      "work_rate": 12.5,
+      "build_s": 750.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_large_laser",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_pulse"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "am_xianquzhe",
+      "name": "先驱者级后勤型",
+      "tonnage": "battlecruiser",
+      "model": "am_xianquzhe",
+      "portrait": "res://assets/ui/portraits/am_xianquzhe.png",
+      "mass": 10000000.0,
+      "inertia": 0.5,
+      "prep_s": 8.2,
+      "move_s": 4.8,
+      "jump_s": 3.6,
+      "landing_s": 3.6,
+      "shield": 3000.0,
+      "armor": 5250.0,
+      "structure": 4500.0,
+      "cap": 3000.0,
+      "recharge_s": 500.0,
+      "speed": 200.0,
+      "signature_radius": 150.0,
+      "scan_res": 200.0,
+      "resist": 34,
+      "work_rate": 12.5,
+      "build_s": 750.0,
+      "fit": {
+        "slots": [
+          "armor_repairer_l",
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_remote_armor_l",
+            "range_cells": 2
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "am_aogenuo",
+      "name": "奥格诺级",
+      "tonnage": "cruiser",
+      "model": "am_aogenuo",
+      "portrait": "res://assets/ui/portraits/am_aogenuo.png",
+      "mass": 12870000.0,
+      "inertia": 0.56,
+      "prep_s": 8.9,
+      "move_s": 4,
+      "jump_s": 3,
+      "landing_s": 3,
+      "shield": 1000.0,
+      "armor": 1650.0,
+      "structure": 1550.0,
+      "cap": 2250.0,
+      "recharge_s": 450.0,
+      "speed": 235.0,
+      "signature_radius": 90.0,
+      "scan_res": 300.0,
+      "resist": 34,
+      "work_rate": 17.5,
+      "build_s": 300.0,
+      "fit": {
+        "slots": [
+          "armor_repairer_m",
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_remote_armor_m",
+            "range_cells": 1
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "am_jianchaguan",
+      "name": "检察官级",
+      "tonnage": "frigate",
+      "model": "am_jianchaguan",
+      "portrait": "res://assets/ui/portraits/am_jianchaguan.png",
+      "mass": 1630000.0,
+      "inertia": 3.55,
+      "prep_s": 5.5,
+      "move_s": 1,
+      "jump_s": 3,
+      "landing_s": 0,
+      "shield": 225.0,
+      "armor": 500.0,
+      "structure": 330.0,
+      "cap": 675.0,
+      "recharge_s": 337.5,
+      "speed": 405.0,
+      "signature_radius": 34.0,
+      "scan_res": 900.0,
+      "resist": 22,
+      "work_rate": 100.0,
+      "build_s": 75.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_small_em",
+            "count": 1
+          },
+          {
+            "kind": "afterburner",
+            "ref": "afterburner_s"
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_remote_armor_s",
+            "range_cells": 0
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_armor_support"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "glt_telisitan",
+      "name": "特里斯坦级",
+      "tonnage": "frigate",
+      "model": "glt_telisitan",
+      "portrait": "res://assets/ui/portraits/glt_telisitan.png",
+      "mass": 10000000.0,
+      "inertia": 0.5,
+      "prep_s": 5.5,
+      "move_s": 1,
+      "jump_s": 2.5,
+      "landing_s": 0,
+      "shield": 400.0,
+      "armor": 600.0,
+      "structure": 300.0,
+      "cap": 400.0,
+      "recharge_s": 500.0,
+      "speed": 320.0,
+      "signature_radius": 40.0,
+      "scan_res": 500.0,
+      "resist": 22,
+      "work_rate": 100.0,
+      "build_s": 75.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_small_em",
+            "count": 3
+          },
+          {
+            "kind": "afterburner",
+            "ref": "afterburner_s"
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_small_laser",
+            "range_cells": 0
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_focus_crystal"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "glt_kuangnuzhe",
+      "name": "狂怒者级",
+      "tonnage": "cruiser",
+      "model": "glt_kuangnuzhe",
+      "portrait": "res://assets/ui/portraits/glt_kuangnuzhe.png",
+      "mass": 11100000.0,
+      "inertia": 0.56,
+      "prep_s": 8.7,
+      "move_s": 4,
+      "jump_s": 2.5,
+      "landing_s": 3,
+      "shield": 1100.0,
+      "armor": 2000.0,
+      "structure": 2000.0,
+      "cap": 1450.0,
+      "recharge_s": 482.5,
+      "speed": 195.0,
+      "signature_radius": 145.0,
+      "scan_res": 280.0,
+      "resist": 34,
+      "work_rate": 17.5,
+      "build_s": 300.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 2
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_medium_laser",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_focus_crystal"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "glt_xingkong",
+      "name": "星空级",
+      "tonnage": "cruiser",
+      "model": "glt_xingkong",
+      "portrait": "res://assets/ui/portraits/glt_xingkong.png",
+      "mass": 12070000.0,
+      "inertia": 0.505,
+      "prep_s": 8.6,
+      "move_s": 4,
+      "jump_s": 2.5,
+      "landing_s": 3,
+      "shield": 1200.0,
+      "armor": 1300.0,
+      "structure": 1700.0,
+      "cap": 1300.0,
+      "recharge_s": 463.0,
+      "speed": 210.0,
+      "signature_radius": 135.0,
+      "scan_res": 290.0,
+      "resist": 34,
+      "work_rate": 17.5,
+      "build_s": 300.0,
+      "fit": {
+        "slots": [
+          "interdiction",
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_medium_rail",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_thermal_cycle"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "glt_cujin",
+      "name": "促进级",
+      "tonnage": "destroyer",
+      "model": "glt_cujin",
+      "portrait": "res://assets/ui/portraits/glt_cujin.png",
+      "mass": 1550000.0,
+      "inertia": 2.76,
+      "prep_s": 6.2,
+      "move_s": 2,
+      "jump_s": 2.5,
+      "landing_s": 1.5,
+      "shield": 750.0,
+      "armor": 800.0,
+      "structure": 900.0,
+      "cap": 650.0,
+      "recharge_s": 350.0,
+      "speed": 265.0,
+      "signature_radius": 68.0,
+      "scan_res": 500.0,
+      "resist": 22,
+      "work_rate": 25.0,
+      "build_s": 150.0,
+      "fit": {
+        "slots": [
+          "bubble",
+          "damage_control",
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_small_em",
+            "count": 1
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "glt_miermidun",
+      "name": "弥洱米顿级",
+      "tonnage": "battlecruiser",
+      "model": "glt_miermidun",
+      "portrait": "res://assets/ui/portraits/glt_miermidun.png",
+      "mass": 10000000.0,
+      "inertia": 0.5,
+      "prep_s": 8.7,
+      "move_s": 4.8,
+      "jump_s": 3.1,
+      "landing_s": 3.6,
+      "shield": 1200.0,
+      "armor": 1800.0,
+      "structure": 900.0,
+      "cap": 3000.0,
+      "recharge_s": 500.0,
+      "speed": 200.0,
+      "signature_radius": 150.0,
+      "scan_res": 200.0,
+      "resist": 34,
+      "work_rate": 12.5,
+      "build_s": 750.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_large_kinetic",
+            "count": 2,
+            "range_cells": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_medium_laser",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_focus_crystal"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "glt_bulutikesi",
+      "name": "布鲁提克斯级后勤型",
+      "tonnage": "battlecruiser",
+      "model": "glt_bulutikesi",
+      "portrait": "res://assets/ui/portraits/glt_bulutikesi.png",
+      "mass": 10000000.0,
+      "inertia": 0.5,
+      "prep_s": 8.7,
+      "move_s": 4.8,
+      "jump_s": 3.1,
+      "landing_s": 3.6,
+      "shield": 3500.0,
+      "armor": 4500.0,
+      "structure": 5000.0,
+      "cap": 3000.0,
+      "recharge_s": 500.0,
+      "speed": 200.0,
+      "signature_radius": 150.0,
+      "scan_res": 200.0,
+      "resist": 34,
+      "work_rate": 12.5,
+      "build_s": 750.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_remote_armor_l",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_armor_support"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "jdl_tujiu",
+      "name": "秃鹫级",
+      "tonnage": "frigate",
+      "model": "jdl_tujiu",
+      "portrait": "res://assets/ui/portraits/jdl_tujiu.png",
+      "mass": 1100000.0,
+      "inertia": 2.9,
+      "prep_s": 4.2,
+      "move_s": 1,
+      "jump_s": 3,
+      "landing_s": -0.5,
+      "shield": 400.0,
+      "armor": 250.0,
+      "structure": 250.0,
+      "cap": 300.0,
+      "recharge_s": 150.0,
+      "speed": 400.0,
+      "signature_radius": 33.0,
+      "scan_res": 880.0,
+      "resist": 22,
+      "work_rate": 100.0,
+      "build_s": 75.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_small_em",
+            "count": 1
+          },
+          {
+            "kind": "afterburner",
+            "ref": "afterburner_s"
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_small_missile",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_projection"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "jdl_duya",
+      "name": "渡鸦级",
+      "tonnage": "destroyer",
+      "model": "jdl_duya",
+      "portrait": "res://assets/ui/portraits/jdl_duya.png",
+      "mass": 1750000.0,
+      "inertia": 2.7,
+      "prep_s": 6.5,
+      "move_s": 2,
+      "jump_s": 3,
+      "landing_s": 1,
+      "shield": 1000.0,
+      "armor": 750.0,
+      "structure": 750.0,
+      "cap": 500.0,
+      "recharge_s": 320.0,
+      "speed": 235.0,
+      "signature_radius": 69.0,
+      "scan_res": 475.0,
+      "resist": 22,
+      "work_rate": 25.0,
+      "build_s": 150.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_small_em",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_small_missile",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_projection"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "jdl_heiniao",
+      "name": "黑鸟级",
+      "tonnage": "cruiser",
+      "model": "jdl_heiniao",
+      "portrait": "res://assets/ui/portraits/jdl_heiniao.png",
+      "mass": 13190000.0,
+      "inertia": 0.48,
+      "prep_s": 8.8,
+      "move_s": 4,
+      "jump_s": 3,
+      "landing_s": 2.5,
+      "shield": 1400.0,
+      "armor": 1200.0,
+      "structure": 1400.0,
+      "cap": 1250.0,
+      "recharge_s": 445.0,
+      "speed": 190.0,
+      "signature_radius": 135.0,
+      "scan_res": 230.0,
+      "resist": 34,
+      "work_rate": 17.5,
+      "build_s": 300.0,
+      "fit": {
+        "slots": [
+          "interdiction",
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_medium_missile",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_projection"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "jdl_yuying",
+      "name": "鱼鹰级",
+      "tonnage": "cruiser",
+      "model": "jdl_yuying",
+      "portrait": "res://assets/ui/portraits/jdl_yuying.png",
+      "mass": 11100000.0,
+      "inertia": 0.61,
+      "prep_s": 9.1,
+      "move_s": 4,
+      "jump_s": 3,
+      "landing_s": 2.5,
+      "shield": 1650.0,
+      "armor": 1000.0,
+      "structure": 1450.0,
+      "cap": 2100.0,
+      "recharge_s": 420.0,
+      "speed": 210.0,
+      "signature_radius": 95.0,
+      "scan_res": 280.0,
+      "resist": 34,
+      "work_rate": 17.5,
+      "build_s": 300.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_remote_shield_m",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_shield_support"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "jdl_menggui",
+      "name": "猛鲑级",
+      "tonnage": "battlecruiser",
+      "model": "jdl_menggui",
+      "portrait": "res://assets/ui/portraits/jdl_menggui.png",
+      "mass": 10000000.0,
+      "inertia": 0.5,
+      "prep_s": 8.7,
+      "move_s": 4.8,
+      "jump_s": 3.6,
+      "landing_s": 3.1,
+      "shield": 1200.0,
+      "armor": 1800.0,
+      "structure": 900.0,
+      "cap": 3000.0,
+      "recharge_s": 500.0,
+      "speed": 200.0,
+      "signature_radius": 150.0,
+      "scan_res": 200.0,
+      "resist": 34,
+      "work_rate": 12.5,
+      "build_s": 750.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_medium_rail",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_coil"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "jdl_youlong",
+      "name": "幼龙级后勤型",
+      "tonnage": "battlecruiser",
+      "model": "jdl_youlong",
+      "portrait": "res://assets/ui/portraits/jdl_youlong.png",
+      "mass": 10000000.0,
+      "inertia": 0.5,
+      "prep_s": 8.7,
+      "move_s": 4.8,
+      "jump_s": 3.6,
+      "landing_s": 3.1,
+      "shield": 5500.0,
+      "armor": 3250.0,
+      "structure": 3750.0,
+      "cap": 3000.0,
+      "recharge_s": 500.0,
+      "speed": 200.0,
+      "signature_radius": 150.0,
+      "scan_res": 200.0,
+      "resist": 34,
+      "work_rate": 12.5,
+      "build_s": 750.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_remote_shield_l",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_shield_support"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "jdl_pengkun",
+      "name": "鹏鲲级",
+      "tonnage": "battleship",
+      "model": "jdl_pengkun",
+      "portrait": "res://assets/ui/portraits/jdl_pengkun.png",
+      "mass": 10000000.0,
+      "inertia": 0.5,
+      "prep_s": 10.2,
+      "move_s": 5.8,
+      "jump_s": 4.3,
+      "landing_s": 3.8,
+      "shield": 9350.0,
+      "armor": 7700.0,
+      "structure": 8250.0,
+      "cap": 3000.0,
+      "recharge_s": 500.0,
+      "speed": 150.0,
+      "signature_radius": 400.0,
+      "scan_res": 200.0,
+      "resist": 34,
+      "work_rate": 7.25,
+      "build_s": 1500.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_large_kinetic",
+            "count": 1,
+            "range_cells": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_large_rail",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_coil"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mmte_liegu",
+      "name": "裂谷级",
+      "tonnage": "frigate",
+      "model": "mmte_liegu",
+      "portrait": "res://assets/ui/portraits/mmte_liegu.png",
+      "mass": 1067000.0,
+      "inertia": 3.2,
+      "prep_s": 4.4,
+      "move_s": 0.5,
+      "jump_s": 3,
+      "landing_s": 0,
+      "shield": 450.0,
+      "armor": 450.0,
+      "structure": 350.0,
+      "cap": 250.0,
+      "recharge_s": 125.0,
+      "speed": 365.0,
+      "signature_radius": 35.0,
+      "scan_res": 660.0,
+      "resist": 22,
+      "work_rate": 100.0,
+      "build_s": 75.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_small_em",
+            "count": 1
+          },
+          {
+            "kind": "afterburner",
+            "ref": "afterburner_s"
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_small_cannon",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_barrage"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mmte_famuzhe",
+      "name": "伐木者级",
+      "tonnage": "frigate",
+      "model": "mmte_famuzhe",
+      "portrait": "res://assets/ui/portraits/mmte_famuzhe.png",
+      "mass": 1075000.0,
+      "inertia": 2.83,
+      "prep_s": 4.1,
+      "move_s": 0.5,
+      "jump_s": 3,
+      "landing_s": 0,
+      "shield": 350.0,
+      "armor": 300.0,
+      "structure": 300.0,
+      "cap": 240.0,
+      "recharge_s": 120.0,
+      "speed": 430.0,
+      "signature_radius": 30.0,
+      "scan_res": 940.0,
+      "resist": 22,
+      "work_rate": 100.0,
+      "build_s": 75.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_small_em",
+            "count": 1
+          },
+          {
+            "kind": "afterburner",
+            "ref": "afterburner_s"
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_small_cannon",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_barrage"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mmte_baofa",
+      "name": "爆发级",
+      "tonnage": "frigate",
+      "model": "mmte_baofa",
+      "portrait": "res://assets/ui/portraits/mmte_baofa.png",
+      "mass": 1420000.0,
+      "inertia": 3.9,
+      "prep_s": 5.8,
+      "move_s": 0.5,
+      "jump_s": 3,
+      "landing_s": 0,
+      "shield": 400.0,
+      "armor": 250.0,
+      "structure": 290.0,
+      "cap": 560.0,
+      "recharge_s": 280.0,
+      "speed": 415.0,
+      "signature_radius": 33.0,
+      "scan_res": 925.0,
+      "resist": 22,
+      "work_rate": 100.0,
+      "build_s": 75.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_small_em",
+            "count": 1
+          },
+          {
+            "kind": "afterburner",
+            "ref": "afterburner_s"
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_remote_shield_s",
+            "range_cells": 0
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_shield_support"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mmte_wandao",
+      "name": "弯刀级",
+      "tonnage": "destroyer",
+      "model": "mmte_wandao",
+      "portrait": "res://assets/ui/portraits/mmte_wandao.png",
+      "mass": 1650000.0,
+      "inertia": 2.9,
+      "prep_s": 6.6,
+      "move_s": 1.5,
+      "jump_s": 3,
+      "landing_s": 1.5,
+      "shield": 850.0,
+      "armor": 800.0,
+      "structure": 800.0,
+      "cap": 450.0,
+      "recharge_s": 290.0,
+      "speed": 255.0,
+      "signature_radius": 60.0,
+      "scan_res": 550.0,
+      "resist": 22,
+      "work_rate": 25.0,
+      "build_s": 150.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_small_em",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_small_missile",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_projection"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mmte_duanya",
+      "name": "断崖级",
+      "tonnage": "cruiser",
+      "model": "mmte_duanya",
+      "portrait": "res://assets/ui/portraits/mmte_duanya.png",
+      "mass": 12200000.0,
+      "inertia": 0.5,
+      "prep_s": 8.6,
+      "move_s": 3.5,
+      "jump_s": 3,
+      "landing_s": 3,
+      "shield": 1500.0,
+      "armor": 1800.0,
+      "structure": 1500.0,
+      "cap": 1275.0,
+      "recharge_s": 425.0,
+      "speed": 210.0,
+      "signature_radius": 125.0,
+      "scan_res": 290.0,
+      "resist": 34,
+      "work_rate": 17.5,
+      "build_s": 300.0,
+      "fit": {
+        "slots": [
+          "interdiction",
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_medium_cannon",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_barrage"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mmte_tiaozhan",
+      "name": "挑战级",
+      "tonnage": "cruiser",
+      "model": "mmte_tiaozhan",
+      "portrait": "res://assets/ui/portraits/mmte_tiaozhan.png",
+      "mass": 11550000.0,
+      "inertia": 0.51,
+      "prep_s": 8.5,
+      "move_s": 3.5,
+      "jump_s": 3,
+      "landing_s": 3,
+      "shield": 1400.0,
+      "armor": 1200.0,
+      "structure": 1500.0,
+      "cap": 1200.0,
+      "recharge_s": 427.5,
+      "speed": 260.0,
+      "signature_radius": 120.0,
+      "scan_res": 300.0,
+      "resist": 34,
+      "work_rate": 17.5,
+      "build_s": 300.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_medium_missile",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_warhead"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mmte_jufeng",
+      "name": "飓风级",
+      "tonnage": "battlecruiser",
+      "model": "mmte_jufeng",
+      "portrait": "res://assets/ui/portraits/mmte_jufeng.png",
+      "mass": 10000000.0,
+      "inertia": 0.5,
+      "prep_s": 8.7,
+      "move_s": 4.3,
+      "jump_s": 3.6,
+      "landing_s": 3.6,
+      "shield": 1200.0,
+      "armor": 1800.0,
+      "structure": 900.0,
+      "cap": 3000.0,
+      "recharge_s": 500.0,
+      "speed": 200.0,
+      "signature_radius": 150.0,
+      "scan_res": 200.0,
+      "resist": 34,
+      "work_rate": 12.5,
+      "build_s": 750.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_medium_missile",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_warhead"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mmte_kuangbao",
+      "name": "狂暴级",
+      "tonnage": "battleship",
+      "model": "mmte_kuangbao",
+      "portrait": "res://assets/ui/portraits/mmte_kuangbao.png",
+      "mass": 10000000.0,
+      "inertia": 0.5,
+      "prep_s": 10.2,
+      "move_s": 5.3,
+      "jump_s": 4.3,
+      "landing_s": 4.3,
+      "shield": 8800.0,
+      "armor": 8250.0,
+      "structure": 7700.0,
+      "cap": 3000.0,
+      "recharge_s": 500.0,
+      "speed": 150.0,
+      "signature_radius": 400.0,
+      "scan_res": 200.0,
+      "resist": 34,
+      "work_rate": 7.25,
+      "build_s": 1500.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_large_kinetic",
+            "count": 1,
+            "range_cells": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_large_missile",
+            "range_cells": 3
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_warhead"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mmte_baofeng",
+      "name": "暴风级后勤型",
+      "tonnage": "battlecruiser",
+      "model": "mmte_baofeng",
+      "portrait": "res://assets/ui/portraits/mmte_baofeng.png",
+      "mass": 10000000.0,
+      "inertia": 0.5,
+      "prep_s": 8.7,
+      "move_s": 4.3,
+      "jump_s": 3.6,
+      "landing_s": 3.6,
+      "shield": 3860.0466431415,
+      "armor": 3883.43035766091,
+      "structure": 5240.83956469196,
+      "cap": 3000.0,
+      "recharge_s": 500.0,
+      "speed": 150.0,
+      "signature_radius": 400.0,
+      "scan_res": 200.0,
+      "resist": 34,
+      "work_rate": 12.5,
+      "build_s": 750.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_remote_shield_l",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_shield_support"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "gsts_duxi",
+      "name": "潜龙级",
+      "tonnage": "frigate",
+      "model": "gsts_duxi",
+      "portrait": "res://assets/ui/portraits/gsts_duxi.png",
+      "mass": 981000.0,
+      "inertia": 3.8,
+      "prep_s": 5.1,
+      "move_s": 2,
+      "jump_s": 3,
+      "landing_s": -0.5,
+      "shield": 830.0,
+      "armor": 500.0,
+      "structure": 620.0,
+      "cap": 380.0,
+      "recharge_s": 212.0,
+      "speed": 320.0,
+      "signature_radius": 40.0,
+      "scan_res": 650.0,
+      "resist": 22,
+      "work_rate": 100.0,
+      "build_s": 75.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_small_kinetic",
+            "count": 2
+          },
+          {
+            "kind": "pd_damage_mul",
+            "value": 2.0
+          },
+          {
+            "kind": "afterburner",
+            "ref": "afterburner_s"
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_small_laser",
+            "range_cells": 0
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_focus_crystal"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "gsts_xiangweishe",
+      "name": "响尾蛇级",
+      "tonnage": "battleship",
+      "model": "gsts_xiangweishe",
+      "portrait": "res://assets/ui/portraits/gsts_xiangweishe.png",
+      "mass": 99300000.0,
+      "inertia": 0.128,
+      "prep_s": 16.1,
+      "move_s": 6.8,
+      "jump_s": 4.3,
+      "landing_s": 3.8,
+      "shield": 14025.0,
+      "armor": 8834.0,
+      "structure": 10916.0,
+      "cap": 5350.0,
+      "recharge_s": 1154.0,
+      "speed": 94.0,
+      "signature_radius": 450.0,
+      "scan_res": 130.0,
+      "resist": 34,
+      "work_rate": 7.25,
+      "build_s": 1500.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_large_kinetic",
+            "count": 2,
+            "range_cells": 1
+          },
+          {
+            "kind": "pd_damage_mul",
+            "value": 2.0
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_large_missile",
+            "range_cells": 3
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_warhead"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "tsl_makerui",
+      "name": "马克瑞级",
+      "tonnage": "battleship",
+      "model": "tsl_makerui",
+      "portrait": "res://assets/ui/portraits/tsl_makerui.png",
+      "mass": 94700000.0,
+      "inertia": 0.096,
+      "prep_s": 11.6,
+      "move_s": 5.8,
+      "jump_s": 4.3,
+      "landing_s": 4.3,
+      "shield": 10252.0,
+      "armor": 10235.0,
+      "structure": 9086.0,
+      "cap": 5800.0,
+      "recharge_s": 1154.0,
+      "speed": 161.0,
+      "signature_radius": 380.0,
+      "scan_res": 163.0,
+      "resist": 34,
+      "work_rate": 7.25,
+      "build_s": 1500.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_large_kinetic",
+            "count": 1,
+            "range_cells": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_large_cannon",
+            "range_cells": 3
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_sniper"
+          },
+          {
+            "kind": "weapon_cycle_mul",
+            "value": 0.5,
+            "weapon_kind": "cannon"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "tsl_delamier",
+      "name": "德拉米尔级",
+      "tonnage": "frigate",
+      "model": "tsl_delamier",
+      "portrait": "res://assets/ui/portraits/tsl_delamier.png",
+      "mass": 950000.0,
+      "inertia": 3.1,
+      "prep_s": 4.0,
+      "move_s": 1,
+      "jump_s": 3,
+      "landing_s": 0,
+      "shield": 590.0,
+      "armor": 590.0,
+      "structure": 520.0,
+      "cap": 370.0,
+      "recharge_s": 208.0,
+      "speed": 460.0,
+      "signature_radius": 30.0,
+      "scan_res": 750.0,
+      "resist": 22,
+      "work_rate": 100.0,
+      "build_s": 75.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_small_em",
+            "count": 1
+          },
+          {
+            "kind": "afterburner",
+            "ref": "afterburner_s"
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_small_cannon",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_barrage"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ts_jingti",
+      "name": "警惕级",
+      "tonnage": "cruiser",
+      "model": "ts_jingti",
+      "portrait": "res://assets/ui/portraits/ts_jingti.png",
+      "mass": 9830000.0,
+      "inertia": 0.48,
+      "prep_s": 7.7,
+      "move_s": 4,
+      "jump_s": 3,
+      "landing_s": 3,
+      "shield": 2175.0,
+      "armor": 2500.0,
+      "structure": 2625.0,
+      "cap": 1545.0,
+      "recharge_s": 490.0,
+      "speed": 242.0,
+      "signature_radius": 130.0,
+      "scan_res": 300.0,
+      "resist": 34,
+      "work_rate": 17.5,
+      "build_s": 300.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_medium_rail",
+            "range_cells": 1
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_thermal_cycle"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "xxz_bagelong",
+      "name": "巴戈龙级",
+      "tonnage": "battleship",
+      "model": "xxz_bagelong",
+      "portrait": "res://assets/ui/portraits/xxz_bagelong.png",
+      "mass": 97100000.0,
+      "inertia": 0.125,
+      "prep_s": 15.2,
+      "move_s": 5.8,
+      "jump_s": 4.3,
+      "landing_s": 4.3,
+      "shield": 10230.0,
+      "armor": 11935.0,
+      "structure": 10230.0,
+      "cap": 7500.0,
+      "recharge_s": 1154.0,
+      "speed": 101.0,
+      "signature_radius": 400.0,
+      "scan_res": 130.0,
+      "resist": 34,
+      "work_rate": 7.25,
+      "build_s": 1500.0,
+      "fit": {
+        "slots": [
+          "nos_large",
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_large_kinetic",
+            "count": 1,
+            "range_cells": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_large_laser",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_pulse"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ss_monv",
+      "name": "魔女级",
+      "tonnage": "frigate",
+      "model": "ss_monv",
+      "portrait": "res://assets/ui/portraits/ss_monv.png",
+      "mass": 965000.0,
+      "inertia": 3.5,
+      "prep_s": 4.3,
+      "move_s": 1,
+      "jump_s": 3,
+      "landing_s": 0,
+      "shield": 830.0,
+      "armor": 550.0,
+      "structure": 540.0,
+      "cap": 525.0,
+      "recharge_s": 210.0,
+      "speed": 340.0,
+      "signature_radius": 33.0,
+      "scan_res": 650.0,
+      "resist": 22,
+      "work_rate": 100.0,
+      "build_s": 75.0,
+      "fit": {
+        "slots": [
+          "shield_field",
+          "shield_booster_s",
+          "armor_repairer_s",
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_small_em",
+            "count": 1
+          },
+          {
+            "kind": "afterburner",
+            "ref": "afterburner_s"
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_small_laser",
+            "range_cells": 0
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_focus_crystal"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ss_emeng",
+      "name": "噩梦级",
+      "tonnage": "battleship",
+      "model": "ss_emeng",
+      "portrait": "res://assets/ui/portraits/ss_emeng.png",
+      "mass": 99300000.0,
+      "inertia": 0.122,
+      "prep_s": 15.1,
+      "move_s": 5.8,
+      "jump_s": 4.3,
+      "landing_s": 4.3,
+      "shield": 11605.0,
+      "armor": 9515.0,
+      "structure": 9020.0,
+      "cap": 6950.0,
+      "recharge_s": 1154.0,
+      "speed": 114.0,
+      "signature_radius": 370.0,
+      "scan_res": 143.0,
+      "resist": 34,
+      "work_rate": 7.25,
+      "build_s": 1500.0,
+      "fit": {
+        "slots": [
+          "shield_field",
+          "shield_booster_l",
+          "armor_repairer_l",
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_large_kinetic",
+            "count": 1,
+            "range_cells": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_large_laser",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_focus_crystal"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mdt_aosusi",
+      "name": "奥苏斯级",
+      "tonnage": "cruiser",
+      "model": "mdt_aosusi",
+      "portrait": "res://assets/ui/portraits/mdt_aosusi.png",
+      "mass": 9360000.0,
+      "inertia": 0.48,
+      "prep_s": 7.5,
+      "move_s": 4,
+      "jump_s": 3,
+      "landing_s": 3,
+      "shield": 2950.0,
+      "armor": 2280.0,
+      "structure": 2100.0,
+      "cap": 1550.0,
+      "recharge_s": 490.0,
+      "speed": 230.0,
+      "signature_radius": 135.0,
+      "scan_res": 300.0,
+      "resist": 34,
+      "work_rate": 17.5,
+      "build_s": 300.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_medium_missile",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_warhead"
+          },
+          {
+            "kind": "missile_range_add",
+            "value": 2
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mdt_bagaisi",
+      "name": "巴盖斯级",
+      "tonnage": "battleship",
+      "model": "mdt_bagaisi",
+      "portrait": "res://assets/ui/portraits/mdt_bagaisi.png",
+      "mass": 98500000.0,
+      "inertia": 0.098,
+      "prep_s": 13.4,
+      "move_s": 5.8,
+      "jump_s": 4.3,
+      "landing_s": 4.3,
+      "shield": 12320.0,
+      "armor": 9625.0,
+      "structure": 8910.0,
+      "cap": 6100.0,
+      "recharge_s": 1155.0,
+      "speed": 148.0,
+      "signature_radius": 370.0,
+      "scan_res": 143.0,
+      "resist": 34,
+      "work_rate": 7.25,
+      "build_s": 1500.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_large_kinetic",
+            "count": 1,
+            "range_cells": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_large_missile",
+            "range_cells": 3
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_warhead"
+          },
+          {
+            "kind": "missile_range_add",
+            "value": 2
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "jmh_niesituo",
+      "name": "涅斯托级",
+      "tonnage": "battleship",
+      "model": "jmh_niesituo",
+      "portrait": "res://assets/ui/portraits/jmh_niesituo.png",
+      "mass": 20000000.0,
+      "inertia": 0.35,
+      "prep_s": 11.6,
+      "move_s": 5.8,
+      "jump_s": 4.3,
+      "landing_s": 4.3,
+      "shield": 9790.0,
+      "armor": 10945.0,
+      "structure": 10890.0,
+      "cap": 7000.0,
+      "recharge_s": 1025.0,
+      "speed": 70.0,
+      "signature_radius": 420.0,
+      "scan_res": 163.0,
+      "resist": 34,
+      "work_rate": 7.25,
+      "build_s": 1500.0,
+      "fit": {
+        "slots": [
+          "armor_link",
+          "shield_booster_l",
+          "armor_repairer_l",
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_large_kinetic",
+            "count": 1,
+            "range_cells": 1
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_remote_armor_l",
+            "range_cells": 2
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_armor_support"
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
+        ]
+      }
+    },
+    {
+      "id": "am_jinghuazhe",
+      "name": "净化者级",
+      "tonnage": "frigate",
+      "model": "am_jinghuazhe",
+      "portrait": "res://assets/ui/portraits/am_jinghuazhe.png",
+      "type_id": 12038,
+      "mass": 1464000,
+      "inertia": 3.62,
+      "prep_s": 5.2,
+      "move_s": 1,
+      "jump_s": 3,
+      "landing_s": 0,
+      "shield": 225.0,
+      "armor": 500.0,
+      "structure": 330.0,
+      "cap": 675.0,
+      "recharge_s": 337.5,
+      "speed": 405.0,
+      "signature_radius": 34.0,
+      "scan_res": 900.0,
+      "resist": 22,
+      "work_rate": 100.0,
+      "build_s": 75.0,
+      "fit": {
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
+        "hidden": [
+          {
+            "kind": "pd",
+            "ref": "pd_small_em",
+            "count": 1
+          },
+          {
+            "kind": "afterburner",
+            "ref": "afterburner_s"
+          },
+          {
+            "kind": "weapon",
+            "ref": "weapon_large_missile",
+            "range_cells": 3
+          },
+          {
+            "kind": "implant",
+            "ref": "implant_warhead"
+          },
+          {
+            "kind": "missile_explosion_mul",
+            "value": 2
+          },
+          {
+            "kind": "shield_regen"
+          },
+          {
+            "kind": "cap_regen"
+          }
         ]
       }
     }
