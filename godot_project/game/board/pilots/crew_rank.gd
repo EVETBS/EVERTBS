@@ -4,7 +4,29 @@ class_name CrewRank
 ## Runtime reads the ships column and crew-equipment fields.
 
 const TONNAGES: Array[String] = ["frigate", "destroyer", "cruiser", "battlecruiser", "battleship"]
-const EFFECT_KEYS: Array[String] = ["hp_mul", "weapon_damage_mul", "cap_convert_mul", "move_penalty_mul", "build_mul"]
+const EFFECT_KEYS: Array[String] = [
+	"hp_mul", "shield_mul", "armor_mul", "structure_mul", "cap_mul", "recharge_mul", "resist_mul",
+	"speed_mul", "signature_mul", "scan_mul", "mass_mul", "inertia_mul", "prep_mul", "move_mul", "jump_mul", "landing_mul", "move_penalty_mul",
+	"build_mul", "work_mul",
+	"weapon_damage_mul", "damage_emp_mul", "damage_thermal_mul", "damage_kinetic_mul", "damage_explosive_mul",
+	"heal_shield_mul", "heal_armor_mul", "cycle_mul", "cap_cost_mul", "tracking_mul", "optimal_mul", "falloff_mul", "sig_res_mul", "range_cells_mul",
+	"explosion_radius_mul", "explosion_velocity_mul", "drf_mul", "explosion_cells_mul",
+	"range_mul", "resistance_mul", "pd_damage_mul", "dph_mul", "missile_explosion_mul", "speed_bonus_mul", "cap_convert_mul",
+	"bubble_range_mul", "bubble_time_mul", "bubble_cap_mul",
+]
+const BONUS_LABELS := {
+	"hp_mul": "血量", "shield_mul": "护盾", "armor_mul": "装甲", "structure_mul": "结构", "cap_mul": "电容", "recharge_mul": "电容回充秒", "resist_mul": "抗性",
+	"speed_mul": "速度", "signature_mul": "签名", "scan_mul": "扫描分辨率", "mass_mul": "质量", "inertia_mul": "惯性",
+	"prep_mul": "跨格准备", "move_mul": "同系跨格", "jump_mul": "过门", "landing_mul": "落地僵直", "move_penalty_mul": "移速惩罚",
+	"build_mul": "制造时间", "work_mul": "作业值",
+	"weapon_damage_mul": "伤害", "damage_emp_mul": "电磁伤害", "damage_thermal_mul": "热能伤害", "damage_kinetic_mul": "动能伤害", "damage_explosive_mul": "爆炸伤害",
+	"heal_shield_mul": "回盾", "heal_armor_mul": "回甲", "cycle_mul": "周期", "cap_cost_mul": "耗电", "tracking_mul": "跟踪",
+	"optimal_mul": "最优", "falloff_mul": "失准", "sig_res_mul": "签分", "range_cells_mul": "射程格",
+	"explosion_radius_mul": "爆炸半径", "explosion_velocity_mul": "爆速", "drf_mul": "DRF", "explosion_cells_mul": "爆炸格数",
+	"range_mul": "射程倍率", "resistance_mul": "抗性倍率", "pd_damage_mul": "近防伤害倍率", "dph_mul": "输出倍率",
+	"missile_explosion_mul": "导弹爆炸倍率", "speed_bonus_mul": "加力倍率", "cap_convert_mul": "上限损失转化",
+	"bubble_range_mul": "泡吸附格", "bubble_time_mul": "泡周期", "bubble_cap_mul": "泡耗电",
+}
 
 
 static func unlock_count(rank: String) -> int:

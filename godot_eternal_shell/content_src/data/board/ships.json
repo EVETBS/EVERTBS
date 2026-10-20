@@ -297,12 +297,30 @@
       "work_rate": 8.0,
       "npc_hull": true,
       "fit": {
-        "slots": [null, null, null, null],
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
         "hidden": [
-          { "kind": "pd", "ref": "pd_small_kinetic", "count": 1 },
-          { "kind": "self_rep", "ref": "armor_repairer_s_sleeper" },
-          { "kind": "cap_regen", "recharge_s": 500 },
-          { "kind": "pd_repair_max_loss", "ref": "sleeper_pd_max_restore" }
+          {
+            "kind": "pd",
+            "ref": "pd_small_kinetic",
+            "count": 1
+          },
+          {
+            "kind": "self_rep",
+            "ref": "armor_repairer_s_sleeper"
+          },
+          {
+            "kind": "cap_regen",
+            "recharge_s": 500
+          },
+          {
+            "kind": "pd_repair_max_loss",
+            "ref": "sleeper_pd_max_restore"
+          }
         ]
       }
     },
@@ -326,12 +344,30 @@
       "work_rate": 8.0,
       "npc_hull": true,
       "fit": {
-        "slots": [null, null, null, null],
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
         "hidden": [
-          { "kind": "pd", "ref": "pd_small_kinetic", "count": 1 },
-          { "kind": "self_rep", "ref": "armor_repairer_s_sleeper" },
-          { "kind": "cap_regen", "recharge_s": 500 },
-          { "kind": "pd_repair_max_loss", "ref": "sleeper_pd_max_restore" }
+          {
+            "kind": "pd",
+            "ref": "pd_small_kinetic",
+            "count": 1
+          },
+          {
+            "kind": "self_rep",
+            "ref": "armor_repairer_s_sleeper"
+          },
+          {
+            "kind": "cap_regen",
+            "recharge_s": 500
+          },
+          {
+            "kind": "pd_repair_max_loss",
+            "ref": "sleeper_pd_max_restore"
+          }
         ]
       }
     },
@@ -355,12 +391,30 @@
       "work_rate": 12.0,
       "npc_hull": true,
       "fit": {
-        "slots": [null, null, null, null],
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
         "hidden": [
-          { "kind": "pd", "ref": "pd_medium_thermal", "count": 1 },
-          { "kind": "self_rep", "ref": "armor_repairer_s_sleeper" },
-          { "kind": "cap_regen", "recharge_s": 1000 },
-          { "kind": "pd_repair_max_loss", "ref": "sleeper_pd_max_restore" }
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 1
+          },
+          {
+            "kind": "self_rep",
+            "ref": "armor_repairer_s_sleeper"
+          },
+          {
+            "kind": "cap_regen",
+            "recharge_s": 1000
+          },
+          {
+            "kind": "pd_repair_max_loss",
+            "ref": "sleeper_pd_max_restore"
+          }
         ]
       }
     },
@@ -384,12 +438,30 @@
       "work_rate": 16.0,
       "npc_hull": true,
       "fit": {
-        "slots": [null, null, null, null],
+        "slots": [
+          null,
+          null,
+          null,
+          null
+        ],
         "hidden": [
-          { "kind": "pd", "ref": "pd_medium_thermal", "count": 2 },
-          { "kind": "self_rep", "ref": "armor_repairer_s_sleeper" },
-          { "kind": "cap_regen", "recharge_s": 1000 },
-          { "kind": "pd_repair_max_loss", "ref": "sleeper_pd_max_restore" }
+          {
+            "kind": "pd",
+            "ref": "pd_medium_thermal",
+            "count": 2
+          },
+          {
+            "kind": "self_rep",
+            "ref": "armor_repairer_s_sleeper"
+          },
+          {
+            "kind": "cap_regen",
+            "recharge_s": 1000
+          },
+          {
+            "kind": "pd_repair_max_loss",
+            "ref": "sleeper_pd_max_restore"
+          }
         ]
       }
     }

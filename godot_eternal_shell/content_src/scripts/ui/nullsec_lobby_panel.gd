@@ -44,7 +44,7 @@ func _ready() -> void:
 	nick_lbl.add_theme_constant_override("outline_size", 2)
 	_box.add_child(nick_lbl)
 	_nick = LineEdit.new()
-	_nick.placeholder_text = "克隆人棋手…"
+	_nick.placeholder_text = "领航员…"
 	_nick.max_length = NickCodec.MAX_LEN
 	_nick.text = _ensure_default_nick()
 	_box.add_child(_nick)
@@ -324,7 +324,7 @@ static func make_default_clone_nick() -> String:
 	var digits := ""
 	for _i in range(7):
 		digits += str(rng.randi_range(0, 9))
-	return "克隆人棋手" + digits
+	return "领航员" + digits
 
 static func _ensure_default_nick() -> String:
 	var existing := NickCodec.sanitize(_load_nick())

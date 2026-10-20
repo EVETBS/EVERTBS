@@ -134,6 +134,10 @@ var _callout_click_t := -1.0
 var _callout_click_key := ""
 const HOLD_ARM_S := 1.0
 const HOLD_GROW_PX := 140.0
+const TAP_DBL_S := 0.4
+var _tap_pending := false
+var _tap_pos := Vector2.ZERO
+var _tap_at := 0.0
 
 var drag_start = Vector2.ZERO
 var dragging = false
@@ -936,8 +940,8 @@ func dev_reapply_fits() -> void:
 		if not bool(u.get("alive", false)):
 			continue
 		var def := data.ship_def(str(u.get("ship_id", "")))
-		_init_unit_combat(u)
 		u["pd"] = _build_pd(def)
+		_init_unit_combat(u)
 
 func dev_restamp_work() -> void:
 	if map == null:
@@ -1020,7 +1024,7 @@ func _dev_prep(u: Dictionary) -> float:
 		base = maxf(float(u.get("prep_s", 0.0)), 0.0)
 	else:
 		base = BoardTypes.align_prep_s(float(u.get("inertia", 1.0)), float(u.get("mass", 1e6)))
-	return base * DevBalance.scale_prep
+	return base * DevBalance.scale_prep * (1.0 - _skirmish_prep(u))
 
 func _dev_move(u: Dictionary) -> float:
 	return maxf(float(u.get("move_s", 0.0)), 0.0) * DevBalance.scale_move
@@ -1033,7 +1037,7 @@ func _dev_land(u: Dictionary) -> float:
 
 func _hit_speed(u: Dictionary) -> float:
 	## Afterburner bonus is read only when resolving damage, not when moving.
-	return float(u.get("speed", 0.0)) * (1.0 + float(u.get("ab_speed_bonus", 0.0)))
+	return float(u.get("speed", 0.0)) * (1.0 + float(u.get("ab_speed_bonus", 0.0))) * (1.0 + _skirmish_speed(u))
 
 func _landing_phase_t(u: Dictionary) -> float:
 	## Gate and undock keep a full landing. Same-system hops scale by the short arc.
@@ -1060,13 +1064,14 @@ func _hidden_on(h) -> bool:
 
 func _dph_mul(u: Dictionary) -> float:
 	var def: Dictionary = data.ship_def(str(u.get("ship_id", "")))
+	var mul := 1.0
 	for h in def.get("fit", {}).get("hidden", []):
 		if not _hidden_on(h):
 			continue
-		if str(h.get("kind", "")) != "dph_mul":
-			continue
-		return maxf(0.0, float(h.get("value", 1.0)))
-	return 1.0
+		if str(h.get("kind", "")) == "dph_mul":
+			mul = maxf(0.0, float(h.get("value", 1.0)))
+			break
+	return mul * _crew_mul(u, "dph_mul")
 
 func _known_deputy(did: String) -> bool:
 	return did == "yang" or did == "six" or did == "chuang" or did == "bei" or did == "i"
@@ -1208,7 +1213,7 @@ func _apply_saved_roster(factions_in: Array) -> void:
 			if typeof(member) != TYPE_DICTIONARY:
 				continue
 			var mid := str(member.get("id", ""))
-			var eight := mid.is_valid_int() and mid.length() == 8
+			var eight := mid.is_valid_int() and (mid.length() == 8 or mid.length() == 6)
 			var placement := str(member.get("placement_id", mid))
 			rebuilt.append({
 				"id": placement,
@@ -1948,6 +1953,12 @@ func _build_pd(def: Dictionary) -> Array:
 			})
 	return guns
 
+func _unit_has_slot(u: Dictionary, slot_id: String) -> bool:
+	for s in u.get("fit_slots", []):
+		if str(s) == slot_id:
+			return true
+	return _fit_has_slot(data.ship_def(str(u.get("ship_id", ""))), slot_id)
+
 func _fit_has_slot(def: Dictionary, slot_id: String) -> bool:
 	for s in def.get("fit", {}).get("slots", []):
 		if str(s) == slot_id:
@@ -2078,8 +2089,9 @@ func _init_unit_combat(u: Dictionary) -> void:
 		if not has_cap_h:
 			u["cap_regen_on"] = true
 	u["weapons"] = _build_weapons(def)
+	_fill_pref_slots(u)
 	u["self_rep"] = []
-	for slot_ref in def.get("fit", {}).get("slots", []):
+	for slot_ref in u.get("fit_slots", []):
 		if slot_ref == null:
 			continue
 		_append_self_rep(u, str(slot_ref))
@@ -2089,12 +2101,290 @@ func _init_unit_combat(u: Dictionary) -> void:
 		if str(h2.get("kind")) == "self_rep" and str(h2.get("ref", "")) != "":
 			_append_self_rep(u, str(h2.get("ref")))
 	_init_unit_guard_implant(u, def)
+	_init_command_bursts(u)
+	_apply_crew_runtime(u)
+	_apply_pd_slot_mods(u)
+
+func _crew_mul(u: Dictionary, key: String) -> float:
+	var eq = u.get("crew_equip", {})
+	if typeof(eq) != TYPE_DICTIONARY:
+		return 1.0
+	return MemberTableScr.effect_mul(eq, key)
+
+func _fill_pref_slots(u: Dictionary) -> void:
+	var def: Dictionary = data.ship_def(str(u.get("ship_id", "")))
+	var slots: Array = []
+	for s in def.get("fit", {}).get("slots", []):
+		slots.append(s)
+	while slots.size() < 4:
+		slots.append(null)
+	var fitted: Array = []
+	var pilot := _pilot_by_id(str(u.get("pilot_id", "")))
+	var mid := str(pilot.get("member_id", ""))
+	if mid != "":
+		var prefs := MemberTableScr.pref_list(data.member_by_id(mid))
+		var pi := 0
+		for i in slots.size():
+			if slots[i] != null and str(slots[i]) != "":
+				continue
+			while pi < prefs.size() and str(prefs[pi]) == "":
+				pi += 1
+			if pi >= prefs.size():
+				break
+			var eid := str(prefs[pi])
+			pi += 1
+			if eid != "" and data.equipment.has(eid):
+				slots[i] = eid
+				fitted.append(eid)
+	u["fit_slots"] = slots
+	u["pref_fitted"] = fitted
+
+func _init_command_bursts(u: Dictionary) -> void:
+	var bursts: Array = []
+	for sid in u.get("fit_slots", []):
+		var eq: Dictionary = data.equipment.get(str(sid), {})
+		if str(eq.get("kind", "")) != "command_burst":
+			continue
+		bursts.append({
+			"ref": str(sid),
+			"auto_on": true,
+			"remain": 0.0,
+			"cd": 0.0,
+			"snap": [],
+			"snap_t": 0.0,
+		})
+	u["bursts"] = bursts
+
+func _command_mul(caster: Dictionary, ref: String) -> float:
+	var def: Dictionary = data.ship_def(str(caster.get("ship_id", "")))
+	for h in def.get("fit", {}).get("hidden", []):
+		if not _hidden_on(h):
+			continue
+		if str(h.get("kind", "")) == "command_burst_mul" and str(h.get("ref", "")) == ref:
+			return maxf(1.0, float(h.get("value", 1.0)))
+	return 1.0
+
+func _burst_friendly(a: Dictionary, b: Dictionary) -> bool:
+	var rel := _rel_between(int(a.get("faction", -1)), int(b.get("faction", -2)))
+	return rel == "self" or rel == "ally"
+
+func _tick_command_bursts(u: Dictionary, delta: float) -> void:
+	for b in u.get("bursts", []):
+		var eq: Dictionary = data.equipment.get(str(b.get("ref", "")), {})
+		var cost := float(eq.get("cap_cost", 100))
+		var cd_s := float(eq.get("cooldown_s", 15))
+		if bool(eq.get("snapshot", false)):
+			if float(b.get("snap_t", 0.0)) > 0.0:
+				b["snap_t"] = maxf(0.0, float(b["snap_t"]) - delta)
+			if float(b.get("cd", 0.0)) > 0.0:
+				b["cd"] = float(b["cd"]) - delta
+				continue
+			if not bool(b.get("auto_on", true)):
+				continue
+			if float(u["inst"]["cap"]) < cost:
+				continue
+			u["inst"]["cap"] = float(u["inst"]["cap"]) - cost
+			b["cd"] = cd_s
+			var ids: Array = []
+			for o in units:
+				if not o.get("alive", false):
+					continue
+				if str(o.get("sys", "")) != str(u.get("sys", "")) or int(o.get("cell", -1)) != int(u.get("cell", -2)):
+					continue
+				if _burst_friendly(u, o):
+					ids.append(str(o.get("id", "")))
+			b["snap"] = ids
+			b["snap_t"] = float(eq.get("uptime_s", 16))
+			continue
+		if float(b.get("remain", 0.0)) > 0.0:
+			b["remain"] = float(b["remain"]) - delta
+			if float(b["remain"]) <= 0.0:
+				b["remain"] = 0.0
+				b["cd"] = cd_s
+			continue
+		if float(b.get("cd", 0.0)) > 0.0:
+			b["cd"] = float(b["cd"]) - delta
+			continue
+		if not bool(b.get("auto_on", true)):
+			continue
+		if float(u["inst"]["cap"]) < cost:
+			continue
+		u["inst"]["cap"] = float(u["inst"]["cap"]) - cost
+		b["remain"] = float(eq.get("uptime_s", 15))
+
+func _armor_burst_add(target: Dictionary) -> int:
+	var best := 0.0
+	for caster in units:
+		if not caster.get("alive", false) or not _burst_friendly(caster, target):
+			continue
+		if str(caster.get("sys", "")) != str(target.get("sys", "")) or int(caster.get("cell", -1)) != int(target.get("cell", -2)):
+			continue
+		for b in caster.get("bursts", []):
+			if float(b.get("remain", 0.0)) <= 0.0:
+				continue
+			var eq: Dictionary = data.equipment.get(str(b.get("ref", "")), {})
+			if float(eq.get("armor_resist_add", 0)) <= 0.0:
+				continue
+			best = maxf(best, float(eq.get("armor_resist_add", 0)) * _command_mul(caster, str(b.get("ref", ""))))
+	return int(round(best))
+
+func _armor_burst_repair(target: Dictionary) -> float:
+	var best := 0.0
+	for caster in units:
+		if not caster.get("alive", false) or not _burst_friendly(caster, target):
+			continue
+		if str(caster.get("sys", "")) != str(target.get("sys", "")) or int(caster.get("cell", -1)) != int(target.get("cell", -2)):
+			continue
+		for b in caster.get("bursts", []):
+			if float(b.get("remain", 0.0)) <= 0.0:
+				continue
+			var eq: Dictionary = data.equipment.get(str(b.get("ref", "")), {})
+			if float(eq.get("armor_repair_mul", 0)) <= 0.0:
+				continue
+			best = maxf(best, float(eq.get("armor_repair_mul", 0)) * _command_mul(caster, str(b.get("ref", ""))))
+	return best
+
+func _shield_burst_pct(target: Dictionary) -> float:
+	var best := 0.0
+	for caster in units:
+		if not caster.get("alive", false) or not _burst_friendly(caster, target):
+			continue
+		if str(caster.get("sys", "")) != str(target.get("sys", "")) or int(caster.get("cell", -1)) != int(target.get("cell", -2)):
+			continue
+		for b in caster.get("bursts", []):
+			if float(b.get("remain", 0.0)) <= 0.0:
+				continue
+			var eq: Dictionary = data.equipment.get(str(b.get("ref", "")), {})
+			if float(eq.get("shield_regen_pct", 0)) <= 0.0:
+				continue
+			best = maxf(best, float(eq.get("shield_regen_pct", 0)) * _command_mul(caster, str(b.get("ref", ""))))
+	return best
+
+func _shield_rep_cd_mul(target: Dictionary) -> float:
+	var best := 1.0
+	for caster in units:
+		if not caster.get("alive", false) or not _burst_friendly(caster, target):
+			continue
+		if str(caster.get("sys", "")) != str(target.get("sys", "")) or int(caster.get("cell", -1)) != int(target.get("cell", -2)):
+			continue
+		for b in caster.get("bursts", []):
+			if float(b.get("remain", 0.0)) <= 0.0:
+				continue
+			var eq: Dictionary = data.equipment.get(str(b.get("ref", "")), {})
+			if not eq.has("shield_repair_cd_mul"):
+				continue
+			var mul := _command_mul(caster, str(b.get("ref", "")))
+			var factor := 1.0 - (1.0 - float(eq.get("shield_repair_cd_mul", 1.0))) * mul
+			best = minf(best, factor)
+	return best
+
+func _skirmish_speed(target: Dictionary) -> float:
+	var best := 0.0
+	var tid := str(target.get("id", ""))
+	for caster in units:
+		if not caster.get("alive", false):
+			continue
+		for b in caster.get("bursts", []):
+			if float(b.get("snap_t", 0.0)) <= 0.0:
+				continue
+			var snap: Array = b.get("snap", [])
+			if not snap.has(tid):
+				continue
+			var eq: Dictionary = data.equipment.get(str(b.get("ref", "")), {})
+			best = maxf(best, float(eq.get("speed_mul", 0.0)) * _command_mul(caster, str(b.get("ref", ""))))
+	return best
+
+func _skirmish_prep(target: Dictionary) -> float:
+	var best := 0.0
+	var tid := str(target.get("id", ""))
+	for caster in units:
+		if not caster.get("alive", false):
+			continue
+		for b in caster.get("bursts", []):
+			if float(b.get("snap_t", 0.0)) <= 0.0:
+				continue
+			var snap: Array = b.get("snap", [])
+			if not snap.has(tid):
+				continue
+			var eq: Dictionary = data.equipment.get(str(b.get("ref", "")), {})
+			best = maxf(best, float(eq.get("prep_mul", 0.0)) * _command_mul(caster, str(b.get("ref", ""))))
+	return clampf(best, 0.0, 0.95)
+
+func _apply_crew_runtime(u: Dictionary) -> void:
+	_capture_mul(u, "speed", "speed_mul")
+	_capture_mul(u, "signature_radius", "signature_mul")
+	_capture_mul(u, "scan_res", "scan_mul")
+	_capture_mul(u, "mass", "mass_mul")
+	_capture_mul(u, "inertia", "inertia_mul")
+	_capture_mul(u, "move_s", "move_mul")
+	_capture_mul(u, "jump_s", "jump_mul")
+	_capture_mul(u, "landing_s", "landing_mul")
+	_capture_mul(u, "recharge_s", "recharge_mul")
+	_capture_mul(u, "work_rate", "work_mul")
+	if u.has("prep_s"):
+		_capture_mul(u, "prep_s", "prep_mul")
+	u["ab_speed_bonus"] = float(u.get("ab_speed_bonus", 0.0)) * _crew_mul(u, "speed_bonus_mul")
+	for w in u.get("weapons", []):
+		w["cycle"] = float(w.get("cycle", 1.0)) * _crew_mul(u, "cycle_mul")
+		w["cycle_base"] = float(w.get("cycle", 1.0))
+		w["cap"] = float(w.get("cap", 0.0)) * _crew_mul(u, "cap_cost_mul")
+		w["tracking"] = float(w.get("tracking", 1.0)) * _crew_mul(u, "tracking_mul")
+		w["tracking_base"] = float(w.get("tracking", 1.0))
+		w["optimal"] = float(w.get("optimal", 0.0)) * _crew_mul(u, "optimal_mul")
+		w["falloff"] = float(w.get("falloff", 0.0)) * _crew_mul(u, "falloff_mul")
+		w["sig_res"] = float(w.get("sig_res", 40.0)) * _crew_mul(u, "sig_res_mul")
+		w["range_cells"] = int(round(float(w.get("range_cells", 0)) * _crew_mul(u, "range_cells_mul") * _crew_mul(u, "range_mul")))
+		w["explosion_radius"] = float(w.get("explosion_radius", 0.0)) * _crew_mul(u, "explosion_radius_mul")
+		w["explosion_velocity"] = float(w.get("explosion_velocity", 0.0)) * _crew_mul(u, "explosion_velocity_mul")
+		w["drf"] = float(w.get("drf", 0.0)) * _crew_mul(u, "drf_mul")
+		w["explosion_cells"] = int(round(float(w.get("explosion_cells", 0)) * _crew_mul(u, "explosion_cells_mul")))
+		w["heal_shield"] = float(w.get("heal_shield", 0.0)) * _crew_mul(u, "heal_shield_mul")
+		w["heal_armor"] = float(w.get("heal_armor", 0.0)) * _crew_mul(u, "heal_armor_mul")
+		w["dmg_emp_mul"] = _crew_mul(u, "damage_emp_mul")
+		w["dmg_thermal_mul"] = _crew_mul(u, "damage_thermal_mul")
+		w["dmg_kinetic_mul"] = _crew_mul(u, "damage_kinetic_mul")
+		w["dmg_explosive_mul"] = _crew_mul(u, "damage_explosive_mul")
+	for r in u.get("self_rep", []):
+		r["cycle"] = float(r.get("cycle", 1.0)) * _crew_mul(u, "cycle_mul")
+		r["cap"] = float(r.get("cap", 0.0)) * _crew_mul(u, "cap_cost_mul")
+		r["heal_shield"] = float(r.get("heal_shield", 0.0)) * _crew_mul(u, "heal_shield_mul")
+		r["heal_armor"] = float(r.get("heal_armor", 0.0)) * _crew_mul(u, "heal_armor_mul")
+
+func _capture_mul(u: Dictionary, field: String, key: String) -> void:
+	var base_key := field + "_base"
+	if not u.has(base_key):
+		u[base_key] = float(u.get(field, 0.0))
+	u[field] = float(u.get(base_key, 0.0)) * _crew_mul(u, key)
+
+func _apply_pd_slot_mods(u: Dictionary) -> void:
+	var def: Dictionary = data.ship_def(str(u.get("ship_id", "")))
+	u["pd"] = _build_pd(def)
+	var dmg := _crew_mul(u, "pd_damage_mul")
+	var cyc := _crew_mul(u, "cycle_mul")
+	var tr := _crew_mul(u, "tracking_mul")
+	var opt := _crew_mul(u, "optimal_mul")
+	var fall := _crew_mul(u, "falloff_mul")
+	for sid in u.get("fit_slots", []):
+		var eq: Dictionary = data.equipment.get(str(sid), {})
+		dmg *= float(eq.get("pd_damage_mul", 1.0))
+		if float(eq.get("pd_cycle_div", 0.0)) > 0.0:
+			cyc /= float(eq.get("pd_cycle_div", 1.0))
+		tr *= float(eq.get("pd_tracking_mul", 1.0))
+		opt *= float(eq.get("pd_optimal_mul", 1.0))
+		fall *= float(eq.get("pd_falloff_mul", 1.0))
+	for g in u.get("pd", []):
+		g["damage"] = float(g.get("damage", 0.0)) * dmg
+		g["cycle"] = float(g.get("cycle", 1.0)) * cyc
+		g["tracking"] = float(g.get("tracking", 1.0)) * tr
+		g["optimal"] = float(g.get("optimal", 0.0)) * opt
+		g["falloff"] = float(g.get("falloff", 0.0)) * fall
+		g["cap"] = float(g.get("cap", 0.0)) * _crew_mul(u, "cap_cost_mul")
 
 func _append_self_rep(u: Dictionary, ref: String) -> void:
 	var eq: Dictionary = data.equipment.get(ref, {})
 	if eq.is_empty():
 		return
-	if not eq.has("heal_shield") and not eq.has("heal_armor"):
+	if not eq.has("heal_shield") and not eq.has("heal_armor") and not eq.has("heal_structure"):
 		return
 	u["self_rep"].append({
 		"ref": ref,
@@ -2103,11 +2393,12 @@ func _append_self_rep(u: Dictionary, ref: String) -> void:
 		"cap": float(eq.get("cap_cost", 1)),
 		"heal_shield": float(eq.get("heal_shield", 0)),
 		"heal_armor": float(eq.get("heal_armor", 0)),
+		"heal_structure": float(eq.get("heal_structure", 0)),
 	})
 
 func _init_unit_guard_implant(u: Dictionary, def: Dictionary) -> void:
-	var field_fit = _fit_has_slot(def, "shield_field")
-	var link_fit = _fit_has_slot(def, "armor_link")
+	var field_fit = _unit_has_slot(u, "shield_field")
+	var link_fit = _unit_has_slot(u, "armor_link")
 	u["guard"] = {
 		"field_fitted": field_fit,
 		"link_fitted": link_fit,
@@ -2187,10 +2478,10 @@ func _pd_tracking_distance_m(a: Dictionary, b: Dictionary) -> float:
 
 func _weapon_raw(eq: Dictionary, w: Dictionary) -> float:
 	var raw = 0.0
-	raw += float(eq.get("damage_emp", 0))
-	raw += float(eq.get("damage_thermal", 0))
-	raw += float(eq.get("damage_kinetic", 0))
-	raw += float(eq.get("damage_explosive", 0))
+	raw += float(eq.get("damage_emp", 0)) * float(w.get("dmg_emp_mul", 1.0))
+	raw += float(eq.get("damage_thermal", 0)) * float(w.get("dmg_thermal_mul", 1.0))
+	raw += float(eq.get("damage_kinetic", 0)) * float(w.get("dmg_kinetic_mul", 1.0))
+	raw += float(eq.get("damage_explosive", 0)) * float(w.get("dmg_explosive_mul", 1.0))
 	if raw <= 0.0:
 		raw = float(w.get("heal_armor", 0))
 	return raw
@@ -2283,7 +2574,7 @@ func _focus_spend_stacks(u: Dictionary) -> void:
 	var inst: Dictionary = u["inst"]
 	var heal: float = float(stacks) * (float(imp.get("stack_pct", 1)) / 100.0) * float(inst["max_s"])
 	inst["shield"] = minf(float(inst["max_s"]), float(inst["shield"]) + heal)
-	u["implant"]["shield_heal_cd"] = float(imp.get("shield_cd", 20))
+	u["implant"]["shield_heal_cd"] = float(imp.get("shield_cd", 20)) * _shield_rep_cd_mul(u)
 	if _fx_ok() and _battle_fx_allowed(str(u.get("id", ""))) and float_text and heal > 0.05:
 		float_text.add_heal(u["pos"], heal, hash(str(u["id"]) + "fc"))
 
@@ -2421,7 +2712,7 @@ func _apply_damage_to_unit(
 	var res = BoardCombatFormulas.apply_layer_damage(
 		inst["shield"], inst["armor"], inst["structure"],
 		inst["max_s"], inst["max_a"], inst["max_h"],
-		portion, resist, skip_max_loss, max_loss_ratio
+		portion, resist, skip_max_loss, max_loss_ratio, _armor_burst_add(target)
 	)
 	inst["shield"] = res["shield"]
 	inst["armor"] = res["armor"]
@@ -2518,7 +2809,7 @@ func _tick_self_repair(u: Dictionary, delta: float) -> void:
 			inst["cap"] -= float(r["cap"])
 			var hs = minf(float(r["heal_shield"]), float(inst["max_s"]) - float(inst["shield"]))
 			inst["shield"] = float(inst["shield"]) + hs
-			r["cd"] = float(r["cycle"])
+			r["cd"] = float(r["cycle"]) * _shield_rep_cd_mul(u)
 			_play_turret_vfx("heal", _vfx_endpoint(u), _vfx_endpoint(u) + Vector3(0.0, 0.8, 0.0), str(u.get("id", "")))
 			if _fx_ok() and _battle_fx_allowed(str(u.get("id", ""))) and float_text and hs > 0.05:
 				float_text.add_heal(u["pos"], hs, hash(str(u["id"]) + "sr"))
@@ -2528,18 +2819,33 @@ func _tick_self_repair(u: Dictionary, delta: float) -> void:
 			if float(inst["cap"]) < float(r["cap"]):
 				continue
 			inst["cap"] -= float(r["cap"])
-			var ha = minf(float(r["heal_armor"]), float(inst["max_a"]) - float(inst["armor"]))
+			var ha = minf(float(r["heal_armor"]) * (1.0 + _armor_burst_repair(u)), float(inst["max_a"]) - float(inst["armor"]))
 			inst["armor"] = float(inst["armor"]) + ha
 			r["cd"] = float(r["cycle"])
 			_play_turret_vfx("heal", _vfx_endpoint(u), _vfx_endpoint(u) + Vector3(0.0, 0.8, 0.0), str(u.get("id", "")))
 			if _fx_ok() and _battle_fx_allowed(str(u.get("id", ""))) and float_text and ha > 0.05:
 				float_text.add_heal(u["pos"], ha, hash(str(u["id"]) + "ar"))
+		elif float(r.get("heal_structure", 0)) > 0.0:
+			if float(inst["structure"]) >= float(inst["max_h"]):
+				continue
+			if float(inst["cap"]) < float(r["cap"]):
+				continue
+			inst["cap"] -= float(r["cap"])
+			var hh = minf(float(r["heal_structure"]), float(inst["max_h"]) - float(inst["structure"]))
+			inst["structure"] = float(inst["structure"]) + hh
+			r["cd"] = float(r["cycle"])
+			if _fx_ok() and _battle_fx_allowed(str(u.get("id", ""))) and float_text and hh > 0.05:
+				float_text.add_heal(u["pos"], hh, hash(str(u["id"]) + "hr"))
 
 func _tick_shield_regen(u: Dictionary, delta: float) -> void:
 	## Hidden: every 30s restore 10% of current shield cap; no capacitor.
+	var inst: Dictionary = u["inst"]
+	var burst_pct := _shield_burst_pct(u)
+	if burst_pct > 0.0 and float(inst["shield"]) < float(inst["max_s"]):
+		var extra := minf(float(inst["max_s"]) * burst_pct * delta, float(inst["max_s"]) - float(inst["shield"]))
+		inst["shield"] = float(inst["shield"]) + extra
 	if not u.get("shield_regen_on", false):
 		return
-	var inst: Dictionary = u["inst"]
 	if float(inst["shield"]) >= float(inst["max_s"]):
 		u["shield_regen_cd"] = float(u.get("shield_regen_cd", 30.0))
 		return
@@ -2569,6 +2875,7 @@ func _tick_regen_and_repair(delta: float) -> void:
 		if not _mp_sim_unit(u):
 			continue
 		_tick_self_repair(u, delta)
+		_tick_command_bursts(u, delta)
 		_tick_shield_regen(u, delta)
 		_tick_cap_regen(u, delta)
 		_tick_implant_passive(u, delta)
@@ -2761,7 +3068,7 @@ func _fire_weapon(u: Dictionary, w: Dictionary, tgt: Dictionary) -> void:
 		return
 	inst["cap"] -= float(w.get("cap", 0))
 	if str(w.get("kind", "")) == "remote_armor":
-		var heal = float(w.get("heal_armor", 0)) * _dph_mul(u)
+		var heal = float(w.get("heal_armor", 0)) * _dph_mul(u) * (1.0 + _armor_burst_repair(tgt))
 		var tinst: Dictionary = tgt["inst"]
 		var room = float(tinst["max_a"]) - float(tinst["armor"])
 		heal = minf(heal, maxf(0.0, room))
@@ -2849,7 +3156,7 @@ func _fire_weapon(u: Dictionary, w: Dictionary, tgt: Dictionary) -> void:
 	_play_weapon_vfx(u, w, tgt, true)
 
 func _missile_splash(att: Dictionary, primary: Dictionary, raw: float, radius: int) -> void:
-	if radius <= 0 or raw <= 0.0:
+	if radius < 0 or raw <= 0.0:
 		return
 	var sys := str(primary.get("sys", ""))
 	if not map.systems.has(sys):
@@ -5523,6 +5830,11 @@ func _make_pilot_row(p: Dictionary) -> Control:
 	l1.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_apply_ui_font(l1)
 	vb.add_child(l1)
+	var prefs := HBoxContainer.new()
+	prefs.name = "PrefIcons"
+	prefs.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	prefs.add_theme_constant_override("separation", 2)
+	vb.add_child(prefs)
 	# #region agent log
 	if str(p.get("id", "")) == "p1_lind":
 		_dbg59("UI", "board_root._make_pilot_row", "title_text", {
@@ -6895,6 +7207,7 @@ func _tick_command_layer(wall: float) -> void:
 	_tick_edge_pan()
 	_tick_mouse_hint(wall)
 	_tick_touch_long_press()
+	_tick_pending_touch_tap()
 	_consume_lmb_gesture()
 	_consume_rmb_order()
 	if cam and cam.has_method("tick_breathe"):
@@ -7259,8 +7572,40 @@ func _abort_garrison_travel(u: Dictionary) -> void:
 		u["rest_pos"] = home
 		_mark_cell_enter(u, sys, cell)
 
+func _refresh_undock_slots(sys: String, cell: int) -> void:
+	## Ships still rising share the station cell's sector slots (SHIPS §7). Idle ships stay put.
+	var group: Array = []
+	for other in units:
+		if not bool(other.get("alive", false)):
+			continue
+		if str(other.get("sys", "")) != sys or int(other.get("cell", -1)) != cell:
+			continue
+		group.append(other)
+	group.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return str(a.get("id", "")) < str(b.get("id", ""))
+	)
+	var n := group.size()
+	for i in n:
+		var uu: Dictionary = group[i]
+		if str(uu.get("step_kind", "")) != "undock":
+			continue
+		uu["undock_to"] = _cell_slot_pos(sys, cell, i, n)
+
+
+func _undock_surface(u: Dictionary) -> Vector3:
+	var stored: Variant = u.get("undock_to", null)
+	if stored is Vector3:
+		return stored
+	var sys := str(u.get("sys", ""))
+	var cell := int(u.get("cell", -1))
+	if sys != "" and cell >= 0 and map != null and map.systems.has(sys):
+		return _cell_slot_pos(sys, cell, 0, 1)
+	return _cell_pos_visual(sys, cell, BoardTypes.UNIT_Y)
+
+
 func _begin_undock_rise(u: Dictionary) -> void:
 	## Leave the station under the cell, same rules as cross-cell INVULN (SHIPS.md §7).
+	## XZ is a sector slot, not the cell center, so simultaneous launches do not stack.
 	var sys := str(u.get("sys", ""))
 	var cell := int(u.get("cell", -1))
 	if sys == "" or cell < 0 or map == null or not map.systems.has(sys):
@@ -7272,7 +7617,8 @@ func _begin_undock_rise(u: Dictionary) -> void:
 	u["step_kind"] = "undock"
 	u["step_invuln"] = UNDOCK_RISE_S
 	_enter_step_invuln(u)
-	var surface := _cell_pos_visual(sys, cell, BoardTypes.UNIT_Y)
+	_refresh_undock_slots(sys, cell)
+	var surface := _undock_surface(u)
 	u["pos"] = Vector3(surface.x, BoardTypes.UNIT_Y - UNDOCK_SINK_Y, surface.z)
 	u["rest_pos"] = surface
 	u["from_pos"] = u["pos"]
@@ -7281,9 +7627,7 @@ func _begin_undock_rise(u: Dictionary) -> void:
 
 
 func _tick_undock_rise(u: Dictionary) -> void:
-	var sys := str(u.get("sys", ""))
-	var cell := int(u.get("cell", -1))
-	var surface := _cell_pos_visual(sys, cell, BoardTypes.UNIT_Y)
+	var surface := _undock_surface(u)
 	var t0 := maxf(float(u.get("step_invuln", UNDOCK_RISE_S)), 0.01)
 	var k := 1.0 - clampf(float(u.get("phase_t", 0.0)) / t0, 0.0, 1.0)
 	var e := k * k * (3.0 - 2.0 * k)
@@ -7295,13 +7639,14 @@ func _tick_undock_rise(u: Dictionary) -> void:
 func _finish_undock_rise(u: Dictionary) -> void:
 	var sys := str(u.get("sys", ""))
 	var cell := int(u.get("cell", -1))
-	var surface := _cell_pos_visual(sys, cell, BoardTypes.UNIT_Y)
+	var surface := _undock_surface(u)
 	u["pos"] = surface
 	u["rest_pos"] = surface
 	u["phase"] = BoardTypes.MovePhase.IDLE
 	u["phase_t"] = 0.0
 	u["alpha"] = 1.0
 	u["step_kind"] = ""
+	u.erase("undock_to")
 	_clear_reserve(u)
 	_mark_cell_enter(u, sys, cell)
 
@@ -7702,9 +8047,10 @@ func _bubble_redirect(sys: String, from_c: int, to_c: int, mover: Dictionary) ->
 			if not c.get("bubble", false):
 				continue
 			var bi: int = c["index"]
+			var pull_c := int(c.get("bubble_range", 3))
 			var d_from = BoardTypes.shorter_arc_steps(from_c, bi, n)
 			var d_to = BoardTypes.shorter_arc_steps(to_c, bi, n)
-			if d_from > d_to and d_from <= pull:
+			if d_from > d_to and d_from <= pull_c:
 				return bi
 	for o in units:
 		if not o.get("alive", false) or not o.get("interdict_on", false):
@@ -7855,10 +8201,18 @@ func _tick_bubbles(delta: float) -> void:
 		u["bubble_cd"] = float(u.get("bubble_cd", 0.0)) - delta
 		if float(u["bubble_cd"]) > 0.0:
 			continue
-		u["bubble_cd"] = BUBBLE_PULSE_S
+		var pulse := BUBBLE_PULSE_S * _crew_mul(u, "bubble_time_mul")
+		var bubble_eq: Dictionary = data.equipment.get("bubble", {})
+		var cap_need := float(bubble_eq.get("cap_cost", 0.0)) * _crew_mul(u, "bubble_cap_mul")
+		if cap_need > 0.0 and float(u.get("inst", {}).get("cap", 0.0)) < cap_need:
+			continue
+		if cap_need > 0.0:
+			u["inst"]["cap"] = float(u["inst"]["cap"]) - cap_need
+		u["bubble_cd"] = pulse
 		var cell2: Dictionary = map.systems[u["sys"]]["cells"][u["cell"]]
 		cell2["bubble"] = true
-		cell2["bubble_remain"] = BUBBLE_PULSE_S
+		cell2["bubble_remain"] = pulse
+		cell2["bubble_range"] = int(round(float(bubble_eq.get("pull_range_cells", 3)) * _crew_mul(u, "bubble_range_mul")))
 		cell2["bubble_t"] = float(cell2.get("bubble_t", 0.0))
 
 func _tick_combat(delta: float) -> void:
@@ -8117,6 +8471,56 @@ func _pilot_display_ship_id(p: Dictionary) -> String:
 		return last
 	return str(p.get("default_ship", ""))
 
+func _refresh_pref_icons(row: Control, u: Dictionary) -> void:
+	var host := row.find_child("PrefIcons", true, false) as HBoxContainer
+	if host == null:
+		return
+	for c in host.get_children():
+		host.remove_child(c)
+		c.free()
+	if u.is_empty() or not u.get("alive", false):
+		return
+	var fitted: Array = u.get("pref_fitted", [])
+	var slots: Array = u.get("fit_slots", [])
+	for eid in fitted:
+		if not slots.has(eid):
+			continue
+		host.add_child(_equip_icon_badge(str(eid)))
+
+func _equip_icon_badge(eid: String) -> Control:
+	var eq: Dictionary = data.equipment.get(eid, {}) if data else {}
+	var wrap := Control.new()
+	wrap.custom_minimum_size = Vector2(22, 22)
+	var icon := TextureRect.new()
+	icon.custom_minimum_size = Vector2(22, 22)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var path := str(eq.get("icon", "res://assets/ui/equipment/%s.png" % eid))
+	if ResourceLoader.exists(path):
+		icon.texture = load(path)
+	wrap.add_child(icon)
+	var size_s := str(eq.get("size", "")).to_lower()
+	if size_s == "" and not bool(eq.get("implant", false)) and not eid.begins_with("implant_"):
+		if eid.ends_with("_xl"):
+			size_s = "xl"
+		elif eid.ends_with("_l"):
+			size_s = "l"
+		elif eid.ends_with("_m"):
+			size_s = "m"
+		elif eid.ends_with("_s"):
+			size_s = "s"
+	if size_s != "" and not bool(eq.get("implant", false)):
+		var badge := TextureRect.new()
+		badge.custom_minimum_size = Vector2(10, 10)
+		badge.position = Vector2(12, 0)
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var bpath := "res://assets/ui/sprites/equipment_size_badges/size_%s.png" % size_s
+		if ResourceLoader.exists(bpath):
+			badge.texture = load(bpath)
+		wrap.add_child(badge)
+	return wrap
+
 func _refresh_pilot_row_tonnage(row: Control, p: Dictionary) -> void:
 	if row == null:
 		return
@@ -8140,6 +8544,7 @@ func _refresh_pilot_row_tonnage(row: Control, p: Dictionary) -> void:
 			title.text = "%s  %s" % [p.get("name", ""), ship_name]
 		else:
 			title.text = str(p.get("name", ""))
+	_refresh_pref_icons(row, u if u and u.get("alive", false) else {})
 
 func _prepare_deputy_bubble(ctrl: BoardAiController, plist: Array) -> void:
 	var ships: Dictionary = {}
@@ -10126,12 +10531,7 @@ func _handle_touch_input(event: InputEvent) -> bool:
 		if info.is_empty() or was_long or bool(info.get("moved", false)):
 			return true
 		if _touch_pts.size() == 0:
-			## Single-finger tap → LMB click
-			_lmb_press_latch = true
-			_lmb_press_pos = st.position
-			_lmb_press_on_ui = false
-			_lmb_release_latch = true
-			_lmb_release_pos = st.position
+			_note_touch_tap(st.position)
 		return true
 	if event is InputEventScreenDrag:
 		var sd := event as InputEventScreenDrag
@@ -10241,6 +10641,47 @@ func _is_mobile_board() -> bool:
 func _touch_slop_px() -> float:
 	## 1.0 keeps the 8px split. Higher sensitivity means a smaller move counts as a drag.
 	return BoardTypes.BOX_DRAG_PX / maxf(PlayerSettings.get_op_sensitivity(), 0.1)
+
+
+func _note_touch_tap(pos: Vector2) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if _tap_pending and now - _tap_at <= TAP_DBL_S and pos.distance_to(_tap_pos) <= _touch_slop_px():
+		_tap_pending = false
+		_fire_touch_rmb(pos)
+		return
+	if _tap_pending:
+		_flush_touch_tap()
+	_tap_pending = true
+	_tap_pos = pos
+	_tap_at = now
+
+
+func _tick_pending_touch_tap() -> void:
+	if not _tap_pending:
+		return
+	if Time.get_ticks_msec() / 1000.0 - _tap_at > TAP_DBL_S:
+		_flush_touch_tap()
+
+
+func _flush_touch_tap() -> void:
+	if not _tap_pending:
+		return
+	_tap_pending = false
+	_lmb_press_latch = true
+	_lmb_press_pos = _tap_pos
+	_lmb_press_on_ui = false
+	_lmb_release_latch = true
+	_lmb_release_pos = _tap_pos
+
+
+func _fire_touch_rmb(pos: Vector2) -> void:
+	var mb := InputEventMouseButton.new()
+	mb.button_index = MOUSE_BUTTON_RIGHT
+	mb.pressed = true
+	mb.position = pos
+	_handle_mouse_button(mb)
+	mb.pressed = false
+	_handle_mouse_button(mb)
 
 
 func _tick_touch_long_press() -> void:
@@ -11476,7 +11917,7 @@ func _open_unit_menu(u: Dictionary, screen_pos: Vector2) -> void:
 	if int(u["faction"]) == viewer_faction:
 		## Toggle labels show current state (UI_AND_SHELL §2.1), not the next action.
 		popup.add_item("拦截泡：%s" % ("开" if u.get("bubble_on", false) else "关"), 1)
-		if _fit_has_slot(data.ship_def(u["ship_id"]), "interdiction"):
+		if _unit_has_slot(u, "interdiction"):
 			popup.add_item("拦截立场：%s" % ("开" if u.get("interdict_on", false) else "关"), 20)
 		popup.add_item("停止", 2)
 		popup.add_item("视角跟随" if cam.follow_unit_id != u["id"] else "取消跟随", 3)
@@ -11496,6 +11937,11 @@ func _open_unit_menu(u: Dictionary, screen_pos: Vector2) -> void:
 		var ia = bool(u.get("implant", {}).get("auto_on", true)) if has_imp else false
 		popup.add_item("植入自动：%s" % ("开" if ia else "关"), 12)
 		popup.set_item_disabled(popup.get_item_index(12), not has_imp)
+		var burst_i := 0
+		for b in u.get("bursts", []):
+			var beq: Dictionary = data.equipment.get(str(b.get("ref", "")), {})
+			popup.add_item("%s：%s" % [str(beq.get("name", b.get("ref", ""))), "开" if bool(b.get("auto_on", true)) else "关"], 30 + burst_i)
+			burst_i += 1
 		var can_dock = _can_dock(u)
 		popup.add_item("进站", 4)
 		popup.set_item_disabled(popup.get_item_index(4), not can_dock)
@@ -11550,6 +11996,21 @@ func _on_any_popup(id: int) -> void:
 			sel_units.append(su)
 	if sel_units.is_empty():
 		sel_units.append(u)
+	if id >= 30 and id < 40:
+		var idx := id - 30
+		var bursts: Array = u.get("bursts", [])
+		if idx >= 0 and idx < bursts.size():
+			var ref := str(bursts[idx].get("ref", ""))
+			var want := not bool(bursts[idx].get("auto_on", true))
+			for su in sel_units:
+				for b in su.get("bursts", []):
+					if str(b.get("ref", "")) != ref:
+						continue
+					b["auto_on"] = want
+					if not want:
+						b["remain"] = 0.0
+						b["snap_t"] = 0.0
+		return
 	match id:
 		1:
 			var want_b := not bool(u.get("bubble_on", false))
@@ -11615,7 +12076,7 @@ func _on_any_popup(id: int) -> void:
 		20:
 			var want_h := not bool(u.get("interdict_on", false))
 			for su20 in sel_units:
-				if not _fit_has_slot(data.ship_def(su20["ship_id"]), "interdiction"):
+				if not _unit_has_slot(su20, "interdiction"):
 					continue
 				if int(su20["phase"]) == BoardTypes.MovePhase.LANDING or int(su20["phase"]) == BoardTypes.MovePhase.INVULN:
 					continue
@@ -12935,6 +13396,9 @@ func _describe_slot_equip(sid: String, eq: Dictionary) -> String:
 				float(eq.get("cycle_s", 0)), int(eq.get("heal_armor", 0)), int(eq.get("cap_cost", 0))
 			]
 		_:
+			var desc := str(eq.get("desc", "")).strip_edges()
+			if desc != "":
+				return desc
 			return str(eq.get("name", sid))
 
 func _describe_hidden_equip(h: Dictionary) -> String:
@@ -12989,6 +13453,9 @@ func _describe_hidden_equip(h: Dictionary) -> String:
 				"implant_armor_support":
 					return "%s — 抗性+%d%%" % [inm, int(ieq.get("res_pct", 0))]
 				_:
+					var idesc := str(ieq.get("desc", "")).strip_edges()
+					if idesc != "":
+						return "%s — %s" % [inm, idesc]
 					return inm
 		"range_mul":
 			return "射程倍率 — 武器射程×%.1f" % float(h.get("value", 1.0))
@@ -13008,6 +13475,10 @@ func _describe_hidden_equip(h: Dictionary) -> String:
 			return "护盾回复 — 护盾自然回复"
 		"cap_regen":
 			return "电容回复 — 电容自然回复"
+		"command_burst_mul":
+			var bref := str(h.get("ref", ""))
+			var beq := _equip_def(bref)
+			return "%s效果×%s" % [str(beq.get("name", bref)), str(h.get("value", 2))]
 		_:
 			return ""
 
@@ -13075,6 +13546,23 @@ func _mp_apply_host_tables() -> void:
 	var equip_v: Variant = (parsed as Dictionary).get("equipment", {})
 	if typeof(equip_v) == TYPE_DICTIONARY and not (equip_v as Dictionary).is_empty():
 		data.equipment = equip_v
+	var members_v: Variant = (parsed as Dictionary).get("members", [])
+	if typeof(members_v) == TYPE_ARRAY and not (members_v as Array).is_empty():
+		data.members.clear()
+		var member_script = load("res://game/board/pilots/member_table.gd")
+		for row_v in members_v:
+			if typeof(row_v) != TYPE_DICTIONARY:
+				continue
+			var row: Dictionary = row_v
+			var mid := str(row.get("id", ""))
+			if mid == "":
+				continue
+			data.members[mid] = row
+			if member_script != null:
+				var eq: Dictionary = member_script.crew_equipment(row)
+				var eid := str(eq.get("id", ""))
+				if eid != "" and eid != "crew_":
+					data.equipment[eid] = eq
 
 
 func _mp_sim_unit(u: Dictionary) -> bool:

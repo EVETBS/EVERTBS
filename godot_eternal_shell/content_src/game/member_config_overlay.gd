@@ -21,6 +21,7 @@ var _starters: Dictionary = {}  ## id -> true
 var _members: Dictionary = {}
 var _member_order: PackedStringArray = PackedStringArray()
 var _ship_defs: Dictionary = {}
+var _equip: Dictionary = {}
 var _grid: GridContainer
 var _status: Label
 
@@ -49,6 +50,13 @@ func _load_data() -> void:
 			if bool(s.get("npc_hull", false)):
 				continue
 			_ship_defs[str(s.get("id", ""))] = s
+	_equip.clear()
+	var eq_raw = JSON.parse_string(FileAccess.get_file_as_string("res://data/board/equipment.json"))
+	if typeof(eq_raw) == TYPE_DICTIONARY:
+		for k in (eq_raw as Dictionary).keys():
+			var item = eq_raw[k]
+			if typeof(item) == TYPE_DICTIONARY and str(item.get("id", "")) != "":
+				_equip[str(item.get("id", ""))] = item
 
 
 func _build() -> void:
@@ -211,9 +219,21 @@ func _cell(mid: String) -> Control:
 	top.add_child(face)
 	var name_lab := Label.new()
 	name_lab.text = str(mem.get("name", mid))
-	name_lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lab.size_flags_horizontal = Control.SIZE_SHRINK_END
 	name_lab.add_theme_color_override("font_color", Color.WHITE)
 	top.add_child(name_lab)
+	var prefs := MemberTableScr.pref_list(mem)
+	for i in 4:
+		var eid := str(prefs[i]) if i < prefs.size() else ""
+		top.add_child(_pref_button(mid, i, eid))
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(spacer)
+	if not MemberTableScr.is_builtin(mid):
+		var fire := Button.new()
+		fire.text = "解雇"
+		fire.pressed.connect(_ask_dismiss.bind(mid, str(mem.get("name", mid))))
+		top.add_child(fire)
 	var field_btn := Button.new()
 	field_btn.toggle_mode = true
 	field_btn.button_pressed = on
@@ -280,6 +300,15 @@ func _unlocked_ships(mem: Dictionary) -> Array:
 	if out.is_empty():
 		for k in _ship_defs.keys():
 			out.append(str(k))
+	out.sort_custom(func(a, b) -> bool:
+		var da: Dictionary = _ship_defs.get(str(a), {})
+		var db: Dictionary = _ship_defs.get(str(b), {})
+		var wa := BoardTypes.tonnage_weight(str(da.get("tonnage", "")))
+		var wb := BoardTypes.tonnage_weight(str(db.get("tonnage", "")))
+		if wa != wb:
+			return wa > wb
+		return str(da.get("name", a)) < str(db.get("name", b))
+	)
 	return out
 
 
@@ -312,6 +341,140 @@ func _persist() -> void:
 		if _starters.has(str(mid)):
 			starters.append(str(mid))
 	RosterTemplatesScr.set_entry(_size, onfield, starters)
+
+
+func _pref_button(mid: String, index: int, eid: String) -> Button:
+	var btn := Button.new()
+	btn.name = "Pref_%s_%d" % [mid, index]
+	btn.custom_minimum_size = Vector2(36, 36)
+	btn.pressed.connect(_pick_pref.bind(mid, index))
+	var eq: Dictionary = _equip.get(eid, {})
+	var icon := TextureRect.new()
+	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var path := str(eq.get("icon", ""))
+	if eid != "" and path != "" and ResourceLoader.exists(path):
+		icon.texture = load(path)
+	btn.add_child(icon)
+	var size_s := str(eq.get("size", "")).to_lower()
+	if size_s != "" and not bool(eq.get("implant", false)):
+		var badge := TextureRect.new()
+		badge.custom_minimum_size = Vector2(12, 12)
+		badge.position = Vector2(22, 2)
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var bpath := "res://assets/ui/sprites/equipment_size_badges/size_%s.png" % size_s
+		if ResourceLoader.exists(bpath):
+			badge.texture = load(bpath)
+		btn.add_child(badge)
+	return btn
+
+
+func _pref_blocked(eid: String, eq: Dictionary) -> bool:
+	if bool(eq.get("implant", false)) or eid.begins_with("implant_"):
+		return true
+	if bool(eq.get("parked", false)) or str(eq.get("size", "")) == "XL":
+		return true
+	var kind := str(eq.get("kind", ""))
+	if kind in ["weapon", "missile", "pd", "command_burst", "guard_shield", "guard_armor", "no_max_loss", "pd_repair_max_loss"]:
+		return true
+	if eid.begins_with("weapon_") or eid.begins_with("pd_") or eid.begins_with("command_burst_"):
+		return true
+	if eid in ["bubble", "interdiction", "shield_field", "armor_link"]:
+		return true
+	if eid.contains("sleeper"):
+		return true
+	return false
+
+
+func _pick_pref(mid: String, index: int) -> void:
+	var popup := PopupMenu.new()
+	add_child(popup)
+	popup.add_item("空", 0)
+	popup.set_item_metadata(0, "")
+	var n := 1
+	for eid in _equip.keys():
+		var eq: Dictionary = _equip[eid]
+		if _pref_blocked(str(eid), eq):
+			continue
+		popup.add_item(str(eq.get("name", eid)), n)
+		popup.set_item_metadata(n, str(eid))
+		n += 1
+	popup.id_pressed.connect(func(id: int) -> void:
+		_set_pref(mid, index, str(popup.get_item_metadata(id)))
+		popup.queue_free()
+	)
+	popup.popup_centered()
+
+
+func _set_pref(mid: String, index: int, eid: String) -> void:
+	var rows: Array = MemberTableScr.load_merged()
+	for i in range(rows.size()):
+		if str(rows[i].get("id", "")) != mid:
+			continue
+		var row: Dictionary = (rows[i] as Dictionary).duplicate(true)
+		var prefs := MemberTableScr.pref_list(row)
+		var arr: Array = []
+		for p in prefs:
+			arr.append(str(p))
+		while arr.size() < 4:
+			arr.append("")
+		arr[index] = eid
+		row["pref_eq"] = "|".join(PackedStringArray(arr))
+		rows[i] = row
+		_members[mid] = row
+		break
+	MemberTableScr.write_rows(MemberTableScr._headers_of(rows), rows)
+	_refresh_pref_button(mid, index, eid)
+
+
+func _refresh_pref_button(mid: String, index: int, eid: String) -> void:
+	var old := _grid.find_child("Pref_%s_%d" % [mid, index], true, false) as Button
+	if old == null or old.get_parent() == null:
+		return
+	var parent := old.get_parent()
+	var at := old.get_index()
+	parent.remove_child(old)
+	old.free()
+	parent.add_child(_pref_button(mid, index, eid))
+	parent.move_child(parent.get_child(parent.get_child_count() - 1), at)
+
+
+func _ask_dismiss(mid: String, name: String) -> void:
+	var dlg := ConfirmationDialog.new()
+	dlg.dialog_text = "解雇 %s？" % name
+	add_child(dlg)
+	dlg.confirmed.connect(func() -> void:
+		if MemberTableScr.dismiss(mid):
+			_onfield.erase(mid)
+			_starters.erase(mid)
+			_scrub_templates(mid)
+			_persist()
+			_load_data()
+			_rebuild_grid()
+			_status.text = "已解雇 %s" % name
+		dlg.queue_free()
+	)
+	dlg.popup_centered()
+
+
+func _scrub_templates(mid: String) -> void:
+	var doc := RosterTemplatesScr.load_all()
+	var templates: Dictionary = doc.get("templates", {})
+	for key in templates.keys():
+		var entry = templates[key]
+		if typeof(entry) != TYPE_DICTIONARY:
+			continue
+		for field in ["onfield", "starters"]:
+			var kept: Array = []
+			for item in entry.get(field, []):
+				if str(item) != mid:
+					kept.append(item)
+			entry[field] = kept
+		templates[key] = entry
+	doc["templates"] = templates
+	RosterTemplatesScr.save_all(doc)
 
 
 func _lab(t: String) -> Label:

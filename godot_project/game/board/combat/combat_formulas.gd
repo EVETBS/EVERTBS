@@ -55,7 +55,8 @@ static func apply_layer_damage(
 	max_s: float, max_a: float, max_h: float,
 	raw: float, resist: int,
 	skip_max_loss: bool = false,
-	max_loss_ratio: float = 0.1
+	max_loss_ratio: float = 0.1,
+	armor_resist_add: int = 0
 ) -> Dictionary:
 	var taken = raw * (1.0 - clampf(float(resist), 0.0, 100.0) / 100.0)
 	var rem = taken
@@ -66,7 +67,23 @@ static func apply_layer_damage(
 		ds = minf(shield, rem)
 		shield -= ds
 		rem -= ds
-	if rem > 0.0 and armor > 0.0:
+	if rem > 0.0 and armor > 0.0 and armor_resist_add != 0:
+		var base_f := 1.0 - clampf(float(resist), 0.0, 100.0) / 100.0
+		var arm_f := 1.0 - clampf(float(resist + armor_resist_add), 0.0, 100.0) / 100.0
+		if base_f > 0.0001:
+			var raw_left := rem / base_f
+			var armor_budget := raw_left * arm_f
+			da = minf(armor, armor_budget)
+			armor -= da
+			var raw_after := 0.0
+			if arm_f > 0.0001:
+				raw_after = maxf(0.0, armor_budget - da) / arm_f
+			rem = raw_after * base_f
+		else:
+			da = minf(armor, rem)
+			armor -= da
+			rem -= da
+	elif rem > 0.0 and armor > 0.0:
 		da = minf(armor, rem)
 		armor -= da
 		rem -= da

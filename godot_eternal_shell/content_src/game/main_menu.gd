@@ -53,7 +53,9 @@ func _ready() -> void:
 	# #endregion
 	_build()
 	_android_handtune()
-	_apply_menu_bg(PlayerSettings.get_menu_bg_dynamic())
+	var menu_dynamic := PlayerSettings.get_menu_bg_dynamic()
+	print("[menu-bg] dynamic=%s phys=%d" % [menu_dynamic, PlayerSettings.physical_memory_bytes()])
+	_apply_menu_bg(menu_dynamic)
 	_start_announce_cycle()
 
 
@@ -171,7 +173,7 @@ func _build() -> void:
 	add_child(_settings_panel)
 	_stub_dlg = AcceptDialog.new()
 	_stub_dlg.title = "提示"
-	_stub_dlg.dialog_text = "功能未实装"
+	_stub_dlg.dialog_text = "读取存档失败"
 	add_child(_stub_dlg)
 
 
@@ -237,8 +239,9 @@ func _build_play_secondary() -> Control:
 	root.add_child(col)
 	_add_branch_row(BRANCH_SOLO, "单机模式", _build_solo_secondary, col)
 	_add_branch_row(BRANCH_ONLINE, "联机模式", _build_online_secondary, col)
-	col.add_child(_menu_btn("新手教程", _stub))
 	col.add_child(_menu_btn("配置团员", _open_member_config))
+	col.add_child(_menu_btn("新手指南", _open_guide))
+	col.add_child(_menu_btn("自定义团员", _open_custom_member))
 	return root
 
 
@@ -301,8 +304,8 @@ func _build_options_secondary() -> Control:
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	box.add_theme_constant_override("separation", 8)
 	root.add_child(box)
-	box.add_child(_menu_btn("mod导入", _stub))
 	box.add_child(_menu_btn("图鉴", _open_codex_overlay))
+	box.add_child(_menu_btn("导入团员包", _import_member_pack))
 	box.add_child(_menu_btn("设置", _on_settings_open))
 	return root
 
@@ -586,6 +589,37 @@ func _open_member_config() -> void:
 		conf.closed.connect(_close_overlay)
 	_open_overlay(conf)
 
+
+func _open_guide() -> void:
+	var guide := (load("res://game/guide_overlay.gd") as GDScript).new() as Control
+	if guide.has_signal("closed"):
+		guide.closed.connect(_close_overlay)
+	_open_overlay(guide)
+
+
+func _open_custom_member() -> void:
+	var ed := (load("res://game/custom_member_overlay.gd") as GDScript).new() as Control
+	if ed.has_signal("closed"):
+		ed.closed.connect(_close_overlay)
+	_open_overlay(ed)
+
+
+func _import_member_pack() -> void:
+	var dialog := FileDialog.new()
+	dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	dialog.filters = PackedStringArray(["*.zip"])
+	add_child(dialog)
+	dialog.file_selected.connect(func(path: String) -> void:
+		var pack = load("res://game/board/pilots/custom_member_pack.gd")
+		var row: Dictionary = pack.import_zip(path)
+		if row.is_empty():
+			push_warning("团员包未能读入。请把 zip 放在可读写目录后再选。")
+		dialog.queue_free()
+	)
+	dialog.canceled.connect(dialog.queue_free)
+	dialog.popup_centered_ratio(0.6)
+
 func _open_overlay(node: Control) -> void:
 	_close_overlay()
 	_chrome_offscreen = true
@@ -674,7 +708,7 @@ func _on_mp_restore() -> void:
 
 
 func _stub(_a: Variant = null) -> void:
-	_stub_dlg.dialog_text = "功能未实装"
+	_stub_dlg.dialog_text = "读取存档失败"
 	_stub_dlg.popup_centered()
 
 
@@ -869,15 +903,46 @@ func _apply_host_sizes() -> void:
 		if host == null or primary == null or not host.visible:
 			continue
 		host.position = Vector2(primary.size.x + 100.0, 0.0)
-		match id:
-			BRANCH_ONLINE:
-				host.size = Vector2(440, 460)
-			BRANCH_SOLO:
-				host.size = Vector2(240, 200)
-			BRANCH_PLAY:
-				host.size = Vector2(260, 320)
-			_:
-				host.size = Vector2(240, 160)
+		host.size = _secondary_stack_size(host)
+
+
+func _secondary_stack_size(host: Control) -> Vector2:
+	## Scan clip follows the live button stack, not a fixed plate.
+	var w := 240.0
+	var h := 0.0
+	var n := 0
+	var box := _find_stack_box(host)
+	if box != null:
+		var sep := float(box.get_theme_constant("separation"))
+		for ch in box.get_children():
+			if not (ch is Control) or not (ch as Control).visible:
+				continue
+			var csz: Vector2 = (ch as Control).get_combined_minimum_size()
+			w = maxf(w, csz.x)
+			h += maxf(csz.y, 56.0)
+			n += 1
+		if n > 1:
+			h += sep * float(n - 1)
+	if n == 0:
+		var chrome := host.find_child("SecondaryChrome", true, false) as Control
+		if chrome != null:
+			var cmin := chrome.get_combined_minimum_size()
+			w = maxf(w, cmin.x)
+			h = maxf(h, cmin.y)
+	return Vector2(w + 16.0, maxf(h, 56.0) + 12.0)
+
+
+func _find_stack_box(n: Node) -> VBoxContainer:
+	for ch in n.get_children():
+		var nm := str(ch.name)
+		if nm.begins_with("Secondary_") or nm == "LoadTertiary" or nm == "SecondaryChrome":
+			continue
+		if ch is VBoxContainer:
+			return ch as VBoxContainer
+		var hit := _find_stack_box(ch)
+		if hit != null:
+			return hit
+	return null
 
 
 func _layout() -> void:

@@ -287,6 +287,8 @@ static func secondary_equipment() -> Array:
 			continue
 		if not row.has("id"):
 			continue
+		if bool(row.get("parked", false)) or str(row.get("size", "")) == "XL":
+			continue
 		rows.append(row)
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var na := str(a.get("name", a.get("id", "")))

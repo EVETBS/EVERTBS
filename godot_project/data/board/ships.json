@@ -490,9 +490,9 @@
       "build_s": 750.0,
       "fit": {
         "slots": [
-          null,
-          null,
-          null,
+          "command_burst_armor",
+          "command_burst_skirmish",
+          "command_burst_shield",
           null
         ],
         "hidden": [
@@ -520,6 +520,11 @@
           },
           {
             "kind": "cap_regen"
+          },
+          {
+            "kind": "command_burst_mul",
+            "ref": "command_burst_armor",
+            "value": 2
           }
         ]
       }
@@ -972,9 +977,9 @@
       "build_s": 750.0,
       "fit": {
         "slots": [
-          null,
-          null,
-          null,
+          "command_burst_armor",
+          "command_burst_skirmish",
+          "command_burst_shield",
           null
         ],
         "hidden": [
@@ -998,6 +1003,11 @@
           },
           {
             "kind": "cap_regen"
+          },
+          {
+            "kind": "command_burst_mul",
+            "ref": "command_burst_skirmish",
+            "value": 2
           }
         ]
       }
@@ -1800,9 +1810,9 @@
       "build_s": 750.0,
       "fit": {
         "slots": [
-          null,
-          null,
-          null,
+          "command_burst_armor",
+          "command_burst_skirmish",
+          "command_burst_shield",
           null
         ],
         "hidden": [
@@ -1825,6 +1835,11 @@
           },
           {
             "kind": "cap_regen"
+          },
+          {
+            "kind": "command_burst_mul",
+            "ref": "command_burst_shield",
+            "value": 2
           }
         ]
       }

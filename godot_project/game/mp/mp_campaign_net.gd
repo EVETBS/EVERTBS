@@ -1000,7 +1000,33 @@ func _read_tables() -> Dictionary:
 		var equip_file: Variant = _read_json_file("res://data/board/equipment.json")
 		if typeof(equip_file) == TYPE_DICTIONARY:
 			equip = equip_file
-	return {"ships": ships, "equipment": equip, "hash": rules_hash}
+	var members: Array = []
+	var member_script = load("res://game/board/pilots/member_table.gd")
+	if member_script != null:
+		members = member_script.load_merged()
+	members = _remap_member_ids(members)
+	return {"ships": ships, "equipment": equip, "members": members, "hash": rules_hash}
+
+
+func _remap_member_ids(rows: Array) -> Array:
+	var used := {}
+	var out: Array = []
+	for row_v in rows:
+		if typeof(row_v) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = (row_v as Dictionary).duplicate(true)
+		var mid := str(row.get("id", ""))
+		if mid.length() == 6 and used.has(mid):
+			var n := 0
+			var nxt := mid
+			while used.has(nxt) and n < 10000:
+				n += 1
+				nxt = mid.substr(0, 2) + "%04d" % ((int(mid.substr(2)) + n) % 10000)
+			row["id"] = nxt
+			mid = nxt
+		used[mid] = true
+		out.append(row)
+	return out
 
 
 func _mod_line(method: String, path: String) -> void:

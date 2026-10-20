@@ -4,6 +4,8 @@ class_name MemberTable
 
 const BUILTIN := "res://data/board/member.csv"
 const EXPOSED := "user://content_runtime/data/board/member.csv"
+const DRAFT_DIR := "user://content_runtime/data/board/custom_drafts"
+const DEFAULT_PREF := "damage_control|shield_booster_s|armor_repairer_s|hull_repairer_s"
 
 const PILOTS_DIR := "res://assets/ui/pilots"
 const DEFAULT_PORTRAIT := "default"
@@ -12,6 +14,16 @@ const DEFAULT_PORTRAIT := "default"
 static func load_portrait(portrait_key: String = "", alt_keys: PackedStringArray = []) -> Texture2D:
 	var keys: Array = []
 	var pk := portrait_key.strip_edges()
+	if pk.begins_with("user://") or pk.begins_with("res://"):
+		if ResourceLoader.exists(pk):
+			var direct := load(pk) as Texture2D
+			if direct != null:
+				return direct
+		var abs := ProjectSettings.globalize_path(pk)
+		if FileAccess.file_exists(pk):
+			var img := Image.new()
+			if img.load(abs) == OK:
+				return ImageTexture.create_from_image(img)
 	if pk != "":
 		keys.append(pk)
 	for k in alt_keys:
@@ -73,7 +85,65 @@ static func load_merged() -> Array:
 		out.append(by_id[mid4])
 	if _expand_rank_a_ships(out):
 		_write_rows(_headers_of(out), out)
+	if _stamp_pref(out):
+		_write_rows(_headers_of(out), out)
 	return out
+
+
+static func _stamp_pref(rows: Array) -> bool:
+	var dirty := false
+	for row in rows:
+		if typeof(row) != TYPE_DICTIONARY:
+			continue
+		if str(row.get("pref_eq", "")).strip_edges() == "":
+			row["pref_eq"] = DEFAULT_PREF
+			dirty = true
+	return dirty
+
+
+static func builtin_ids() -> Dictionary:
+	var ids := {}
+	for row in rows_from_file(BUILTIN):
+		ids[str(row.get("id", ""))] = true
+	return ids
+
+
+static func is_builtin(member_id: String) -> bool:
+	return builtin_ids().has(member_id)
+
+
+static func pref_list(row: Dictionary) -> PackedStringArray:
+	var raw := str(row.get("pref_eq", "")).strip_edges()
+	if raw == "":
+		raw = DEFAULT_PREF
+	var out := PackedStringArray()
+	for part in raw.split("|", false):
+		out.append(part.strip_edges())
+	while out.size() < 4:
+		out.append("")
+	if out.size() > 4:
+		out = out.slice(0, 4)
+	return out
+
+
+static func dismiss(member_id: String) -> bool:
+	if member_id == "" or is_builtin(member_id):
+		return false
+	var rows: Array = load_merged()
+	var kept: Array = []
+	var found := false
+	for row in rows:
+		if str(row.get("id", "")) == member_id:
+			found = true
+			continue
+		kept.append(row)
+	if not found:
+		return false
+	_write_rows(_headers_of(kept), kept)
+	var draft := "%s/%s.json" % [DRAFT_DIR, member_id]
+	if FileAccess.file_exists(draft):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(draft))
+	return true
 
 
 static func _expand_rank_a_ships(rows: Array) -> bool:
@@ -121,7 +191,15 @@ static func effect_mul(eq: Dictionary, key: String) -> float:
 static func rows_from_file(path: String) -> Array:
 	if not FileAccess.file_exists(path):
 		return []
-	return rows_from_text(FileAccess.get_file_as_string(path))
+	var rows := rows_from_text(FileAccess.get_file_as_string(path))
+	if path != BUILTIN:
+		return rows
+	var kept: Array = []
+	for row in rows:
+		var mid := str(row.get("id", "")).strip_edges()
+		if mid.is_valid_int() and mid.length() == 8:
+			kept.append(row)
+	return kept
 
 
 static func rows_from_text(text: String) -> Array:

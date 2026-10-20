@@ -61,9 +61,10 @@ func make_pilot(p: Dictionary) -> Dictionary:
 func make_ship_instance(ship_id: String, crew_eq: Dictionary = {}) -> Dictionary:
 	var def: Dictionary = data.ship_def(ship_id)
 	var hp_mul := MemberTableScr.effect_mul(crew_eq, "hp_mul")
-	var shield := float(def["shield"]) * hp_mul
-	var armor := float(def["armor"]) * hp_mul
-	var structure := float(def["structure"]) * hp_mul
+	var shield := float(def["shield"]) * hp_mul * MemberTableScr.effect_mul(crew_eq, "shield_mul")
+	var armor := float(def["armor"]) * hp_mul * MemberTableScr.effect_mul(crew_eq, "armor_mul")
+	var structure := float(def["structure"]) * hp_mul * MemberTableScr.effect_mul(crew_eq, "structure_mul")
+	var cap := float(def["cap"]) * MemberTableScr.effect_mul(crew_eq, "cap_mul")
 	return {
 		"ship_id": ship_id,
 		"pristine_s": shield,
@@ -75,8 +76,8 @@ func make_ship_instance(ship_id: String, crew_eq: Dictionary = {}) -> Dictionary
 		"shield": shield,
 		"armor": armor,
 		"structure": structure,
-		"cap": float(def["cap"]),
-		"max_cap": float(def["cap"]),
+		"cap": cap,
+		"max_cap": cap,
 		"resist": int(def["resist"]),
 	}
 
@@ -122,6 +123,9 @@ func tick_build(pilots: Array, delta: float, map: BoardMapModel = null) -> Array
 					if building["t"] >= need:
 						var inst = make_ship_instance(building["ship_id"], _crew_eq(p))
 						apply_fit_resist(inst, building["ship_id"])
+						var crew_now := _crew_eq(p)
+						var resist_mul := MemberTableScr.effect_mul(crew_now, "resist_mul") * MemberTableScr.effect_mul(crew_now, "resistance_mul")
+						inst["resist"] = mini(100, int(round(float(inst["resist"]) * resist_mul)))
 						store.append(inst)
 						p["building"][ton] = null
 						if bool(building.get("starter_job", false)):

@@ -641,15 +641,35 @@ func _fill_hidden() -> void:
 		chk.toggled.connect(toggled.bind(key))
 		_right.add_child(chk)
 
+func _equip_field_locked(key: String) -> bool:
+	## Image / type numbers stay display-only. Gameplay numbers stay editable.
+	return key in [
+		"id", "name", "icon", "kind", "fx", "desc",
+		"pc_typeid", "ref_typeid", "type_id", "typeID", "icon_item_id",
+	]
+
+
 func _fill_equip() -> void:
 	var e := _equip()
 	if e.is_empty():
 		return
 	var eid := str(e.get("id", ""))
+	var title := str(e.get("name", eid))
+	var desc := str(e.get("desc", "")).strip_edges()
+	if desc == "":
+		var bits: PackedStringArray = PackedStringArray()
+		for k in e.keys():
+			var key := str(k)
+			if _equip_field_locked(key):
+				continue
+			if typeof(e[k]) == TYPE_FLOAT or typeof(e[k]) == TYPE_INT:
+				bits.append("%s %s" % [key, str(e[k])])
+		desc = "，".join(bits) if not bits.is_empty() else title
+	_note("%s\n%s" % [title, desc])
 	var stored: Dictionary = DevBalance.equip_num.get(eid, {})
 	for k in e.keys():
 		var key := str(k)
-		if key in ["id", "name", "icon", "kind", "fx", "desc"]:
+		if _equip_field_locked(key):
 			continue
 		var raw = e[k]
 		if typeof(raw) != TYPE_FLOAT and typeof(raw) != TYPE_INT:

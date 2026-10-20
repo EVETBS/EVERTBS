@@ -355,12 +355,10 @@ func _ship_card(ship: Dictionary) -> Button:
 	b.text = "%s\n%s" % [str(ship.get("name", ship.get("id", ""))), str(TON_LABEL.get(ton, ton))]
 	b.custom_minimum_size = Vector2(150, 72)
 	b.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var portrait := str(ship.get("portrait", ""))
-	if portrait != "" and ResourceLoader.exists(portrait):
-		var tex := load(portrait) as Texture2D
-		if tex != null:
-			b.icon = tex
-			b.expand_icon = true
+	var tex := _load_res_tex(str(ship.get("portrait", "")))
+	if tex != null:
+		b.icon = tex
+		b.expand_icon = true
 	b.add_theme_stylebox_override("normal", _style(PANEL_BG, PANEL_BORDER))
 	b.pressed.connect(_show_ship.bind(ship))
 	return b
@@ -476,8 +474,31 @@ func _show_member(member: Dictionary) -> void:
 		_detail.add_child(line)
 
 
+func _load_res_tex(path: String) -> Texture2D:
+	var p := path.strip_edges()
+	if p == "":
+		return null
+	if ResourceLoader.exists(p):
+		var loaded := load(p) as Texture2D
+		if loaded != null:
+			return loaded
+	if FileAccess.file_exists(p):
+		var img := Image.load_from_file(ProjectSettings.globalize_path(p))
+		if img != null:
+			return ImageTexture.create_from_image(img)
+	return null
+
+
 func _show_ship(ship: Dictionary) -> void:
 	_clear_detail()
+	var art := _load_res_tex(str(ship.get("portrait", "")))
+	if art != null:
+		var rect := TextureRect.new()
+		rect.custom_minimum_size = Vector2(180, 120)
+		rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		rect.texture = art
+		_detail.add_child(rect)
 	_detail.add_child(_big_label(str(ship.get("name", ship.get("id", "")))))
 	var ton := str(ship.get("tonnage", ""))
 	var ton_l := Label.new()
@@ -541,6 +562,9 @@ func _describe_slot_equip(sid: String, eq: Dictionary) -> String:
 				float(eq.get("cycle_s", 0)), int(eq.get("heal_armor", 0)), int(eq.get("cap_cost", 0))
 			]
 		_:
+			var desc := str(eq.get("desc", "")).strip_edges()
+			if desc != "":
+				return desc
 			return str(eq.get("name", sid))
 
 
@@ -596,6 +620,9 @@ func _describe_hidden_equip(h: Dictionary) -> String:
 				"implant_armor_support":
 					return "%s — 抗性+%d%%" % [inm, int(ieq.get("res_pct", 0))]
 				_:
+					var idesc := str(ieq.get("desc", "")).strip_edges()
+					if idesc != "":
+						return "%s — %s" % [inm, idesc]
 					return inm
 		"range_mul":
 			return "射程倍率 — 武器射程×%.1f" % float(h.get("value", 1.0))
@@ -609,6 +636,10 @@ func _describe_hidden_equip(h: Dictionary) -> String:
 			return "电容回复 — 电容自然回复"
 		"bubble_immune":
 			return "泡免疫 — 不受拦截泡牵引"
+		"command_burst_mul":
+			var bref := str(h.get("ref", ""))
+			var beq: Dictionary = _equip.get(bref, {})
+			return "%s效果×%s" % [str(beq.get("name", bref)), str(h.get("value", 2))]
 		_:
 			return ""
 

@@ -149,25 +149,6 @@ func _ready() -> void:
 	add_ai.text = "加人机"
 	add_ai.pressed.connect(_on_add_ai)
 	left.add_child(add_ai)
-	var mod_row := HBoxContainer.new()
-	left.add_child(mod_row)
-	var mod_path := LineEdit.new()
-	mod_path.placeholder_text = "mod 路径"
-	mod_path.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mod_path.name = "ModPath"
-	mod_row.add_child(mod_path)
-	var b1 := Button.new()
-	b1.text = "请求互发"
-	b1.pressed.connect(func() -> void: net.mod_install_request(mod_path.text))
-	mod_row.add_child(b1)
-	var b2 := Button.new()
-	b2.text = "同意"
-	b2.pressed.connect(func() -> void: net.approve_mod_install(mod_path.text))
-	mod_row.add_child(b2)
-	var b3 := Button.new()
-	b3.text = "拒绝"
-	b3.pressed.connect(func() -> void: net.reject_mod_install(mod_path.text))
-	mod_row.add_child(b3)
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	left.add_child(_status)
