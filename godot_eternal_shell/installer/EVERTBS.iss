@@ -1,8 +1,8 @@
-﻿; EVE战棋 (EVERTBS) Windows installer — Inno Setup 6
+﻿; EVE模拟器：军团 (EVERTBS) Windows installer — Inno Setup 6
 ; Same AppId enables upgrade. Before install: silent-uninstall any previous EVE战棋 shell.
 ; No wizard bitmaps: default Inno look (EVE自走棋 artwork must not be reused).
 
-#define MyAppName "EVE战棋"
+#define MyAppName "EVE模拟器：军团"
 #define MyAppNameEn "EVERTBS"
 #define MyAppVersion "202610.18.4"
 #define MyAppPublisher "EVERTBS"
@@ -49,8 +49,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加图标:"; Flags: checkedonce
 ; Decorative only — no [Icons]/[Run]/[Code] hooks.
-Name: "promo_bilibili"; Description: "去bilibili关注EVE战棋"; GroupDescription: "附加图标:"; Flags: unchecked
-Name: "promo_afdian"; Description: "去爱发电支持EVE战棋"; GroupDescription: "附加图标:"; Flags: unchecked
+Name: "promo_bilibili"; Description: "去bilibili关注EVE模拟器：军团"; GroupDescription: "附加图标:"; Flags: unchecked
+Name: "promo_afdian"; Description: "去爱发电支持EVE模拟器：军团"; GroupDescription: "附加图标:"; Flags: unchecked
 
 [Files]
 Source: "..\builds\windows\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
@@ -165,7 +165,8 @@ begin
     if UninstallString = '' then
       Continue;
     { Only our own product lines. Never match EVE自走棋 / EveAutochess / EVE Online. }
-    if (Pos('EVE战棋', DisplayName) > 0) or
+    if (Pos('EVE模拟器：军团', DisplayName) > 0) or
+       (Pos('EVE战棋', DisplayName) > 0) or
        (Pos('eve战棋', DisplayName) > 0) or
        (Pos('EVERTBS', DisplayName) > 0) or
        (Pos('EVETBS', DisplayName) > 0) or
@@ -186,8 +187,10 @@ begin
   Desk := ExpandConstant('{userdesktop}');
   StartMenu := ExpandConstant('{userprograms}');
   DeleteFile(Desk + '\烬海征服者.lnk');
+  DeleteFile(Desk + '\EVE战棋.lnk');
   DeleteFile(Desk + '\eve战棋.lnk');
   DeleteFile(StartMenu + '\烬海征服者.lnk');
+  DeleteFile(StartMenu + '\EVE战棋.lnk');
   DeleteFile(StartMenu + '\eve战棋.lnk');
 end;
 

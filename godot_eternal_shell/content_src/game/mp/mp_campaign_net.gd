@@ -9,6 +9,7 @@ signal room_updated
 signal chat_received(text: String, scope: String, faction: int)
 signal zone_received(pkt: Dictionary, reliable: bool)
 signal order_received(unit_id: String, to_sys: String, to_cell: int)
+signal fit_received(unit_id: String, kind: String, on: bool)
 signal group_received(unit_id: String, group_id: int)
 signal deputy_received(faction: int, group_id: int)
 signal diplo_received(a: int, b: int, on: bool)
@@ -259,6 +260,17 @@ func send_zone(pkt: Dictionary, hot: bool) -> void:
 	_maybe_audit(pkt)
 
 
+func send_fit(unit_id: String, kind: String, on: bool, owner_peer: int) -> void:
+	if owner_peer <= 0 or not multiplayer.has_multiplayer_peer():
+		return
+	if owner_peer == _self_id():
+		return
+	if is_host or owner_peer == 1:
+		rpc_id(owner_peer, "rpc_fit", unit_id, kind, on)
+	else:
+		rpc_id(1, "rpc_fit_to", owner_peer, unit_id, kind, on)
+
+
 func send_order(unit_id: String, to_sys: String, to_cell: int, owner_peer: int) -> void:
 	if owner_peer <= 0 or not multiplayer.has_multiplayer_peer():
 		return
@@ -451,6 +463,9 @@ func _layout_for_match() -> Dictionary:
 	layout["annihilate_goal"] = int(room.get("annihilate", 50))
 	layout["fog_of_war"] = bool(room.get("fog", false))
 	layout["mp"] = true
+	#（联机冻结名单不再套本机配置）26.10.22 01:52 s
+	layout["roster_applied"] = true
+	#（联机冻结名单不再套本机配置）26.10.22 01:52 e
 	return layout
 
 
@@ -664,6 +679,7 @@ func _apply_intent(sender: int, kind: String, payload: Dictionary) -> void:
 			member["deputy"] = str(payload.get("id", "yang"))
 		"roster":
 			member["roster"] = payload.get("pilots", [])
+			member["crew"] = payload.get("crew", [])
 		"seat":
 			if sender == 1 and not match_started:
 				var target := int(payload.get("peer", sender))
@@ -696,6 +712,7 @@ func _apply_intent(sender: int, kind: String, payload: Dictionary) -> void:
 							continue
 						var m: Dictionary = m_v
 						m["roster"] = []
+						m["crew"] = []
 						if not bool(m.get("ai", false)):
 							m["ready"] = false
 					_fill_ai_roster()
@@ -809,6 +826,28 @@ func build_local_roster(scale: int) -> Array:
 	var me := _member(multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1)
 	home = str(me.get("seat", ""))
 	return _pilots_from_resolve(RosterTemplates.resolve(scale, r), fac, home, false, r)
+
+
+func crew_for_roster(pilots: Array) -> Array:
+	var member_script = load("res://game/board/pilots/member_table.gd")
+	var pack = load("res://game/board/pilots/custom_member_pack.gd")
+	if member_script == null or pack == null:
+		return []
+	var by := {}
+	for row_v in member_script.load_merged():
+		if typeof(row_v) == TYPE_DICTIONARY:
+			by[str((row_v as Dictionary).get("id", ""))] = row_v
+	var out: Array = []
+	var seen := {}
+	for p_v in pilots:
+		if typeof(p_v) != TYPE_DICTIONARY:
+			continue
+		var mid := str((p_v as Dictionary).get("member_id", ""))
+		if mid.length() == 8 or seen.has(mid) or not by.has(mid):
+			continue
+		seen[mid] = true
+		out.append(pack.portable_row((by[mid] as Dictionary).duplicate(true)))
+	return out
 
 
 func _member(peer_id: int) -> Dictionary:
@@ -1004,29 +1043,80 @@ func _read_tables() -> Dictionary:
 	var member_script = load("res://game/board/pilots/member_table.gd")
 	if member_script != null:
 		members = member_script.load_merged()
-	members = _remap_member_ids(members)
+	members = _merge_peer_crew(members)
 	return {"ships": ships, "equipment": equip, "members": members, "hash": rules_hash}
 
 
-func _remap_member_ids(rows: Array) -> Array:
-	var used := {}
-	var out: Array = []
+func _merge_peer_crew(rows: Array) -> Array:
+	var by := {}
+	var order: Array = []
 	for row_v in rows:
 		if typeof(row_v) != TYPE_DICTIONARY:
 			continue
 		var row: Dictionary = (row_v as Dictionary).duplicate(true)
 		var mid := str(row.get("id", ""))
-		if mid.length() == 6 and used.has(mid):
-			var n := 0
-			var nxt := mid
-			while used.has(nxt) and n < 10000:
-				n += 1
-				nxt = mid.substr(0, 2) + "%04d" % ((int(mid.substr(2)) + n) % 10000)
-			row["id"] = nxt
-			mid = nxt
-		used[mid] = true
-		out.append(row)
+		if mid == "" or by.has(mid):
+			continue
+		by[mid] = row
+		order.append(mid)
+	var pack = load("res://game/board/pilots/custom_member_pack.gd")
+	for m_v in room.get("members", []):
+		if typeof(m_v) != TYPE_DICTIONARY:
+			continue
+		var seat: Dictionary = m_v
+		if bool(seat.get("ai", false)):
+			continue
+		var remap := {}
+		for crew_v in seat.get("crew", []):
+			if typeof(crew_v) != TYPE_DICTIONARY:
+				continue
+			var src: Dictionary = (crew_v as Dictionary).duplicate(true)
+			var sid := str(src.get("id", ""))
+			if sid.length() == 8 and sid.is_valid_int():
+				continue
+			var why := ""
+			if pack != null:
+				why = str(pack.reject_reason(src))
+				if why == "":
+					pack.fit_bonus(src)
+			if why != "":
+				_fanout_chat("[全体] 团员 %s %s，本局不带入" % [str(src.get("name", sid)), why], "all", 0, 0)
+				remap[sid] = ""
+				continue
+			var assigned := sid
+			if by.has(assigned):
+				assigned = _free_six(by, sid.substr(0, 2) if sid.length() >= 2 else "00")
+			if assigned == "":
+				_fanout_chat("[全体] 团员 %s 编号已满，本局不带入" % str(src.get("name", sid)), "all", 0, 0)
+				remap[sid] = ""
+				continue
+			src["id"] = assigned
+			by[assigned] = src
+			if not order.has(assigned):
+				order.append(assigned)
+			if assigned != sid:
+				remap[sid] = assigned
+		for p_v in seat.get("roster", []):
+			if typeof(p_v) != TYPE_DICTIONARY:
+				continue
+			var pilot: Dictionary = p_v
+			var pmid := str(pilot.get("member_id", ""))
+			if remap.has(pmid):
+				pilot["member_id"] = str(remap[pmid])
+	var out: Array = []
+	for mid2 in order:
+		out.append(by[mid2])
 	return out
+
+
+func _free_six(by: Dictionary, prefix: String) -> String:
+	if prefix.length() != 2 or not prefix.is_valid_int():
+		prefix = "00"
+	for n in 10000:
+		var candidate := prefix + "%04d" % n
+		if not by.has(candidate):
+			return candidate
+	return ""
 
 
 func _mod_line(method: String, path: String) -> void:
@@ -1656,6 +1746,21 @@ func rpc_zone_submit(body: String) -> void:
 @rpc("any_peer", "unreliable_ordered")
 func rpc_zone_submit_light(body: String) -> void:
 	_accept_zone(body, true)
+
+
+@rpc("any_peer", "reliable")
+func rpc_fit(unit_id: String, kind: String, on: bool) -> void:
+	fit_received.emit(unit_id, kind, on)
+
+
+@rpc("any_peer", "reliable")
+func rpc_fit_to(target: int, unit_id: String, kind: String, on: bool) -> void:
+	if not is_host:
+		return
+	if target == _self_id():
+		fit_received.emit(unit_id, kind, on)
+	elif target > 0:
+		rpc_id(target, "rpc_fit", unit_id, kind, on)
 
 
 @rpc("any_peer", "reliable")

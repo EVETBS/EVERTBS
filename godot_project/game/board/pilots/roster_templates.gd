@@ -15,14 +15,17 @@ static func ensure_dir() -> void:
 static func load_all() -> Dictionary:
 	ensure_dir()
 	if not FileAccess.file_exists(PATH):
-		return {"templates": {}}
+		return {"templates": {}, "active_size": 20, "saved": false}
 	var raw = JSON.parse_string(FileAccess.get_file_as_string(PATH))
 	if typeof(raw) != TYPE_DICTIONARY:
-		return {"templates": {}}
+		return {"templates": {}, "active_size": 20, "saved": false}
 	var t = raw.get("templates", {})
 	if typeof(t) != TYPE_DICTIONARY:
 		t = {}
-	return {"templates": t}
+	var size_n := int(raw.get("active_size", 20))
+	if not SIZES.has(size_n):
+		size_n = 20
+	return {"templates": t, "active_size": size_n, "saved": bool(raw.get("saved", false))}
 
 
 static func save_all(doc: Dictionary) -> void:
@@ -58,17 +61,26 @@ static func get_entry(size_n: int) -> Dictionary:
 	var raw = templates.get(key, null)
 	var onfield := PackedStringArray()
 	var starters := PackedStringArray()
-	if typeof(raw) == TYPE_ARRAY:
-		onfield = _ids_of(raw)
-	elif typeof(raw) == TYPE_DICTIONARY:
-		onfield = _ids_of((raw as Dictionary).get("onfield", []))
-		starters = _ids_of((raw as Dictionary).get("starters", []))
-	if onfield.is_empty():
+	if raw == null:
 		onfield = random_fill(size_n)
 		templates[key] = {"onfield": Array(onfield), "starters": []}
 		doc["templates"] = templates
 		save_all(doc)
+	elif typeof(raw) == TYPE_ARRAY:
+		onfield = _ids_of(raw)
+	elif typeof(raw) == TYPE_DICTIONARY:
+		onfield = _ids_of((raw as Dictionary).get("onfield", []))
+		starters = _ids_of((raw as Dictionary).get("starters", []))
 	return {"onfield": onfield, "starters": starters}
+
+
+static func active_size() -> int:
+	var n := int(load_all().get("active_size", 20))
+	return n if SIZES.has(n) else 20
+
+
+static func has_saved() -> bool:
+	return bool(load_all().get("saved", false))
 
 
 static func get_template(size_n: int) -> PackedStringArray:
@@ -81,6 +93,8 @@ static func set_entry(size_n: int, onfield: PackedStringArray, starters: PackedS
 	var templates: Dictionary = doc.get("templates", {})
 	templates[str(size_n)] = {"onfield": Array(onfield), "starters": Array(starters)}
 	doc["templates"] = templates
+	doc["active_size"] = size_n if SIZES.has(size_n) else int(doc.get("active_size", 20))
+	doc["saved"] = true
 	save_all(doc)
 
 

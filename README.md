@@ -3,7 +3,7 @@
 
 
 
-# EVERTBS · eve战棋（开发仓）
+# EVERTBS · EVE模拟器：军团（开发仓）
 
 
 =》=》=》=》=》=》=》=》   要体验游戏点右边release   =》=》=》=》=》=》=》=》
@@ -11,7 +11,7 @@
 https://github.com/user-attachments/assets/b2eea62d-4be3-4477-9091-3e9a83c1b807
 
 
-**eve战棋**（工程名 **EVERTBS**）是一款**不以盈利为目的**的玩家二创实时策略军棋游戏。玩家扮演**军团意志**，在星图上指挥**小队战**。
+**EVE模拟器：军团**（工程名 **EVERTBS**）是一款**不以盈利为目的**的玩家二创实时策略军棋游戏。玩家扮演**军团意志**，在星图上指挥**小队战**。
 
 本仓只承载 **Godot 游戏本体代码**（脚本、场景、内容 JSON、永恒壳）。玩法 / 数值 / 仓门禁权威在设计仓：  
 [EVERTBS-design](https://github.com/EVETBS/EVERTBS-design)

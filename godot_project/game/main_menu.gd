@@ -7,7 +7,7 @@ const _LobbyPanel: Script = preload("res://scripts/ui/nullsec_lobby_panel.gd")
 const _BoardSave: Script = preload("res://scripts/save/board_save.gd")
 const DevWindowScr := preload("res://game/dev_options_window.gd")
 
-const TITLE_TEXT := "EVE战棋"
+const TITLE_TEXT := "EVE模拟器：军团"
 const DECLARE_TEXT := "EVE以及其相关之图标/设计均属CCP所有.\n本作为非商业玩家二创。"
 const BRANCH_PLAY := "play"
 const BRANCH_SOLO := "solo"
@@ -614,7 +614,8 @@ func _import_member_pack() -> void:
 		var pack = load("res://game/board/pilots/custom_member_pack.gd")
 		var row: Dictionary = pack.import_zip(path)
 		if row.is_empty():
-			push_warning("团员包未能读入。请把 zip 放在可读写目录后再选。")
+			var why := str(CustomMemberPack.last_error)
+			push_warning(why if why != "" else "团员包未能读入。请把 zip 放在可读写目录后再选。")
 		dialog.queue_free()
 	)
 	dialog.canceled.connect(dialog.queue_free)
@@ -811,6 +812,19 @@ func _rebuild_settings() -> void:
 		plate_chk.text = "开" if on else "关"
 	)
 	plate_row.add_child(plate_chk)
+	var dilate_row := HBoxContainer.new()
+	box.add_child(dilate_row)
+	var dilate_lab := Label.new()
+	dilate_lab.text = "时间膨胀"
+	dilate_row.add_child(dilate_lab)
+	var dilate_chk := CheckButton.new()
+	dilate_chk.button_pressed = PlayerSettings.get_time_dilation()
+	dilate_chk.text = "开" if dilate_chk.button_pressed else "关"
+	dilate_chk.toggled.connect(func(on: bool) -> void:
+		PlayerSettings.set_time_dilation(on)
+		dilate_chk.text = "开" if on else "关"
+	)
+	dilate_row.add_child(dilate_chk)
 	_add_sensitivity_row(box)
 	var dev_btn := Button.new()
 	dev_btn.text = "开发者选项"

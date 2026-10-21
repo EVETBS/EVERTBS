@@ -16,7 +16,9 @@ const FLOAT_SCR := preload("res://game/board/fx/float_text_pool.gd")
 const BR_TRACKER := preload("res://game/board/battle_report_tracker.gd")
 const SHIP_ART := preload("res://art_modules/eve_ship_art/scripts/eve_ship_art_module.gd")
 const CALLOUT_SCR := preload("res://game/board/hud/tactical_callout_layer.gd")
+const EquipIconScr := preload("res://game/board/equip_icon.gd")
 const MemberTableScr := preload("res://game/board/pilots/member_table.gd")
+const RosterTemplatesScr := preload("res://game/board/pilots/roster_templates.gd")
 const CrewRankScr := preload("res://game/board/pilots/crew_rank.gd")
 const SIM_CLOCK_SCR := preload("res://game/board/sim_clock.gd")
 const HP_BATCH_SCR := preload("res://game/board/hud/hp_bar_batch.gd")
@@ -92,6 +94,7 @@ var deputy_face: TextureRect
 var settings_bgm_vol := 1.0
 var settings_sfx_vol := 1.0
 var settings_battle_full_plates := false
+var settings_time_dilation := false
 var settings_deputy_btn: Button
 var settings_deputy_list: VBoxContainer
 var _br_sort_col := ""
@@ -125,7 +128,6 @@ var _pinch_prev_angle := 0.0
 var _touch_panning := false
 var _ui_scroll: Control
 var _ui_scroll_last := Vector2.ZERO
-var _zoom_col: Control
 var _hold_grow := false
 var _hold_origin := Vector2.ZERO
 var _hold_half := 0.0
@@ -463,6 +465,7 @@ func _ready() -> void:
 	settings_bgm_vol = PlayerSettings.get_bgm()
 	settings_sfx_vol = PlayerSettings.get_sfx()
 	settings_battle_full_plates = PlayerSettings.get_full_plates()
+	settings_time_dilation = PlayerSettings.get_time_dilation()
 	capture = CAPTURE.new()
 	capture.admin = admin
 	pilots_sys = PILOTS.new()
@@ -783,6 +786,55 @@ func _tick_deputy_designations() -> void:
 			p.erase("deputy_req_ship")
 			p.erase("deputy_req_fleet")
 
+func _match_roster() -> Dictionary:
+	## Custom campaigns only include chosen factions. Empty station and AI lists mean every non-sleeper.
+	var out: Dictionary = {}
+	if map == null or typeof(map.layout) != TYPE_DICTIONARY:
+		return _all_playable_factions()
+	var layout: Dictionary = map.layout
+	var opening: Variant = layout.get("opening_stations", {})
+	var has_open := typeof(opening) == TYPE_DICTIONARY and not (opening as Dictionary).is_empty()
+	var ai: Variant = layout.get("ai_factions", [])
+	var has_ai := typeof(ai) == TYPE_ARRAY and not (ai as Array).is_empty()
+	if not has_open and not has_ai:
+		return _all_playable_factions()
+	out[int(viewer_faction)] = true
+	if has_open:
+		for v in (opening as Dictionary).values():
+			var fid := int(v)
+			if fid > 0:
+				out[fid] = true
+	if has_ai:
+		for v in ai as Array:
+			var fid2 := int(v)
+			if fid2 > 0:
+				out[fid2] = true
+	for p in pilots:
+		var pf := int(p.get("faction", -1))
+		if pf > 0 and not (data != null and data.is_npc_faction(pf)):
+			out[pf] = true
+	return out
+
+
+func _all_playable_factions() -> Dictionary:
+	var out: Dictionary = {}
+	if data == null:
+		return out
+	for f in data.factions.get("factions", []):
+		if bool(f.get("npc", false)):
+			continue
+		var fid := int(f.get("id", -1))
+		if fid >= 0:
+			out[fid] = true
+	return out
+
+
+func _faction_in_match(fac: int) -> bool:
+	if data != null and data.is_npc_faction(fac):
+		return true
+	return _match_roster().has(fac)
+
+
 func _setup_deputies() -> void:
 	faction_ai.clear()
 	faction_deputy_name.clear()
@@ -795,6 +847,8 @@ func _setup_deputies() -> void:
 	for f in data.factions.get("factions", []):
 		var fid := int(f.get("id", -1))
 		if bool(f.get("npc", false)) or fid == viewer_faction:
+			continue
+		if not _faction_in_match(fid):
 			continue
 		if typeof(map.layout) == TYPE_DICTIONARY and bool((map.layout as Dictionary).get("mp", false)):
 			var ai_facs: Array = (map.layout as Dictionary).get("ai_factions", [])
@@ -1234,8 +1288,56 @@ func _pilot_crew_eq(pilot: Dictionary) -> Dictionary:
 	var eq = data.equipment.get(str(pilot.get("crew_equip_id", "")), {})
 	return eq if typeof(eq) == TYPE_DICTIONARY else {}
 
+func _apply_saved_player_roster() -> void:
+	## Member config writes the size used by the next match. Custom campaigns already baked pilots.
+	if map == null or typeof(map.layout) != TYPE_DICTIONARY:
+		return
+	#（联机冻结名单不再套本机配置）26.10.22 01:52 s
+	if bool(map.layout.get("mp", false)) or bool(map.layout.get("roster_applied", false)) or not RosterTemplatesScr.has_saved():
+		return
+	#（联机冻结名单不再套本机配置）26.10.22 01:52 e
+	var size_n := RosterTemplatesScr.active_size()
+	var res: Dictionary = RosterTemplatesScr.resolve(size_n)
+	var ids: PackedStringArray = res.get("ids", PackedStringArray())
+	var starters: Dictionary = res.get("starters", {})
+	var members: Dictionary = {}
+	for row in MemberTableScr.load_merged():
+		if typeof(row) == TYPE_DICTIONARY:
+			members[str(row.get("id", ""))] = row
+	var home := "soular"
+	var kept: Array = []
+	for raw in map.layout.get("pilots", []):
+		if typeof(raw) != TYPE_DICTIONARY:
+			continue
+		if int(raw.get("faction", 0)) == viewer_faction:
+			var h := str(raw.get("home", "")).strip_edges()
+			if h != "":
+				home = h
+			continue
+		kept.append(raw)
+	for n in range(ids.size()):
+		var mid := str(ids[n])
+		var mem: Dictionary = members.get(mid, {})
+		var ship_id := str(mem.get("default_ship", "")).strip_edges()
+		if ship_id == "":
+			ship_id = "gila_cc2"
+		kept.append({
+			"id": "f1_p%d" % (n + 1),
+			"name": str(mem.get("name", "团员%d" % (n + 1))),
+			"faction": viewer_faction,
+			"home": home,
+			"ship": ship_id,
+			"member_id": mid,
+			"cell_kind": "station",
+			"starter": starters.has(mid),
+		})
+	map.layout["pilots"] = kept
+	map.layout["roster_applied"] = true
+
+
 func _spawn_opening() -> void:
 	## SHIPS §7: register pilots in station with no hull; they manufacture then undock.
+	_apply_saved_player_roster()
 	for raw in map.layout.get("pilots", []):
 		var p = pilots_sys.make_pilot(raw)
 		pilots.append(p)
@@ -1949,6 +2051,7 @@ func _build_pd(def: Dictionary) -> Array:
 				"falloff": float(eq.get("falloff_m", 4000)),
 				"optimal": float(eq.get("optimal_m", 0)),
 				"range_cells": rc,
+				"size": str(eq.get("size", "")),
 				"target": "",
 			})
 	return guns
@@ -2071,6 +2174,7 @@ func _init_unit_combat(u: Dictionary) -> void:
 				u["pd_repair_max_loss"] = true
 			"afterburner":
 				var ab_eq: Dictionary = data.equipment.get(str(h.get("ref", "")), {})
+				u["ab_ref"] = str(h.get("ref", ""))
 				u["ab_speed_bonus"] = float(ab_eq.get("speed_bonus", 0.0))
 	# #region agent log
 	if bool(u.get("no_max_loss", false)) or bool(u.get("pd_repair_max_loss", false)):
@@ -2169,6 +2273,8 @@ func _burst_friendly(a: Dictionary, b: Dictionary) -> bool:
 	return rel == "self" or rel == "ally"
 
 func _tick_command_bursts(u: Dictionary, delta: float) -> void:
+	if float(u.get("skirmish_left", 0.0)) > 0.0:
+		u["skirmish_left"] = maxf(0.0, float(u["skirmish_left"]) - delta)
 	for b in u.get("bursts", []):
 		var eq: Dictionary = data.equipment.get(str(b.get("ref", "")), {})
 		var cost := float(eq.get("cap_cost", 100))
@@ -2185,16 +2291,27 @@ func _tick_command_bursts(u: Dictionary, delta: float) -> void:
 				continue
 			u["inst"]["cap"] = float(u["inst"]["cap"]) - cost
 			b["cd"] = cd_s
-			var ids: Array = []
+			var uptime := float(eq.get("uptime_s", 16))
+			var speed_add := float(eq.get("speed_mul", 0.0)) * _command_mul(u, str(b.get("ref", "")))
+			var prep_add := float(eq.get("prep_mul", 0.0)) * _command_mul(u, str(b.get("ref", "")))
 			for o in units:
 				if not o.get("alive", false):
 					continue
 				if str(o.get("sys", "")) != str(u.get("sys", "")) or int(o.get("cell", -1)) != int(u.get("cell", -2)):
 					continue
-				if _burst_friendly(u, o):
-					ids.append(str(o.get("id", "")))
-			b["snap"] = ids
-			b["snap_t"] = float(eq.get("uptime_s", 16))
+				if not _burst_friendly(u, o):
+					continue
+				var left := float(o.get("skirmish_left", 0.0))
+				var old_speed := float(o.get("skirmish_speed", 0.0))
+				#（较弱游击不延长更强效果）26.10.22 01:52 s
+				if left <= 0.0 or speed_add > old_speed:
+					o["skirmish_speed"] = speed_add
+					o["skirmish_prep"] = prep_add
+					o["skirmish_left"] = uptime
+				elif is_equal_approx(speed_add, old_speed):
+					o["skirmish_prep"] = maxf(float(o.get("skirmish_prep", 0.0)), prep_add)
+					o["skirmish_left"] = maxf(left, uptime)
+				#（较弱游击不延长更强效果）26.10.22 01:52 e
 			continue
 		if float(b.get("remain", 0.0)) > 0.0:
 			b["remain"] = float(b["remain"]) - delta
@@ -2279,36 +2396,14 @@ func _shield_rep_cd_mul(target: Dictionary) -> float:
 	return best
 
 func _skirmish_speed(target: Dictionary) -> float:
-	var best := 0.0
-	var tid := str(target.get("id", ""))
-	for caster in units:
-		if not caster.get("alive", false):
-			continue
-		for b in caster.get("bursts", []):
-			if float(b.get("snap_t", 0.0)) <= 0.0:
-				continue
-			var snap: Array = b.get("snap", [])
-			if not snap.has(tid):
-				continue
-			var eq: Dictionary = data.equipment.get(str(b.get("ref", "")), {})
-			best = maxf(best, float(eq.get("speed_mul", 0.0)) * _command_mul(caster, str(b.get("ref", ""))))
-	return best
+	if float(target.get("skirmish_left", 0.0)) <= 0.0:
+		return 0.0
+	return maxf(0.0, float(target.get("skirmish_speed", 0.0)))
 
 func _skirmish_prep(target: Dictionary) -> float:
-	var best := 0.0
-	var tid := str(target.get("id", ""))
-	for caster in units:
-		if not caster.get("alive", false):
-			continue
-		for b in caster.get("bursts", []):
-			if float(b.get("snap_t", 0.0)) <= 0.0:
-				continue
-			var snap: Array = b.get("snap", [])
-			if not snap.has(tid):
-				continue
-			var eq: Dictionary = data.equipment.get(str(b.get("ref", "")), {})
-			best = maxf(best, float(eq.get("prep_mul", 0.0)) * _command_mul(caster, str(b.get("ref", ""))))
-	return clampf(best, 0.0, 0.95)
+	if float(target.get("skirmish_left", 0.0)) <= 0.0:
+		return 0.0
+	return clampf(float(target.get("skirmish_prep", 0.0)), 0.0, 0.95)
 
 func _apply_crew_runtime(u: Dictionary) -> void:
 	_capture_mul(u, "speed", "speed_mul")
@@ -2334,10 +2429,11 @@ func _apply_crew_runtime(u: Dictionary) -> void:
 		w["falloff"] = float(w.get("falloff", 0.0)) * _crew_mul(u, "falloff_mul")
 		w["sig_res"] = float(w.get("sig_res", 40.0)) * _crew_mul(u, "sig_res_mul")
 		w["range_cells"] = int(round(float(w.get("range_cells", 0)) * _crew_mul(u, "range_cells_mul") * _crew_mul(u, "range_mul")))
-		w["explosion_radius"] = float(w.get("explosion_radius", 0.0)) * _crew_mul(u, "explosion_radius_mul")
+		var boom := _crew_mul(u, "explosion_radius_mul") * _crew_mul(u, "missile_explosion_mul")
+		w["explosion_radius"] = float(w.get("explosion_radius", 0.0)) * boom
 		w["explosion_velocity"] = float(w.get("explosion_velocity", 0.0)) * _crew_mul(u, "explosion_velocity_mul")
 		w["drf"] = float(w.get("drf", 0.0)) * _crew_mul(u, "drf_mul")
-		w["explosion_cells"] = int(round(float(w.get("explosion_cells", 0)) * _crew_mul(u, "explosion_cells_mul")))
+		w["explosion_cells"] = int(round(float(w.get("explosion_cells", 0)) * _crew_mul(u, "explosion_cells_mul") * _crew_mul(u, "missile_explosion_mul")))
 		w["heal_shield"] = float(w.get("heal_shield", 0.0)) * _crew_mul(u, "heal_shield_mul")
 		w["heal_armor"] = float(w.get("heal_armor", 0.0)) * _crew_mul(u, "heal_armor_mul")
 		w["dmg_emp_mul"] = _crew_mul(u, "damage_emp_mul")
@@ -3909,7 +4005,6 @@ func _build_hud() -> void:
 	_apply_ui_font(detail)
 	right_col.add_child(detail)
 	layer.add_child(right_col)
-	_build_zoom_buttons(layer)
 	_layout_right_col()
 	if not get_viewport().size_changed.is_connected(_layout_right_col):
 		get_viewport().size_changed.connect(_layout_right_col)
@@ -4053,6 +4148,7 @@ func _build_bottom_bar(parent: Control) -> void:
 		_apply_ui_font(b)
 		row.add_child(b)
 		marker_btns[spec[0]] = b
+	_build_zoom_buttons(row)
 	bottom_bar.add_child(row)
 	parent.add_child(bottom_bar)
 	_build_chat_panel(parent)
@@ -4988,11 +5084,26 @@ func _rebuild_settings_panel() -> void:
 	_apply_ui_font(plate_lab)
 	plate_row.add_child(plate_lab)
 	var plate_chk := CheckButton.new()
+	plate_chk.name = "FullPlatesChk"
 	plate_chk.button_pressed = settings_battle_full_plates
 	plate_chk.text = "开" if settings_battle_full_plates else "关"
 	_apply_ui_font(plate_chk)
 	plate_chk.toggled.connect(_on_settings_full_plates)
 	plate_row.add_child(plate_chk)
+	var dilate_row := HBoxContainer.new()
+	settings_page.add_child(dilate_row)
+	var dilate_lab := Label.new()
+	dilate_lab.text = "时间膨胀"
+	dilate_lab.custom_minimum_size = Vector2(200, 28)
+	_apply_ui_font(dilate_lab)
+	dilate_row.add_child(dilate_lab)
+	var dilate_chk := CheckButton.new()
+	dilate_chk.name = "TimeDilationChk"
+	dilate_chk.button_pressed = settings_time_dilation
+	dilate_chk.text = "开" if settings_time_dilation else "关"
+	_apply_ui_font(dilate_chk)
+	dilate_chk.toggled.connect(_on_settings_time_dilation)
+	dilate_row.add_child(dilate_chk)
 	_add_op_sensitivity_row(settings_page)
 	var dep_row := HBoxContainer.new()
 	dep_row.add_theme_constant_override("separation", 8)
@@ -5169,10 +5280,17 @@ func _on_settings_full_plates(on: bool) -> void:
 	settings_battle_full_plates = on
 	PlayerSettings.set_full_plates(on)
 	if settings_page:
-		for c in settings_page.find_children("*", "CheckButton", true, false):
-			var chk := c as CheckButton
-			if chk:
-				chk.text = "开" if on else "关"
+		var chk := settings_page.find_child("FullPlatesChk", true, false) as CheckButton
+		if chk:
+			chk.text = "开" if on else "关"
+
+func _on_settings_time_dilation(on: bool) -> void:
+	settings_time_dilation = on
+	PlayerSettings.set_time_dilation(on)
+	if settings_page:
+		var chk := settings_page.find_child("TimeDilationChk", true, false) as CheckButton
+		if chk:
+			chk.text = "开" if on else "关"
 
 func _ensure_named_bus(bus_name: String) -> int:
 	var idx := AudioServer.get_bus_index(bus_name)
@@ -5231,6 +5349,8 @@ func _rebuild_diplomacy_rows() -> void:
 		if bool(f.get("npc", false)):
 			continue
 		var fid := int(f.get("id", -1))
+		if not _faction_in_match(fid):
+			continue
 		var row := HBoxContainer.new()
 		box.add_child(row)
 		var lab := Label.new()
@@ -5738,6 +5858,8 @@ func _make_pilot_row(p: Dictionary) -> Control:
 	# portrait frame: sky bg + pilot top + ship art (1.5x, overflow bottom 1/10)
 	var frame = Control.new()
 	frame.custom_minimum_size = Vector2(52, 52)
+	frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	frame.clip_contents = true
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sky_bg = TextureRect.new()
@@ -5777,7 +5899,7 @@ func _make_pilot_row(p: Dictionary) -> Control:
 	portrait.name = "ShipArt"
 	var art_h = 52.0 * 0.46 * 1.2
 	var art_w = 40.0 * 1.2
-	portrait.position = Vector2((52.0 - art_w) * 0.5, 52.0 - art_h + 2.0)
+	portrait.position = Vector2((52.0 - art_w) * 0.5, 52.0 - art_h + 10.0)
 	portrait.size = Vector2(art_w, art_h)
 	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -6381,17 +6503,11 @@ func _right_col_backdrop() -> StyleBoxFlat:
 	sb.set_content_margin_all(4)
 	return sb
 
-func _build_zoom_buttons(layer: Control) -> void:
-	## Beside the tactical icon field, on the right column's left edge.
-	var col := VBoxContainer.new()
-	col.name = "TacticalZoom"
-	col.mouse_filter = Control.MOUSE_FILTER_STOP
-	col.z_index = 60
-	col.add_theme_constant_override("separation", 6)
+func _build_zoom_buttons(row: HBoxContainer) -> void:
 	var up := Button.new()
 	up.name = "ZoomIn"
-	up.text = "上"
-	up.custom_minimum_size = Vector2(48, 48)
+	up.text = "↑"
+	up.custom_minimum_size = Vector2(44, 36)
 	up.mouse_filter = Control.MOUSE_FILTER_STOP
 	up.pressed.connect(func() -> void:
 		if cam:
@@ -6399,8 +6515,8 @@ func _build_zoom_buttons(layer: Control) -> void:
 	)
 	var down := Button.new()
 	down.name = "ZoomOut"
-	down.text = "下"
-	down.custom_minimum_size = Vector2(48, 48)
+	down.text = "↓"
+	down.custom_minimum_size = Vector2(44, 36)
 	down.mouse_filter = Control.MOUSE_FILTER_STOP
 	down.pressed.connect(func() -> void:
 		if cam:
@@ -6408,10 +6524,8 @@ func _build_zoom_buttons(layer: Control) -> void:
 	)
 	_apply_ui_font(up)
 	_apply_ui_font(down)
-	col.add_child(up)
-	col.add_child(down)
-	layer.add_child(col)
-	_zoom_col = col
+	row.add_child(up)
+	row.add_child(down)
 
 
 func _layout_right_col() -> void:
@@ -6425,8 +6539,6 @@ func _layout_right_col() -> void:
 	## Stay clear of the diplomacy button (top) and the bottom key bar.
 	right_col.position = Vector2(vr.x - 316.0, 48.0)
 	right_col.size = Vector2(300.0, maxf(vr.y - 48.0 - 60.0, 200.0))
-	if _zoom_col:
-		_zoom_col.position = Vector2(right_col.position.x - 56.0, right_col.position.y + right_col.size.y * 0.5 - 51.0)
 	_layout_bottom_bar()
 
 func _ensure_br_window() -> void:
@@ -7213,7 +7325,6 @@ func _tick_command_layer(wall: float) -> void:
 	if cam and cam.has_method("tick_breathe"):
 		cam.tick_breathe(wall)
 	_update_box_overlay()
-	_refresh_dilate_hint()
 	# #region agent log
 	if Engine.get_process_frames() % 90 == 0:
 		_dbg59("CLK", "board_root._tick_command_layer", "clock", {
@@ -7227,10 +7338,16 @@ func _tick_command_layer(wall: float) -> void:
 func _refresh_dilate_hint() -> void:
 	if _dilate_lab == null or _sim_clk == null:
 		return
+	if sim_paused or not settings_time_dilation:
+		_dilate_lab.visible = false
+		return
 	var sc := float(_sim_clk.scale)
 	if sc < 0.98:
 		_dilate_lab.visible = true
 		_dilate_lab.text = "时间膨胀 ×%.2f" % sc
+	elif _sim_clk.spiked:
+		_dilate_lab.visible = true
+		_dilate_lab.text = "时间膨胀以缓解你的设备运行压力"
 	else:
 		_dilate_lab.visible = false
 
@@ -7305,9 +7422,11 @@ func _process(delta: float) -> void:
 	# #endregion
 	if match_over:
 		return
-	var clk: Dictionary = _sim_clk.step(delta, _fight_n)
+	var clk: Dictionary = _sim_clk.step(delta, _fight_n, settings_time_dilation)
+	_refresh_dilate_hint()
 	var sim_dt: float = float(clk.get("sim_dt", delta))
 	var spiked := bool(clk.get("spike", false))
+	var sim_t0 := Time.get_ticks_usec()
 	for built in pilots_sys.tick_build(pilots, sim_dt, map):
 		if typeof(built) == TYPE_DICTIONARY:
 			_note_match_built(int(built.get("faction", -1)))
@@ -7322,6 +7441,8 @@ func _process(delta: float) -> void:
 	_tick_regen_and_repair(sim_dt)
 	_tick_weapon_locks(sim_dt)
 	_tick_combat(sim_dt)
+	if _mp != null:
+		_mp.note_sim_ms(float(Time.get_ticks_usec() - sim_t0) / 1000.0)
 	_tick_ai(sim_dt)
 	_tick_marker_widgets()
 	_tick_diplo_offers(sim_dt)
@@ -8241,9 +8362,19 @@ func _tick_combat(delta: float) -> void:
 				g["tracking"], g["sig_res"], g["falloff"], float(g.get("optimal", 0.0)),
 				_hit_speed(tgt), tgt["signature_radius"], dist_m
 			)
+			var pd_ref := str(g.get("ref", ""))
+			var pd_size := str(g.get("size", ""))
+			if pd_size == "S" or pd_ref.begins_with("pd_small"):
+				p_hit = 1.0
+			elif (pd_size == "L" or pd_size == "XL" or pd_ref.begins_with("pd_large")) and str(tgt.get("tonnage", "")) == "frigate" and str(tgt.get("ab_ref", "")) == "afterburner_s":
+				p_hit = 0.0
 			g["cd"] = float(g["cycle"])
 			g["target"] = tgt["id"]
-			var hit = rng.randf() <= p_hit
+			#（命中率为0的近防直接未中）26.10.22 01:52 s
+			var hit := false
+			if p_hit > 0.0:
+				hit = rng.randf() <= p_hit
+			#（命中率为0的近防直接未中）26.10.22 01:52 e
 			var raw = float(g["damage"]) * _dph_mul(u)
 			raw = _focus_on_hit(u, hit, raw)
 			if not hit or raw <= 0.0:
@@ -8496,9 +8627,7 @@ func _equip_icon_badge(eid: String) -> Control:
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var path := str(eq.get("icon", "res://assets/ui/equipment/%s.png" % eid))
-	if ResourceLoader.exists(path):
-		icon.texture = load(path)
+	icon.texture = EquipIconScr.for_row(eq if not eq.is_empty() else {"id": eid})
 	wrap.add_child(icon)
 	var size_s := str(eq.get("size", "")).to_lower()
 	if size_s == "" and not bool(eq.get("implant", false)) and not eid.begins_with("implant_"):
@@ -9807,6 +9936,7 @@ func _build_match_clock(layer: Control) -> void:
 	_dilate_lab.text = ""
 	_dilate_lab.visible = false
 	_dilate_lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dilate_lab.z_index = 90
 	_dilate_lab.modulate = Color(1.0, 0.82, 0.35, 0.95)
 	_apply_ui_font(_dilate_lab)
 	layer.add_child(_dilate_lab)
@@ -9826,7 +9956,7 @@ func _layout_match_clock() -> void:
 	_match_clock_lab.position = Vector2(sz.x * 0.5 - 60.0, 8.0)
 	if _dilate_lab:
 		_dilate_lab.position = Vector2(sz.x * 0.5 + 68.0, 10.0)
-		_dilate_lab.size = Vector2(220, 24)
+		_dilate_lab.size = Vector2(420, 24)
 
 func _tick_match_flow(delta: float) -> void:
 	if match_over:
@@ -9849,6 +9979,8 @@ func _every_faction_surrendered() -> bool:
 		var fac := int(f.get("id", -1))
 		if fac < 0 or bool(f.get("npc", false)):
 			continue
+		if not _faction_in_match(fac):
+			continue
 		any = true
 		if not _faction_out.has(fac):
 			return false
@@ -9859,6 +9991,8 @@ func _standing_factions() -> Array:
 	for f in data.factions.get("factions", []):
 		var fac := int(f.get("id", -1))
 		if fac < 0 or bool(f.get("npc", false)):
+			continue
+		if not _faction_in_match(fac):
 			continue
 		if _faction_out.has(fac):
 			continue
@@ -9880,6 +10014,8 @@ func _cancel_all_alliances() -> void:
 	for f in data.factions.get("factions", []):
 		var fac := int(f.get("id", -1))
 		if fac < 0 or bool(f.get("npc", false)):
+			continue
+		if not _faction_in_match(fac):
 			continue
 		facs.append(fac)
 	for i in range(facs.size()):
@@ -9989,6 +10125,8 @@ func _refresh_scoreboard_body() -> void:
 		var fac := int(f.get("id", -1))
 		if fac < 0:
 			continue
+		if not bool(f.get("npc", false)) and not _faction_in_match(fac):
+			continue
 		var st := _stat_fac(fac)
 		lines.append("%s | %d | %d | %d | %.0f | %d" % [
 			_faction_label(fac), int(st.get("built", 0)), int(st.get("kills", 0)),
@@ -10079,6 +10217,8 @@ func _fill_settle_summary(with_reports: bool) -> void:
 	for f in data.factions.get("factions", []):
 		var fac := int(f.get("id", -1))
 		if fac < 0 or bool(f.get("npc", false)):
+			continue
+		if not _faction_in_match(fac):
 			continue
 		var st := _stat_fac(fac)
 		lines.append("%s | %d | %d | %d | %.0f" % [
@@ -11001,7 +11141,7 @@ func _mouse_over_blocking_hud(pos: Vector2) -> bool:
 		var dr = Rect2(detail.global_position, detail.size)
 		if dr.has_point(pos):
 			return true
-	for extra in [bottom_bar, chat_panel, deputy_panel, diplo_btn, diplo_panel, menu_btn, _zoom_col]:
+	for extra in [bottom_bar, chat_panel, deputy_panel, diplo_btn, diplo_panel, menu_btn]:
 		if extra and is_instance_valid(extra) and extra.visible:
 			if extra.get_global_rect().grow(2.0).has_point(pos):
 				return true
@@ -12003,27 +12143,13 @@ func _on_any_popup(id: int) -> void:
 			var ref := str(bursts[idx].get("ref", ""))
 			var want := not bool(bursts[idx].get("auto_on", true))
 			for su in sel_units:
-				for b in su.get("bursts", []):
-					if str(b.get("ref", "")) != ref:
-						continue
-					b["auto_on"] = want
-					if not want:
-						b["remain"] = 0.0
-						b["snap_t"] = 0.0
+				apply_fit_switch(su, "burst:" + ref, want)
 		return
 	match id:
 		1:
 			var want_b := not bool(u.get("bubble_on", false))
 			for su2 in sel_units:
-				if int(su2["phase"]) == BoardTypes.MovePhase.LANDING or int(su2["phase"]) == BoardTypes.MovePhase.INVULN:
-					continue
-				su2["bubble_on"] = want_b
-				if want_b:
-					su2["bubble_cd"] = 0.0
-				else:
-					var cell_off: Dictionary = map.systems[su2["sys"]]["cells"][su2["cell"]]
-					cell_off["bubble"] = false
-					cell_off["bubble_remain"] = 0.0
+				apply_fit_switch(su2, "bubble", want_b)
 		2:
 			for su3 in sel_units:
 				su3["path"].clear()
@@ -12051,15 +12177,11 @@ func _on_any_popup(id: int) -> void:
 		10:
 			var want_fa := not bool(u.get("guard", {}).get("field_auto_on", true))
 			for su6 in sel_units:
-				if su6.has("guard") and su6["guard"].get("field_fitted", false):
-					su6["guard"]["field_auto_on"] = want_fa
-					_tick_guard_reopen(su6)
+				apply_fit_switch(su6, "guard_field_auto", want_fa)
 		11:
 			var want_la := not bool(u.get("guard", {}).get("link_auto_on", true))
 			for su7 in sel_units:
-				if su7.has("guard") and su7["guard"].get("link_fitted", false):
-					su7["guard"]["link_auto_on"] = want_la
-					_tick_guard_reopen(su7)
+				apply_fit_switch(su7, "guard_link_auto", want_la)
 		12:
 			var want_ia := not bool(u.get("implant", {}).get("auto_on", true))
 			for su8 in sel_units:
@@ -12068,23 +12190,78 @@ func _on_any_popup(id: int) -> void:
 		13:
 			var want_fo := not bool(u.get("guard", {}).get("field_on", false))
 			for su9 in sel_units:
-				if su9.has("guard") and su9["guard"].get("field_fitted", false):
-					su9["guard"]["field_on"] = want_fo
-					if not want_fo:
-						su9["guard"]["field_auto_on"] = false
-					_tick_guard_reopen(su9)
+				apply_fit_switch(su9, "guard_field", want_fo)
 		20:
 			var want_h := not bool(u.get("interdict_on", false))
 			for su20 in sel_units:
-				if not _unit_has_slot(su20, "interdiction"):
-					continue
-				if int(su20["phase"]) == BoardTypes.MovePhase.LANDING or int(su20["phase"]) == BoardTypes.MovePhase.INVULN:
-					continue
-				if want_h:
-					su20["interdict_on"] = true
-					su20["interdict_since"] = _sim_clock
-				elif _sim_clock - float(su20.get("interdict_since", 0.0)) >= 20.0:
-					su20["interdict_on"] = false
+				apply_fit_switch(su20, "interdict", want_h)
+
+func apply_fit_switch(u: Dictionary, kind: String, on: bool, announce: bool = true) -> void:
+	#（本机与远端装备开关同一套副作用）26.10.22 01:52 s
+	if u.is_empty():
+		return
+	var applied := false
+	if kind == "bubble":
+		var ph := int(u.get("phase", 0))
+		if ph == BoardTypes.MovePhase.LANDING or ph == BoardTypes.MovePhase.INVULN:
+			return
+		u["bubble_on"] = on
+		if on:
+			u["bubble_cd"] = 0.0
+		elif map != null and map.systems.has(str(u.get("sys", ""))):
+			var cells: Array = map.systems[str(u.get("sys", ""))]["cells"]
+			var ci := int(u.get("cell", -1))
+			if ci >= 0 and ci < cells.size() and typeof(cells[ci]) == TYPE_DICTIONARY:
+				cells[ci]["bubble"] = false
+				cells[ci]["bubble_remain"] = 0.0
+		applied = true
+	elif kind == "interdict":
+		if not _unit_has_slot(u, "interdiction"):
+			return
+		var ph_i := int(u.get("phase", 0))
+		if ph_i == BoardTypes.MovePhase.LANDING or ph_i == BoardTypes.MovePhase.INVULN:
+			return
+		if on:
+			if not bool(u.get("interdict_on", false)):
+				u["interdict_since"] = _sim_clock
+			u["interdict_on"] = true
+		elif _sim_clock - float(u.get("interdict_since", 0.0)) >= 20.0:
+			u["interdict_on"] = false
+		on = bool(u.get("interdict_on", false))
+		applied = true
+	elif kind.begins_with("burst:"):
+		var ref := kind.substr(6)
+		for b in u.get("bursts", []):
+			if typeof(b) != TYPE_DICTIONARY or str(b.get("ref", "")) != ref:
+				continue
+			b["auto_on"] = on
+			if not on:
+				b["remain"] = 0.0
+				b["snap_t"] = 0.0
+			applied = true
+	elif kind.begins_with("guard_") and u.has("guard"):
+		var guard: Dictionary = u["guard"]
+		if kind == "guard_field" and bool(guard.get("field_fitted", false)):
+			guard["field_on"] = on
+			if not on:
+				guard["field_auto_on"] = false
+			_tick_guard_reopen(u)
+			applied = true
+		elif kind == "guard_link" and bool(guard.get("link_fitted", false)):
+			guard["link_on"] = on
+			_tick_guard_reopen(u)
+			applied = true
+		elif kind == "guard_field_auto" and bool(guard.get("field_fitted", false)):
+			guard["field_auto_on"] = on
+			_tick_guard_reopen(u)
+			applied = true
+		elif kind == "guard_link_auto" and bool(guard.get("link_fitted", false)):
+			guard["link_auto_on"] = on
+			_tick_guard_reopen(u)
+			applied = true
+	if applied and announce:
+		_mp_on_fit(str(u.get("id", "")), kind, on)
+	#（本机与远端装备开关同一套副作用）26.10.22 01:52 e
 
 func _dock_unit(u: Dictionary) -> void:
 	if not _can_dock(u):
@@ -12873,43 +13050,64 @@ func _on_assign_step(id: int) -> void:
 			_fill_assign_submenu(c, p)
 			break
 
-func _open_assign_panel(p: Dictionary) -> void:
-	var panel = PopupPanel.new()
-	panel.name = "AssignPanel"
-	add_child(panel)
-	var hb = HBoxContainer.new()
-	panel.add_child(hb)
-	var minus = Button.new()
-	minus.text = "<"
-	var edit = LineEdit.new()
-	edit.custom_minimum_size = Vector2(64, 0)
-	edit.text = str(_pilot_resource_count(str(p["id"])))
-	var plus = Button.new()
-	plus.text = ">"
-	var ok = Button.new()
-	ok.text = "OK"
-	hb.add_child(minus)
-	hb.add_child(edit)
-	hb.add_child(plus)
-	hb.add_child(ok)
-	minus.pressed.connect(func():
-		var v = int(edit.text) - 1
-		edit.text = str(maxi(0, v))
-	)
-	plus.pressed.connect(func():
-		var held = _pilot_resource_count(str(p["id"]))
-		var pool_take = _faction_pool_resources(int(p["faction"]), str(p["id"]))
-		var v = int(edit.text) + 1
-		edit.text = str(mini(held + pool_take, v))
-	)
-	ok.pressed.connect(func():
-		_set_pilot_resource_count(p, int(edit.text))
-		_rebuild_hud_list()
-		if starmap_view:
-			starmap_view.rebuild()
-		panel.queue_free()
-	)
-	panel.popup_centered(Vector2i(220, 48))
+func _open_assign_panel(_p: Dictionary) -> void:
+	var win := Window.new()
+	win.title = "分配资源点"
+	win.size = Vector2i(920, 560)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	scroll.offset_left = 12
+	scroll.offset_top = 12
+	scroll.offset_right = -12
+	scroll.offset_bottom = -12
+	var grid := GridContainer.new()
+	grid.columns = 5
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	var mine: Array = []
+	for pilot in pilots:
+		if int(pilot.get("faction", -1)) != viewer_faction:
+			continue
+		mine.append(pilot)
+	mine.sort_custom(func(a, b): return str(a.get("name", "")) < str(b.get("name", "")))
+	for pilot in mine:
+		grid.add_child(_assign_member_column(pilot))
+	scroll.add_child(grid)
+	win.add_child(scroll)
+	add_child(win)
+	win.close_requested.connect(func() -> void: win.queue_free())
+	win.popup_centered()
+
+
+func _assign_member_column(pilot: Dictionary) -> Control:
+	var box := VBoxContainer.new()
+	box.custom_minimum_size = Vector2(160, 0)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var title := Label.new()
+	title.text = str(pilot.get("name", pilot.get("id", "")))
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_apply_ui_font(title)
+	box.add_child(title)
+	var pid := str(pilot.get("id", ""))
+	var lines := PackedStringArray()
+	for sid in map.systems.keys():
+		var sys: Dictionary = map.systems[sid]
+		var cells: Array = sys.get("cells", [])
+		for c in cells:
+			if typeof(c) != TYPE_DICTIONARY:
+				continue
+			if int(c.get("kind", -1)) != BoardTypes.CellKind.RESOURCE:
+				continue
+			if str(c.get("assigned_pilot_id", "")) != pid:
+				continue
+			lines.append("%s 资源%d" % [str(sys.get("name", sid)), int(c.get("index", 0)) + 1])
+	var body := Label.new()
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.text = "\n".join(lines) if not lines.is_empty() else "无"
+	_apply_ui_font(body)
+	box.add_child(body)
+	return box
 
 func _set_pilot_resource_count(p: Dictionary, target: int) -> void:
 	BoardResourceAssign.set_target_count(map, p, target, rng, admin)
@@ -13557,6 +13755,9 @@ func _mp_apply_host_tables() -> void:
 			var mid := str(row.get("id", ""))
 			if mid == "":
 				continue
+			var pack = load("res://game/board/pilots/custom_member_pack.gd")
+			if pack != null and (str(row.get("portrait_b64", "")) != "" or str(row.get("name_media_b64", "")) != "" or str(row.get("bio_media_b64", "")) != ""):
+				pack.apply_remote_media(row)
 			data.members[mid] = row
 			if member_script != null:
 				var eq: Dictionary = member_script.crew_equipment(row)
@@ -13596,6 +13797,11 @@ func _mp_before_capture() -> Dictionary:
 func _mp_after_capture(saved: Dictionary) -> void:
 	if _mp != null:
 		_mp.after_capture(saved)
+
+
+func _mp_on_fit(uid: String, kind: String, on: bool) -> void:
+	if _mp != null:
+		_mp.on_fit(uid, kind, on)
 
 
 func _mp_on_path(u: Dictionary, to_sys: String, to_cell: int) -> void:

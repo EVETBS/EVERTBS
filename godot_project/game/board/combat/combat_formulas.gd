@@ -71,7 +71,7 @@ static func apply_layer_damage(
 		var base_f := 1.0 - clampf(float(resist), 0.0, 100.0) / 100.0
 		var arm_f := 1.0 - clampf(float(resist + armor_resist_add), 0.0, 100.0) / 100.0
 		if base_f > 0.0001:
-			var raw_left := rem / base_f
+			var raw_left: float = float(rem) / base_f
 			var armor_budget := raw_left * arm_f
 			da = minf(armor, armor_budget)
 			armor -= da

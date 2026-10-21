@@ -151,9 +151,19 @@ func _build() -> void:
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 8)
 	left_box.add_child(grid)
+	var custom_members: Array = []
+	var builtin_members: Array = []
+	var builtin_ids := MemberTableScr.builtin_ids()
 	for member in MemberTableScr.load_merged():
 		if typeof(member) != TYPE_DICTIONARY:
 			continue
+		if builtin_ids.has(str(member.get("id", ""))):
+			builtin_members.append(member)
+		else:
+			custom_members.append(member)
+	for member in custom_members:
+		grid.add_child(_member_card(member))
+	for member in builtin_members:
 		grid.add_child(_member_card(member))
 	left_box.add_child(_section_label("舰船"))
 	var ship_grid := GridContainer.new()
@@ -314,52 +324,93 @@ func _deputies() -> Array:
 	]
 
 
-func _deputy_card(spec: Dictionary) -> Button:
+func _fit_card_font(text: String) -> int:
+	var longest := 0
+	for line in text.split("\n"):
+		longest = maxi(longest, line.length())
+	if longest <= 6:
+		return 16
+	if longest <= 10:
+		return 13
+	if longest <= 16:
+		return 11
+	return 9
+
+
+func _portrait_card(text: String, tex: Texture2D, min_size: Vector2, icon_size: Vector2) -> Button:
 	var b := Button.new()
-	b.text = str(spec.get("name", ""))
-	b.custom_minimum_size = Vector2(160, 72)
-	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.text = ""
+	b.clip_contents = true
+	b.custom_minimum_size = min_size
+	b.add_theme_stylebox_override("normal", _style(PANEL_BG, PANEL_BORDER))
+	var row := HBoxContainer.new()
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	row.offset_left = 6.0
+	row.offset_top = 4.0
+	row.offset_right = -6.0
+	row.offset_bottom = -4.0
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 6)
+	b.add_child(row)
+	var icon := TextureRect.new()
+	icon.custom_minimum_size = icon_size
+	icon.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.texture = tex
+	row.add_child(icon)
+	var lab := Label.new()
+	lab.text = text
+	lab.clip_text = true
+	lab.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lab.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lab.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lab.add_theme_font_size_override("font_size", _fit_card_font(text))
+	lab.add_theme_color_override("font_color", Color.WHITE)
+	row.add_child(lab)
+	return b
+
+
+func _deputy_card(spec: Dictionary) -> Button:
 	var face_path := str(spec.get("face", ""))
 	var tex := load(face_path) as Texture2D
 	if tex == null and FileAccess.file_exists(face_path):
 		var img := Image.load_from_file(ProjectSettings.globalize_path(face_path))
 		if img:
 			tex = ImageTexture.create_from_image(img)
-	if tex != null:
-		b.icon = tex
-		b.expand_icon = true
-	b.add_theme_stylebox_override("normal", _style(PANEL_BG, PANEL_BORDER))
+	var b := _portrait_card(str(spec.get("name", "")), tex, Vector2(160, 72), Vector2(48, 48))
 	b.pressed.connect(_show_deputy.bind(spec))
 	return b
 
 
 func _member_card(member: Dictionary) -> Button:
-	var b := Button.new()
-	b.text = str(member.get("name", member.get("id", "")))
-	b.custom_minimum_size = Vector2(120, 64)
 	var tex := MemberTableScr.load_portrait(
 		str(member.get("portrait", "")),
 		PackedStringArray([str(member.get("id", ""))])
 	)
-	if tex != null:
-		b.icon = tex
-		b.expand_icon = true
-	b.add_theme_stylebox_override("normal", _style(PANEL_BG, PANEL_BORDER))
+	var b := _portrait_card(
+		str(member.get("name", member.get("id", ""))),
+		tex,
+		Vector2(150, 64),
+		Vector2(40, 40)
+	)
 	b.pressed.connect(_show_member.bind(member))
 	return b
 
 
 func _ship_card(ship: Dictionary) -> Button:
-	var b := Button.new()
 	var ton := str(ship.get("tonnage", ""))
-	b.text = "%s\n%s" % [str(ship.get("name", ship.get("id", ""))), str(TON_LABEL.get(ton, ton))]
-	b.custom_minimum_size = Vector2(150, 72)
-	b.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var tex := _load_res_tex(str(ship.get("portrait", "")))
-	if tex != null:
-		b.icon = tex
-		b.expand_icon = true
-	b.add_theme_stylebox_override("normal", _style(PANEL_BG, PANEL_BORDER))
+	var b := _portrait_card(
+		"%s\n%s" % [str(ship.get("name", ship.get("id", ""))), str(TON_LABEL.get(ton, ton))],
+		tex,
+		Vector2(180, 72),
+		Vector2(48, 48)
+	)
 	b.pressed.connect(_show_ship.bind(ship))
 	return b
 
@@ -434,15 +485,32 @@ func _show_fleet_hover(btn: Button, fleet_name: String) -> void:
 	_hover.visible = true
 
 
+func _add_member_media(member: Dictionary, key: String) -> void:
+	var path := str(member.get(key, "")).strip_edges()
+	if path == "":
+		return
+	var tex := MemberTableScr.load_portrait(path)
+	if tex == null:
+		return
+	var rect := TextureRect.new()
+	rect.texture = tex
+	rect.custom_minimum_size = Vector2(220, 120)
+	rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_detail.add_child(rect)
+
+
 func _show_member(member: Dictionary) -> void:
 	_hide_ship_preview()
 	_clear_detail()
 	_detail.add_child(_big_label(str(member.get("name", ""))))
+	_add_member_media(member, "name_media")
 	var bio := Label.new()
 	bio.text = str(member.get("bio", ""))
 	bio.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	bio.add_theme_color_override("font_color", Color.WHITE)
 	_detail.add_child(bio)
+	_add_member_media(member, "bio_media")
 	var rank := Label.new()
 	rank.text = "等级 %s" % str(member.get("rank", ""))
 	rank.add_theme_color_override("font_color", Color.WHITE)

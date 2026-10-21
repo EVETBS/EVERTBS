@@ -112,7 +112,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000001"
     },
     {
       "id": "p1_chen",
@@ -120,7 +121,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000002"
     },
     {
       "id": "p1_zhou",
@@ -128,7 +130,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000003"
     },
     {
       "id": "p1_zhao",
@@ -136,7 +139,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000004"
     },
     {
       "id": "p1_su",
@@ -144,7 +148,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000005"
     },
     {
       "id": "p1_gu",
@@ -152,7 +157,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000006"
     },
     {
       "id": "p2_yuan",
@@ -160,7 +166,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000007"
     },
     {
       "id": "p2_shen",
@@ -168,7 +175,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000008"
     },
     {
       "id": "p2_han",
@@ -176,7 +184,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000009"
     },
     {
       "id": "p2_pei",
@@ -184,7 +193,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000010"
     },
     {
       "id": "p2_tang",
@@ -192,7 +202,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000011"
     },
     {
       "id": "p2_meng",
@@ -200,7 +211,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000012"
     },
     {
       "id": "p1_wen",
@@ -208,7 +220,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "jmh_sitexiusi",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000013"
     },
     {
       "id": "p1_qi",
@@ -216,7 +229,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "ss_youling",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000014"
     },
     {
       "id": "p1_feng",
@@ -224,7 +238,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "mmte_longjuanfeng",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000015"
     },
     {
       "id": "p2_lu",
@@ -232,7 +247,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "jmh_sitexiusi",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000016"
     },
     {
       "id": "p2_bai",
@@ -240,7 +256,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "ss_youling",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000017"
     },
     {
       "id": "p2_he",
@@ -248,7 +265,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "mmte_longjuanfeng",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000018"
     },
     {
       "id": "p1_jiang",
@@ -256,7 +274,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000019"
     },
     {
       "id": "p1_linshuo",
@@ -264,7 +283,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000020"
     },
     {
       "id": "p1_zhouwan",
@@ -272,7 +292,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000021"
     },
     {
       "id": "p1_chencheng",
@@ -280,7 +301,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000022"
     },
     {
       "id": "p1_zhaoqiao",
@@ -288,7 +310,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000023"
     },
     {
       "id": "p1_sumo",
@@ -296,7 +319,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000024"
     },
     {
       "id": "p1_gulan",
@@ -304,7 +328,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "jmh_sitexiusi",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000025"
     },
     {
       "id": "p1_wendu",
@@ -312,7 +337,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "ss_youling",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000026"
     },
     {
       "id": "p1_qiyu",
@@ -320,7 +346,8 @@
       "faction": 1,
       "home": "soular",
       "ship": "mmte_longjuanfeng",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000027"
     },
     {
       "id": "p2_shenzhao",
@@ -328,7 +355,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000028"
     },
     {
       "id": "p2_hanning",
@@ -336,7 +364,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000029"
     },
     {
       "id": "p2_peigui",
@@ -344,7 +373,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000030"
     },
     {
       "id": "p2_tangchuan",
@@ -352,7 +382,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000031"
     },
     {
       "id": "p2_mengyan",
@@ -360,7 +391,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000032"
     },
     {
       "id": "p2_lushuang",
@@ -368,7 +400,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000033"
     },
     {
       "id": "p2_baifei",
@@ -376,7 +409,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "jmh_sitexiusi",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000034"
     },
     {
       "id": "p2_heshe",
@@ -384,7 +418,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "ss_youling",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000035"
     },
     {
       "id": "p2_yuanshuo",
@@ -392,7 +427,8 @@
       "faction": 2,
       "home": "luna",
       "ship": "mmte_longjuanfeng",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000036"
     },
     {
       "id": "p3_jichuan",
@@ -400,7 +436,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000037"
     },
     {
       "id": "p3_fangyue",
@@ -408,7 +445,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000038"
     },
     {
       "id": "p3_shenzhou",
@@ -416,7 +454,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000039"
     },
     {
       "id": "p3_weilang",
@@ -424,7 +463,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000040"
     },
     {
       "id": "p3_chengwan",
@@ -432,7 +472,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000041"
     },
     {
       "id": "p3_yecheng",
@@ -440,7 +481,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000042"
     },
     {
       "id": "p3_songqiao",
@@ -448,7 +490,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "jmh_sitexiusi",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000043"
     },
     {
       "id": "p3_hanmo",
@@ -456,7 +499,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "ss_youling",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000044"
     },
     {
       "id": "p3_luolan",
@@ -464,7 +508,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "mmte_longjuanfeng",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000045"
     },
     {
       "id": "p3_qindu",
@@ -472,7 +517,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000046"
     },
     {
       "id": "p3_weiyu",
@@ -480,7 +526,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000047"
     },
     {
       "id": "p3_xuheng",
@@ -488,7 +535,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000048"
     },
     {
       "id": "p3_caoshuo",
@@ -496,7 +544,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000049"
     },
     {
       "id": "p3_xiewan",
@@ -504,7 +553,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "jdl_haiyan",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000050"
     },
     {
       "id": "p3_pancheng",
@@ -512,7 +562,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "gila_cc2",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000051"
     },
     {
       "id": "p3_dingqiao",
@@ -520,7 +571,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "jmh_sitexiusi",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000052"
     },
     {
       "id": "p3_fengmo",
@@ -528,7 +580,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "ss_youling",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000053"
     },
     {
       "id": "p3_cuilan",
@@ -536,7 +589,8 @@
       "faction": 3,
       "home": "das_gate",
       "ship": "mmte_longjuanfeng",
-      "cell_kind": "station"
+      "cell_kind": "station",
+      "member_id": "10000054"
     }
   ]
 }

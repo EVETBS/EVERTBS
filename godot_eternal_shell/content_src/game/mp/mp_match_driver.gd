@@ -14,6 +14,9 @@ var _shift := ""
 var _hot_acc := 0.0
 var _full_acc := 0.0
 var _cold_acc: Dictionary = {}
+var _cold_phased: Dictionary = {}
+var _sim_ms := 0.0
+var _global_acc := 0.0
 var _contact_acc := 0.0
 var _zone_time := 0.0
 var _over_budget := 0
@@ -68,6 +71,8 @@ func attach(host: Node) -> void:
 		net.peers_changed.connect(_on_peers_changed)
 	if not net.diplo_offer_received.is_connected(_on_diplo_offer):
 		net.diplo_offer_received.connect(_on_diplo_offer)
+	if not net.fit_received.is_connected(_on_fit):
+		net.fit_received.connect(_on_fit)
 	if not net.host_lost.is_connected(_on_host_lost):
 		net.host_lost.connect(_on_host_lost)
 	_apply_saved_progress()
@@ -219,6 +224,7 @@ func tick(delta: float) -> void:
 		_full_acc = 0.0
 		_publish(true, true)
 	_publish_cold(delta)
+	_publish_globals(delta)
 	_lerp_remote(delta)
 	var me := _me()
 	var load_ms := 0.0
@@ -226,13 +232,28 @@ func tick(delta: float) -> void:
 		var zid := str((z_v as Dictionary).get("id", ""))
 		if int(assign.get("primary", {}).get(zid, 0)) == me:
 			load_ms += float((z_v as Dictionary).get("cost", 1.0))
-	_zone_time = float(Time.get_ticks_usec() - t0) / 1000.0
-	net.note_zone_ms(_zone_time)
+	_zone_time = _sim_ms
+	net.note_zone_ms(_sim_ms)
 	var share := _my_share()
-	if share > 0.0 and _zone_time > share * 1000.0:
+	if share > 0.0 and _sim_ms > share * 1000.0:
 		_over_budget += 1
 	else:
 		_over_budget = 0
+
+
+func note_sim_ms(ms: float) -> void:
+	_sim_ms = ms
+
+
+func on_fit(unit_id: String, kind: String, on: bool) -> void:
+	if not active() or _applying:
+		return
+	var u: Dictionary = board._unit_by_id(unit_id)
+	if u.is_empty():
+		return
+	var zid := str(zone_of.get(str(u.get("sys", "")), ""))
+	var owner := int(assign.get("primary", {}).get(zid, 0))
+	net.send_fit(unit_id, kind, on, owner)
 
 
 func on_path(u: Dictionary, to_sys: String, to_cell: int) -> void:
@@ -331,11 +352,11 @@ func start_audit(target_peer: int, target_nick: String) -> void:
 
 
 func audit_text() -> String:
-	if _audit_peer == 0:
-		return ""
-	if Time.get_ticks_msec() < _audit_until:
+	if _audit_peer != 0 and Time.get_ticks_msec() < _audit_until:
 		return "核查中"
-	return "核对 %d 条，一致 %d 条" % [_audit_checked, _audit_matched]
+	if _audit_checked > 0:
+		return "核对 %d 条，一致 %d 条" % [_audit_checked, _audit_matched]
+	return ""
 
 
 func _slice_for(peer_id: int) -> Dictionary:
@@ -431,8 +452,8 @@ func _on_audit_sample(rows: Array) -> void:
 			"pos": [pos.x, pos.y, pos.z],
 		})
 	var cmp: Dictionary = MpZoneSched.compare_rows(local, rows, 4.0)
-	_audit_checked = int(cmp.get("checked", 0))
-	_audit_matched = int(cmp.get("matched", 0))
+	_audit_checked += int(cmp.get("checked", 0))
+	_audit_matched += int(cmp.get("matched", 0))
 
 
 func _publish(hot_only: bool, full: bool) -> void:
@@ -464,10 +485,12 @@ func _publish_cold(delta: float) -> void:
 		var phase := MpZoneSched.cold_phase_ms(zid)
 		var acc := float(_cold_acc.get(zid, 0.0)) + delta
 		_cold_acc[zid] = acc
-		var gate := 1.0 + float(phase) / 1000.0
+		var phased := bool(_cold_phased.get(zid, false))
+		var gate := 1.0 if phased else 1.0 + float(phase) / 1000.0
 		if acc < gate:
 			continue
 		_cold_acc[zid] = acc - gate
+		_cold_phased[zid] = true
 		if now - int(_last_owner_ms.get(zid, 0)) < 400 and not _is_primary(zid):
 			continue
 		net.set_assignment(assign)
@@ -512,6 +535,10 @@ func _packet(zone: Dictionary, with_arcs: bool, with_kills: bool = false) -> Dic
 		var fac := int(u.get("faction", 0))
 		if bool(u.get("alive", false)) and not (presence[sid]["facs"] as Array).has(fac):
 			(presence[sid]["facs"] as Array).append(fac)
+		#（本机模拟星系写出存活舰数）26.10.22 01:52 s
+		if bool(u.get("alive", false)):
+			presence[sid]["ships"] = int(presence[sid].get("ships", 0)) + 1
+		#（本机模拟星系写出存活舰数）26.10.22 01:52 e
 		var pos: Vector3 = u.get("pos", Vector3.ZERO)
 		var inst_v: Variant = u.get("inst", {})
 		var inst: Dictionary = inst_v if typeof(inst_v) == TYPE_DICTIONARY else {}
@@ -536,6 +563,16 @@ func _packet(zone: Dictionary, with_arcs: bool, with_kills: bool = false) -> Dic
 			"ship_id": str(u.get("ship_id", "")),
 			"pilot_id": str(u.get("pilot_id", "")),
 			"garrison": bool(u.get("garrison", false)),
+			"cap": float(inst.get("cap", 0.0)),
+			"max_cap": float(inst.get("max_cap", 0.0)),
+			"step_t": float(u.get("step_t", 0.0)),
+			"weapon_cd": _cd_list(u.get("weapons", [])),
+			"repair_cd": _cd_list(u.get("self_rep", [])),
+			"path": _path_blob(u.get("path", [])),
+			"skirmish_left": float(u.get("skirmish_left", 0.0)),
+			"skirmish_speed": float(u.get("skirmish_speed", 0.0)),
+			"skirmish_prep": float(u.get("skirmish_prep", 0.0)),
+			"bursts": _burst_blob(u.get("bursts", [])),
 		})
 	for sid_v in want.keys():
 		var sid_s := str(sid_v)
@@ -547,6 +584,8 @@ func _packet(zone: Dictionary, with_arcs: bool, with_kills: bool = false) -> Dic
 				if typeof(c_v) == TYPE_DICTIONARY:
 					owners.append(int((c_v as Dictionary).get("owner", 0)))
 		presence[sid_s]["owners"] = owners
+		if not presence[sid_s].has("ships"):
+			presence[sid_s]["ships"] = 0
 	var kills: Array = []
 	if with_kills:
 		kills = board._mp_take_kills(want)
@@ -567,17 +606,99 @@ func _packet(zone: Dictionary, with_arcs: bool, with_kills: bool = false) -> Dic
 		"arcs": arcs,
 		"kills": kills,
 		"vision": _all_faction_vision(),
-		"sim_clock": float(board._sim_clock) if owns_global("clock") else null,
-		"diplomacy": board.data.diplomacy if owns_global("diplo") and board.data != null else null,
 	}
-	if with_kills and owns_global("victory"):
+	return pkt
+
+
+func _cd_list(rows: Variant) -> Array:
+	var out: Array = []
+	if typeof(rows) != TYPE_ARRAY:
+		return out
+	for row_v in rows:
+		if typeof(row_v) != TYPE_DICTIONARY:
+			out.append(0.0)
+		else:
+			out.append(float((row_v as Dictionary).get("cd", 0.0)))
+	return out
+
+
+func _path_blob(path: Variant) -> Array:
+	var out: Array = []
+	if typeof(path) != TYPE_ARRAY:
+		return out
+	for step_v in path:
+		if typeof(step_v) != TYPE_DICTIONARY:
+			continue
+		var step: Dictionary = step_v
+		var step_out := {
+			"sys": str(step.get("sys", "")),
+			"from": int(step.get("from", 0)),
+			"to": int(step.get("to", 0)),
+			"kind": str(step.get("kind", "")),
+			"duration": float(step.get("duration", 0.0)),
+		}
+		#（跳跃步骤交接保留目的星系）26.10.22 01:52 s
+		if str(step.get("to_sys", "")) != "":
+			step_out["to_sys"] = str(step.get("to_sys", ""))
+		#（跳跃步骤交接保留目的星系）26.10.22 01:52 e
+		out.append(step_out)
+	return out
+
+
+func _burst_blob(rows: Variant) -> Array:
+	var out: Array = []
+	if typeof(rows) != TYPE_ARRAY:
+		return out
+	for row_v in rows:
+		if typeof(row_v) != TYPE_DICTIONARY:
+			continue
+		var b: Dictionary = row_v
+		out.append({
+			"ref": str(b.get("ref", "")),
+			"cd": float(b.get("cd", 0.0)),
+			"remain": float(b.get("remain", 0.0)),
+			"auto_on": bool(b.get("auto_on", true)),
+		})
+	return out
+
+
+func _publish_globals(delta: float) -> void:
+	if not active():
+		return
+	_global_acc += delta
+	if _global_acc < 1.0:
+		return
+	_global_acc = 0.0
+	var pkt := {"zone": "__global__", "owner": _me()}
+	var any := false
+	if _global_live("clock"):
+		pkt["sim_clock"] = float(board._sim_clock)
+		_last_owner_ms["g:clock"] = Time.get_ticks_msec()
+		any = true
+	if _global_live("diplo") and board.data != null:
+		pkt["diplomacy"] = board.data.diplomacy
+		_last_owner_ms["g:diplo"] = Time.get_ticks_msec()
+		any = true
+	if _global_live("victory"):
 		var occupy: Dictionary = {}
 		for fac_v in board.match_stats.keys():
 			var stat_v: Variant = board.match_stats[fac_v]
 			var stat: Dictionary = stat_v if typeof(stat_v) == TYPE_DICTIONARY else {}
 			occupy[str(fac_v)] = float(stat.get("occupy_score", 0.0))
 		pkt["occupy"] = occupy
-	return pkt
+		_last_owner_ms["g:victory"] = Time.get_ticks_msec()
+		any = true
+	if any:
+		net.send_zone(pkt, false)
+
+
+func _global_live(name: String) -> bool:
+	var primary := int(assign.get("globals", {}).get(name, 0))
+	if primary == _me():
+		return true
+	if int(assign.get("secondary", {}).get("g:" + name, 0)) != _me():
+		return false
+	return Time.get_ticks_msec() - int(_last_owner_ms.get("g:" + name, 0)) > 1500
 
 
 func _on_zone(pkt: Dictionary, _reliable: bool) -> void:
@@ -586,6 +707,10 @@ func _on_zone(pkt: Dictionary, _reliable: bool) -> void:
 	_applying = true
 	var zid := str(pkt.get("zone", ""))
 	var sender := int(pkt.get("owner", 0))
+	if zid == "__global__":
+		_apply_globals(pkt, sender)
+		_applying = false
+		return
 	if sender == _me():
 		_applying = false
 		return
@@ -619,6 +744,7 @@ func _on_zone(pkt: Dictionary, _reliable: bool) -> void:
 					_targets[str(u.get("id", ""))] = Vector3(float(pos[0]), float(pos[1]), float(pos[2]))
 			u["alive"] = bool(row.get("alive", true))
 			_write_hull(u, row)
+			_write_combat(u, row)
 		var arcs_v: Variant = pkt.get("arcs", {})
 		if typeof(arcs_v) == TYPE_DICTIONARY and board.map != null:
 			for sid_v in (arcs_v as Dictionary).keys():
@@ -716,6 +842,7 @@ func _recompute(full: bool) -> void:
 		return
 	var owners: Dictionary = {}
 	var facs: Dictionary = {}
+	var ship_counts: Dictionary = {}
 	for sid_v in board.map.systems.keys():
 		var sid := str(sid_v)
 		var remote: Dictionary = _presence_of(sid)
@@ -734,10 +861,16 @@ func _recompute(full: bool) -> void:
 		if not facs.has(sid2):
 			continue
 		if not sim_system(sid2) and net.world_presence.has(sid2):
+			#（远端区用存活舰数算代价）26.10.22 01:52 s
+			var remote_row := _presence_of(sid2)
+			if remote_row.has("ships"):
+				ship_counts[sid2] = int(remote_row.get("ships", 0))
+			#（远端区用存活舰数算代价）26.10.22 01:52 e
 			continue
 		var fac := int((u_v as Dictionary).get("faction", 0))
 		if not (facs[sid2] as Array).has(fac):
 			(facs[sid2] as Array).append(fac)
+		ship_counts[sid2] = int(ship_counts.get(sid2, 0)) + 1
 	var layout: Dictionary = {"systems": []}
 	for sid3_v in board.map.systems.keys():
 		var sid3 := str(sid3_v)
@@ -747,7 +880,7 @@ func _recompute(full: bool) -> void:
 			"links": sys.get("links", []),
 			"cells": sys.get("cells", []),
 		})
-	zones = MpZoneSched.partition(layout, owners, facs)
+	zones = MpZoneSched.partition(layout, owners, facs, ship_counts)
 	zone_of.clear()
 	for z_v in zones:
 		for s_v in (z_v as Dictionary).get("systems", []):
@@ -1058,6 +1191,88 @@ func _pull_assignment() -> void:
 func _presence_of(sid: String) -> Dictionary:
 	var raw: Variant = net.world_presence.get(sid, {})
 	return raw if typeof(raw) == TYPE_DICTIONARY else {}
+
+
+func _note_primary_global(pkt: Dictionary, sender: int) -> void:
+	#（备份先记主节点全局包时间）26.10.22 01:52 s
+	var globals: Dictionary = assign.get("globals", {})
+	if pkt.get("sim_clock", null) != null and sender == int(globals.get("clock", 0)):
+		_last_owner_ms["g:clock"] = Time.get_ticks_msec()
+	if typeof(pkt.get("diplomacy", null)) == TYPE_DICTIONARY and sender == int(globals.get("diplo", 0)):
+		_last_owner_ms["g:diplo"] = Time.get_ticks_msec()
+	if pkt.has("occupy") and sender == int(globals.get("victory", 0)):
+		_last_owner_ms["g:victory"] = Time.get_ticks_msec()
+	#（备份先记主节点全局包时间）26.10.22 01:52 e
+
+
+func _apply_globals(pkt: Dictionary, sender: int) -> void:
+	_note_primary_global(pkt, sender)
+	if pkt.get("sim_clock", null) != null and _global_from(sender, "clock") and not owns_global("clock"):
+		board._sim_clock = float(pkt.get("sim_clock", board._sim_clock))
+	var dip_v: Variant = pkt.get("diplomacy", null)
+	if typeof(dip_v) == TYPE_DICTIONARY and board.data != null and _global_from(sender, "diplo") and not owns_global("diplo"):
+		_last_owner_ms["g:diplo"] = Time.get_ticks_msec()
+		board.data.diplomacy = dip_v
+	if not owns_global("victory") and _global_from(sender, "victory"):
+		_last_owner_ms["g:victory"] = Time.get_ticks_msec()
+		var occ_v: Variant = pkt.get("occupy", null)
+		if typeof(occ_v) == TYPE_DICTIONARY:
+			for fac_v in (occ_v as Dictionary).keys():
+				board._stat_fac(int(fac_v))["occupy_score"] = float((occ_v as Dictionary)[fac_v])
+
+
+func _global_from(sender: int, name: String) -> bool:
+	return sender == int(assign.get("globals", {}).get(name, 0)) or sender == int(assign.get("secondary", {}).get("g:" + name, 0))
+
+
+func _write_combat(u: Dictionary, row: Dictionary) -> void:
+	var inst_v: Variant = u.get("inst", {})
+	var inst: Dictionary = inst_v if typeof(inst_v) == TYPE_DICTIONARY else {}
+	if row.has("cap"):
+		inst["cap"] = float(row.get("cap", 0.0))
+	if row.has("max_cap"):
+		inst["max_cap"] = float(row.get("max_cap", inst.get("max_cap", 0.0)))
+	if not inst.is_empty():
+		u["inst"] = inst
+	if row.has("phase"):
+		u["phase"] = int(row.get("phase", u.get("phase", 0)))
+	if row.has("step_t"):
+		u["step_t"] = float(row.get("step_t", 0.0))
+	_write_cds(u.get("weapons", []), row.get("weapon_cd", []))
+	_write_cds(u.get("self_rep", []), row.get("repair_cd", []))
+	if row.has("path") and typeof(row.get("path", [])) == TYPE_ARRAY:
+		u["path"] = (row.get("path", []) as Array).duplicate(true)
+	if row.has("skirmish_left"):
+		u["skirmish_left"] = float(row.get("skirmish_left", 0.0))
+		u["skirmish_speed"] = float(row.get("skirmish_speed", 0.0))
+		u["skirmish_prep"] = float(row.get("skirmish_prep", 0.0))
+	var bursts_v: Variant = row.get("bursts", [])
+	if typeof(bursts_v) == TYPE_ARRAY:
+		var local: Array = u.get("bursts", [])
+		for i in mini(local.size(), (bursts_v as Array).size()):
+			var src: Dictionary = (bursts_v as Array)[i]
+			if typeof(src) != TYPE_DICTIONARY or typeof(local[i]) != TYPE_DICTIONARY:
+				continue
+			local[i]["cd"] = float(src.get("cd", 0.0))
+			local[i]["remain"] = float(src.get("remain", 0.0))
+			local[i]["auto_on"] = bool(src.get("auto_on", true))
+
+
+func _write_cds(local: Variant, cds: Variant) -> void:
+	if typeof(local) != TYPE_ARRAY or typeof(cds) != TYPE_ARRAY:
+		return
+	for i in mini((local as Array).size(), (cds as Array).size()):
+		if typeof((local as Array)[i]) == TYPE_DICTIONARY:
+			(local as Array)[i]["cd"] = float((cds as Array)[i])
+
+
+func _on_fit(unit_id: String, kind: String, on: bool) -> void:
+	var u: Dictionary = board._unit_by_id(unit_id)
+	if u.is_empty() or not sim_unit(u):
+		return
+	_applying = true
+	board.apply_fit_switch(u, kind, on, false)
+	_applying = false
 
 
 func _write_hull(u: Dictionary, row: Dictionary) -> void:

@@ -20,6 +20,10 @@ static func get_sfx() -> float:
 static func get_full_plates() -> bool:
 	return bool(load_cfg().get_value(SECTION, "battle_full_plates", false))
 
+## Sim slowdown when many units are fighting. Default off.
+static func get_time_dilation() -> bool:
+	return bool(load_cfg().get_value(SECTION, "time_dilation", false))
+
 static func get_deputy_id() -> String:
 	return str(load_cfg().get_value(SECTION, "deputy_id", "yang"))
 
@@ -65,6 +69,11 @@ static func set_sfx(v: float) -> void:
 static func set_full_plates(on: bool) -> void:
 	var cf := load_cfg()
 	cf.set_value(SECTION, "battle_full_plates", on)
+	cf.save(PATH)
+
+static func set_time_dilation(on: bool) -> void:
+	var cf := load_cfg()
+	cf.set_value(SECTION, "time_dilation", on)
 	cf.save(PATH)
 
 static func set_deputy_id(id: String) -> void:

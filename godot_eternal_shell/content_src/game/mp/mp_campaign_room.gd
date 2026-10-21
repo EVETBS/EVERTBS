@@ -423,7 +423,7 @@ func _on_ready(on: bool) -> void:
 		return
 	if on:
 		var pilots: Array = net.build_local_roster(int(net.room.get("scale", 20)))
-		net.submit_intent("roster", {"pilots": pilots})
+		net.submit_intent("roster", {"pilots": pilots, "crew": net.crew_for_roster(pilots)})
 	net.submit_intent("ready", {"on": on})
 
 

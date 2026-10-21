@@ -13,13 +13,12 @@ const CONTENT_RUNTIME_DIR := "user://content_runtime"
 const BOOTSTRAP_OVERRIDE_FILE := "user://bootstrap_override.json"
 
 ## HF bucket resolve (authoritative). Order = try order.
-## TODO: replace when EVETBS HF bucket is created (do not push without confirmation).
 const DEFAULT_BASE_URLS: PackedStringArray = [
-	"https://huggingface.co/buckets/liketocode789/evetbs/resolve/",
+	"https://huggingface.co/buckets/liketocode789/EVERTBS/resolve/",
 ]
 
 const GITHUB_POINTER_VERSION_URL := (
-	"https://raw.githubusercontent.com/EVETBS/evetbs-online-update/main/version.json"
+	"https://evetbs.github.io/EVERTBS-online-update/version.json"
 )
 
 const DEFAULT_ENTRY := "res://game/main_menu.tscn"

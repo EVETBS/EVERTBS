@@ -15,6 +15,30 @@ func _ready() -> void:
 		var f = FileAccess.open("res://assets/vfx/turret_fx/manifest.json", FileAccess.READ)
 		_manifest = JSON.parse_string(f.get_as_text())
 
+func play_tips(
+	fx_kind: String,
+	from: Vector3,
+	to: Vector3,
+	thick_wu: float = 0.0,
+	width_mul: float = 1.0
+) -> void:
+	## Sender flash now, receiver flash 0.1s later. Mid-shot is the art pack.
+	var entry: Dictionary = _manifest.get(fx_kind, _manifest.get("rail", {}))
+	if entry.is_empty():
+		entry = {"tex_near": "res://assets/vfx/turret_fx/rail/hybridblastfx_01a.png"}
+	var dist = from.distance_to(to)
+	var tex_path = str(entry.get("tex_far" if dist > 8.0 else "tex_near", entry.get("tex_shared", "")))
+	var tex = _tex(tex_path)
+	if tex == null:
+		return
+	var thick := DEFAULT_THICK
+	if thick_wu > 0.0:
+		thick = thick_wu
+	var start := from + Vector3(0, 0.35, 0)
+	var aim := to + Vector3(0, 0.35, 0)
+	_flash_at(start, tex, dist, thick, width_mul, 0.0)
+	_flash_at(aim, tex, dist, thick, width_mul, TIP_DELAY_S)
+
 func play(
 	fx_kind: String,
 	from: Vector3,

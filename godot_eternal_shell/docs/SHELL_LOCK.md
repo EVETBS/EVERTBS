@@ -8,7 +8,7 @@
 | Binary | `H:\game\game_dev\EVERTBS\tools\godot\Godot_v4.7.1-stable_win64.exe`（junction → eveautochess-dev tools） |
 | Shell project | `godot_eternal_shell/shell` |
 | Content project | `godot_project/`（玩法）· `godot_eternal_shell/content_src`（壳烟测） |
-| App name | `eve战棋` |
+| App name | `EVE模拟器：军团` |
 | Android package | `com.evertbs.game` |
 | `shellCompatibilityId` | `evertbs-shell-v1` |
 | Protocol | `1` |
@@ -24,7 +24,7 @@
 
 ## What never goes in the shell
 
-eve战棋星图小队战玩法场景、美术、数值表 — 留在热更 PCK / `godot_project`。
+EVE模拟器：军团的星图小队战玩法场景、美术、数值表 — 留在热更 PCK / `godot_project`。
 
 **Must stay in shell**: Boot / UpdateClient，以及 Autoload（`AdminBus` / `DataStore` / `GameSession`）。
 

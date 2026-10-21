@@ -2,6 +2,7 @@ extends Window
 ## Full-screen balance editor. Pauses a live match and restores the previous pause on close.
 
 const DevBalance := preload("res://game/board/dev_balance.gd")
+const EquipIconScr := preload("res://game/board/equip_icon.gd")
 const SHIP_ART := preload("res://art_modules/eve_ship_art/scripts/eve_ship_art_module.gd")
 const TAB_NAMES := ["舰船血量", "舰船攻击力", "模型比例", "隐藏装备", "装备数值", "对局控制", "驾驶员增益"]
 const SCALE_SPIN_W := 0.7
@@ -145,8 +146,14 @@ func _fill_left() -> void:
 		for s in _ships:
 			_left.add_item("%s" % str(s.get("name", s.get("id", ""))))
 	elif _tab == 4:
+		_left.fixed_icon_size = Vector2(28, 28)
+		var ei := 0
 		for e in _equips:
 			_left.add_item("%s" % str(e.get("name", e.get("id", ""))))
+			_left.set_item_icon(ei, EquipIconScr.for_row(e))
+			ei += 1
+	if _tab != 4:
+		_left.fixed_icon_size = Vector2.ZERO
 	if _left.item_count > 0:
 		_left.select(0)
 

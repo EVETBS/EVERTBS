@@ -1,6 +1,6 @@
 extends Control
 
-const APP_TITLE: String = "eve战棋"
+const APP_TITLE: String = "EVE模拟器：军团"
 
 @onready var _title: Label = $Center/VBox/Title
 @onready var _status: Label = $Center/VBox/Status

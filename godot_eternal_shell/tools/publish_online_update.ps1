@@ -7,10 +7,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
-$HfStage = "H:\game_dev\eveautochess-hf"
-$Pointer = "H:\game_dev\eveautochess-online-update"
+$HfStage = Join-Path $Root "hf_stage"
+$Pointer = "H:\game_dev\EVERTBS-online-update"
 $Dist = Join-Path $Root "content_dist"
-$BaseUrl = "https://huggingface.co/buckets/liketocode789/eveautochess/resolve/"
+$BaseUrl = "https://huggingface.co/buckets/liketocode789/EVERTBS/resolve/"
 
 function Get-Sha256Hex([string]$Path) {
   $hash = Get-FileHash -Path $Path -Algorithm SHA256
@@ -77,9 +77,9 @@ $versionObj = [ordered]@{
   version               = $Version
   publishedAt           = $publishedAt
   baseUrl               = $BaseUrl
-  entry                 = "res://game/main.tscn"
-  shellCompatibilityId  = "eveac-shell-v1"
-  notes                 = "Snake demo content pack from godot_eternal_shell"
+  entry                 = "res://game/main_menu.tscn"
+  shellCompatibilityId  = "evertbs-shell-v1"
+  notes                 = "EVE模拟器：军团 content pack"
 }
 
 # Write content_dist
@@ -87,7 +87,7 @@ New-Item -ItemType Directory -Path (Join-Path $Dist "packs") -Force | Out-Null
 $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $Dist "manifest.json") -Encoding utf8
 $versionObj | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $Dist "version.json") -Encoding utf8
 
-# Stage into eveautochess-hf
+# Stage beside the shell. Do not write the EVE自走棋 bucket tree.
 New-Item -ItemType Directory -Path (Join-Path $HfStage "packs") -Force | Out-Null
 Copy-Item $pck (Join-Path $HfStage "packs\game.pck") -Force
 Copy-Item (Join-Path $Dist "manifest.json") (Join-Path $HfStage "manifest.json") -Force
@@ -100,10 +100,16 @@ Copy-Item $pck (Join-Path $pub "packs\game.pck") -Force
 Copy-Item (Join-Path $Dist "manifest.json") (Join-Path $pub "manifest.json") -Force
 Copy-Item (Join-Path $Dist "version.json") (Join-Path $pub "version.json") -Force
 
-# Sync pointer repo files locally (no push unless asked)
+# Pointer repo stays discovery-only. Do not copy manifest or packs.
 if (Test-Path $Pointer) {
-  Copy-Item (Join-Path $Dist "version.json") (Join-Path $Pointer "version.json") -Force
-  Copy-Item (Join-Path $Dist "manifest.json") (Join-Path $Pointer "manifest.json") -Force
+  $pointerVer = [ordered]@{
+    protocol             = 1
+    pointerOnly          = $true
+    baseUrl              = $BaseUrl
+    shellCompatibilityId = "evertbs-shell-v1"
+    notes                = "静态指针。权威 version.json 在 HF 桶。"
+  }
+  $pointerVer | ConvertTo-Json -Depth 4 | Set-Content -Path (Join-Path $Pointer "version.json") -Encoding utf8
 }
 
 Write-Host "Staged locally:"
@@ -111,8 +117,8 @@ Write-Host "  $HfStage"
 Write-Host "  $Dist"
 
 if ($Push) {
-  Write-Host "Pushing HF bucket liketocode789/eveautochess ..."
-  hf buckets sync $pub "hf://buckets/liketocode789/eveautochess" -v
+  Write-Host "Pushing HF bucket liketocode789/EVERTBS ..."
+  hf buckets sync $pub "hf://buckets/liketocode789/EVERTBS" -v
   Write-Host "HF sync done."
 } else {
   Write-Host "HF NOT pushed (pass -Push only after user confirms)."
@@ -123,7 +129,7 @@ if ($PushGitHub) {
     throw "Pointer repo missing git: $Pointer"
   }
   Push-Location $Pointer
-  git add version.json manifest.json
+  git add version.json
   git status -sb
   git commit -m "sync hotupdate pointer $Version" 
   git push origin main

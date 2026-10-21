@@ -6,6 +6,7 @@ signal closed
 
 const MemberTableScr := preload("res://game/board/pilots/member_table.gd")
 const RosterTemplatesScr := preload("res://game/board/pilots/roster_templates.gd")
+const EquipIconScr := preload("res://game/board/equip_icon.gd")
 
 const PANEL_BG := Color(0.08, 0.1, 0.14, 0.15)
 const PANEL_BORDER := Color(0.7, 0.75, 0.82, 0.55)
@@ -29,7 +30,7 @@ var _status: Label
 func _ready() -> void:
 	_load_data()
 	_build()
-	_select_size(20)
+	_select_size(RosterTemplatesScr.active_size())
 
 
 func _load_data() -> void:
@@ -89,9 +90,7 @@ func _build() -> void:
 	var back := Button.new()
 	back.text = "返回"
 	back.pressed.connect(func() -> void:
-		_persist()
-		closed.emit()
-		queue_free()
+		_remember_and_close()
 	)
 	head.add_child(back)
 	var mode_row := HBoxContainer.new()
@@ -134,7 +133,7 @@ func _select_size(n: int) -> void:
 		_starters[str(sid)] = true
 	for c in get_children():
 		_refresh_size_toggles(c)
-	_rebuild_grid()
+	_sync_grid()
 	_refresh_status()
 
 
@@ -168,11 +167,25 @@ func _refresh_status() -> void:
 
 
 func _display_order() -> PackedStringArray:
-	## 场上且首发，其次场上，其余。同一档保持团员表原序。
+	## 自定义整组在前，内置默认在后。组内：场上且首发，其次场上，其余。同一档保持团员表原序。
+	var custom := PackedStringArray()
+	var builtin := PackedStringArray()
+	var builtin_ids := MemberTableScr.builtin_ids()
+	for mid in _member_order:
+		if builtin_ids.has(mid):
+			builtin.append(mid)
+		else:
+			custom.append(mid)
+	var out := _tier_order(custom)
+	out.append_array(_tier_order(builtin))
+	return out
+
+
+func _tier_order(ids: PackedStringArray) -> PackedStringArray:
 	var starters := PackedStringArray()
 	var fielded := PackedStringArray()
 	var rest := PackedStringArray()
-	for mid in _member_order:
+	for mid in ids:
 		var on := _onfield.has(mid)
 		if on and _starters.has(mid):
 			starters.append(mid)
@@ -184,25 +197,54 @@ func _display_order() -> PackedStringArray:
 	starters.append_array(rest)
 	return starters
 
+
 func _rebuild_grid() -> void:
 	for c in _grid.get_children():
 		c.queue_free()
-	var order := _display_order()
-	var ids: Array = []
-	for mid in order:
+	for mid in _display_order():
 		_grid.add_child(_cell(str(mid)))
-		ids.append(str(mid))
-	DebugSessionLog.append("UI", "member_config_overlay._rebuild_grid", "order", {
-		"control": "团员配置",
-		"order": ids,
-		"runId": "grok-ui",
-	})
+
+
+func _sync_grid() -> void:
+	var order := _display_order()
+	var have: Dictionary = {}
+	for c in _grid.get_children():
+		var key := str(c.name)
+		if key.begins_with("Cell_"):
+			have[key.trim_prefix("Cell_")] = c
+	if have.size() != order.size():
+		_rebuild_grid()
+		return
+	for i in range(order.size()):
+		var mid := str(order[i])
+		var cell: Control = have.get(mid, null)
+		if cell == null:
+			_rebuild_grid()
+			return
+		_apply_cell_state(cell, mid)
+		_grid.move_child(cell, i)
+
+
+func _apply_cell_state(panel: Control, mid: String) -> void:
+	var on := _onfield.has(mid)
+	panel.add_theme_stylebox_override("panel", _style(CELL_BG_ON if on else CELL_BG_OFF, CELL_BORDER, 8))
+	var field_btn := panel.find_child("FieldBtn", true, false) as Button
+	if field_btn:
+		field_btn.set_pressed_no_signal(on)
+		field_btn.text = "场上" if on else "场下"
+	var st_btn := panel.find_child("StarterBtn", true, false) as Button
+	var is_st := _starters.has(mid)
+	if st_btn:
+		st_btn.set_pressed_no_signal(is_st)
+		st_btn.text = "首发" if is_st else "非首发"
+		st_btn.disabled = not on
 
 
 func _cell(mid: String) -> Control:
 	var mem: Dictionary = _members.get(mid, {})
 	var on := _onfield.has(mid)
 	var panel := PanelContainer.new()
+	panel.name = "Cell_%s" % mid
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_theme_stylebox_override("panel", _style(CELL_BG_ON if on else CELL_BG_OFF, CELL_BORDER, 8))
 	var box := VBoxContainer.new()
@@ -222,6 +264,19 @@ func _cell(mid: String) -> Control:
 	name_lab.size_flags_horizontal = Control.SIZE_SHRINK_END
 	name_lab.add_theme_color_override("font_color", Color.WHITE)
 	top.add_child(name_lab)
+	for media_key in ["name_media", "bio_media"]:
+		var media_path := str(mem.get(media_key, "")).strip_edges()
+		if media_path == "":
+			continue
+		var media_tex := MemberTableScr.load_portrait(media_path)
+		if media_tex == null:
+			continue
+		var media := TextureRect.new()
+		media.custom_minimum_size = Vector2(36, 36)
+		media.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		media.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		media.texture = media_tex
+		top.add_child(media)
 	var prefs := MemberTableScr.pref_list(mem)
 	for i in 4:
 		var eid := str(prefs[i]) if i < prefs.size() else ""
@@ -235,6 +290,7 @@ func _cell(mid: String) -> Control:
 		fire.pressed.connect(_ask_dismiss.bind(mid, str(mem.get("name", mid))))
 		top.add_child(fire)
 	var field_btn := Button.new()
+	field_btn.name = "FieldBtn"
 	field_btn.toggle_mode = true
 	field_btn.button_pressed = on
 	field_btn.text = "场上" if on else "场下"
@@ -244,11 +300,12 @@ func _cell(mid: String) -> Control:
 		else:
 			_onfield.erase(mid)
 		_persist()
-		_rebuild_grid()
+		_sync_grid()
 		_refresh_status()
 	)
 	top.add_child(field_btn)
 	var st_btn := Button.new()
+	st_btn.name = "StarterBtn"
 	st_btn.toggle_mode = true
 	var is_st := _starters.has(mid)
 	st_btn.button_pressed = is_st
@@ -259,9 +316,8 @@ func _cell(mid: String) -> Control:
 			_starters[mid] = true
 		else:
 			_starters.erase(mid)
-		st_btn.text = "首发" if v else "非首发"
 		_persist()
-		_rebuild_grid()
+		_sync_grid()
 		_refresh_status()
 	)
 	top.add_child(st_btn)
@@ -330,6 +386,17 @@ func _set_default_ship(member_id: String, ship_id: String) -> void:
 	_status.text = "已保存 %s 默认舰 → %s" % [member_id, ship_id]
 
 
+func _remember_and_close() -> void:
+	_persist()
+	closed.emit()
+	queue_free()
+
+
+func _exit_tree() -> void:
+	## Any close path writes the current size once for the next match.
+	_persist()
+
+
 func _persist() -> void:
 	if _size <= 0:
 		return
@@ -354,9 +421,8 @@ func _pref_button(mid: String, index: int, eid: String) -> Button:
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var path := str(eq.get("icon", ""))
-	if eid != "" and path != "" and ResourceLoader.exists(path):
-		icon.texture = load(path)
+	if eid != "":
+		icon.texture = EquipIconScr.for_row(eq)
 	btn.add_child(icon)
 	var size_s := str(eq.get("size", "")).to_lower()
 	if size_s != "" and not bool(eq.get("implant", false)):

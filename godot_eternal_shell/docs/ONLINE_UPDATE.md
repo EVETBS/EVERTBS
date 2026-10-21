@@ -1,6 +1,6 @@
 # ONLINE_UPDATE — Eternal shell protocol
 
-Aligns with TopDog [`VERSION.md`](../../top_dog_unity/docs/VERSION.md) / [`ONLINE_UPDATE.md`](../../top_dog_unity/docs/ONLINE_UPDATE.md) and pointer [`PROTOCOL.md`](../../eveautochess-online-update/PROTOCOL.md).
+Aligns with TopDog [`VERSION.md`](../../top_dog_unity/docs/VERSION.md) / [`ONLINE_UPDATE.md`](../../top_dog_unity/docs/ONLINE_UPDATE.md) and pointer [`PROTOCOL.md`](../../../EVERTBS-online-update/PROTOCOL.md).
 
 ## Boot（壳 `202608.8.26+`）
 

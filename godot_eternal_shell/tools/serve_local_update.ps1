@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 if (-not $Root) {
-  $Root = "H:\game_dev\eveautochess-hf\_hf_publish_root"
+  $Root = Join-Path (Split-Path -Parent $PSScriptRoot) "hf_stage"
   if (-not (Test-Path (Join-Path $Root "version.json"))) {
     $Root = Join-Path (Split-Path -Parent $PSScriptRoot) "content_dist"
   }

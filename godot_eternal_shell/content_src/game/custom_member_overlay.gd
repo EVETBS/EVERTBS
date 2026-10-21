@@ -9,6 +9,7 @@ const Pack := preload("res://game/board/pilots/custom_member_pack.gd")
 
 var _row: Dictionary = {}
 var _sliders: Dictionary = {}
+var _pct_labs: Dictionary = {}
 var _warn: Label
 var _list: ItemList
 var _editor: Control
@@ -18,6 +19,7 @@ var _broke_once: Dictionary = {}
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	set_process_input(true)
 	var dim := ColorRect.new()
 	dim.color = Color(0.08, 0.1, 0.14, 0.15)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -93,9 +95,22 @@ func _on_pick(idx: int) -> void:
 		_fill_editor()
 
 
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
+			for k in _sliders.keys():
+				(_sliders[k] as HSlider).editable = true
+
+
 func _new_row() -> void:
+	var mid := Pack.alloc_local_id()
+	if mid == "":
+		_warn.text = CustomMemberPack.last_error
+		_warn.modulate.a = 1.0
+		return
 	_row = {
-		"id": Pack.alloc_local_id(),
+		"id": mid,
 		"name": "",
 		"portrait": "",
 		"bio": "",
@@ -112,6 +127,7 @@ func _fill_editor() -> void:
 	for c in _editor.get_children():
 		c.queue_free()
 	_sliders.clear()
+	_pct_labs.clear()
 	_broke_once.clear()
 	_editor.add_child(_labeled("名字", str(_row.get("name", "")), "name"))
 	var hint := Label.new()
@@ -144,8 +160,9 @@ func _fill_editor() -> void:
 		line.add_child(slider)
 		var num := Label.new()
 		num.text = "%d%%" % int(slider.value)
-		slider.value_changed.connect(func(v: float) -> void: num.text = "%d%%" % int(v))
+		slider.value_changed.connect(func(_v: float) -> void: _sync_pct())
 		line.add_child(num)
+		_pct_labs[key] = num
 		_editor.add_child(line)
 		_sliders[key] = slider
 
@@ -169,8 +186,18 @@ func _labeled(title: String, value: String, field: String) -> Control:
 		edit.text = value
 		edit.text_changed.connect(func(t: String) -> void: _row[field] = t)
 		box.add_child(edit)
+	var pic := Button.new()
+	pic.text = "插入图片"
+	pic.pressed.connect(_pick_side.bind(field))
+	box.add_child(pic)
 	_row[field] = value
 	return box
+
+
+func _sync_pct() -> void:
+	for k in _sliders.keys():
+		if _pct_labs.has(k):
+			(_pct_labs[k] as Label).text = "%d%%" % int((_sliders[k] as HSlider).value)
 
 
 func _on_slider(v: float, key: String, slider: HSlider) -> void:
@@ -186,6 +213,8 @@ func _on_slider(v: float, key: String, slider: HSlider) -> void:
 		_broke_once[key] = true
 		var allow := maxf(0.0, 50.0 - others)
 		slider.set_value_no_signal(signf(v) * allow)
+		slider.editable = false
+		_sync_pct()
 		_flash_warn()
 		return
 	var need := absf(v) + others - 50.0
@@ -208,6 +237,7 @@ func _on_slider(v: float, key: String, slider: HSlider) -> void:
 		left -= cut
 	if left > 0.1:
 		slider.set_value_no_signal(signf(v) * maxf(0.0, absf(v) - left))
+	_sync_pct()
 
 
 func _flash_warn() -> void:
@@ -242,10 +272,13 @@ func _close_draft() -> void:
 
 func _confirm() -> void:
 	_capture()
-	Pack.confirm_row(_row)
-	_refresh_list()
-	_warn.text = "已写入团员表"
-	_warn.modulate.a = 1.0
+	var why := Pack.confirm_row(_row)
+	if why != "":
+		_warn.text = why
+		_warn.modulate.a = 1.0
+		return
+	closed.emit()
+	queue_free()
 
 
 func _export() -> void:
@@ -278,8 +311,54 @@ func _pick_portrait() -> void:
 		elif path.ends_with(".webp"):
 			mime = "image/webp"
 		var scaled: Dictionary = Pack.scale_image_bytes(bytes, mime)
-		_row["portrait_b64"] = Marshalls.raw_to_base64(scaled.get("bytes", bytes))
-		_row["portrait_mime"] = str(scaled.get("mime", mime))
+		if str(scaled.get("error", "")) != "":
+			_warn.text = str(scaled.get("error", ""))
+			_warn.modulate.a = 1.0
+			dialog.queue_free()
+			return
+		if str(scaled.get("anim_path", "")) != "":
+			_row["portrait"] = str(scaled.get("anim_path", ""))
+			_row["portrait_mime"] = str(scaled.get("mime", ""))
+			_row.erase("portrait_b64")
+		else:
+			_row["portrait_b64"] = Marshalls.raw_to_base64(scaled.get("bytes", PackedByteArray()))
+			_row["portrait_mime"] = str(scaled.get("mime", mime))
+		dialog.queue_free()
+	)
+	dialog.popup_centered_ratio(0.6)
+
+
+func _pick_side(field: String) -> void:
+	var dialog := FileDialog.new()
+	dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	dialog.filters = PackedStringArray(["*.png,*.jpg,*.jpeg,*.webp,*.gif"])
+	add_child(dialog)
+	dialog.file_selected.connect(func(path: String) -> void:
+		var bytes := FileAccess.get_file_as_bytes(path)
+		var mime := "image/png"
+		if path.ends_with(".gif"):
+			mime = "image/gif"
+		elif path.ends_with(".jpg") or path.ends_with(".jpeg"):
+			mime = "image/jpeg"
+		elif path.ends_with(".webp"):
+			mime = "image/webp"
+		var scaled: Dictionary = Pack.scale_image_bytes(bytes, mime)
+		if str(scaled.get("error", "")) != "":
+			_warn.text = str(scaled.get("error", ""))
+			_warn.modulate.a = 1.0
+			dialog.queue_free()
+			return
+		var b64_key := "name_media_b64" if field == "name" else "bio_media_b64"
+		var mime_key := "name_media_mime" if field == "name" else "bio_media_mime"
+		var path_key := "name_media" if field == "name" else "bio_media"
+		if str(scaled.get("anim_path", "")) != "":
+			_row[path_key] = str(scaled.get("anim_path", ""))
+			_row[mime_key] = str(scaled.get("mime", ""))
+			_row.erase(b64_key)
+		else:
+			_row[b64_key] = Marshalls.raw_to_base64(scaled.get("bytes", PackedByteArray()))
+			_row[mime_key] = str(scaled.get("mime", mime))
 		dialog.queue_free()
 	)
 	dialog.popup_centered_ratio(0.6)

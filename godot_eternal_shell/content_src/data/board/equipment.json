@@ -80,7 +80,8 @@
     "optimal_m": 2000.0,
     "signature_resolution": 40.0,
     "falloff_m": 4730.0,
-    "ref_typeid": 485
+    "ref_typeid": 485,
+    "icon": "res://assets/ui/equipment/pd_small_kinetic.png"
   },
   "pd_medium_thermal": {
     "id": "pd_medium_thermal",
@@ -94,7 +95,8 @@
     "optimal_m": 2000.0,
     "signature_resolution": 40.0,
     "falloff_m": 4000.0,
-    "ref_typeid": 456
+    "ref_typeid": 456,
+    "icon": "res://assets/ui/equipment/pd_medium_thermal.png"
   },
   "weapon_medium_laser": {
     "id": "weapon_medium_laser",
@@ -111,7 +113,8 @@
     "damage_kinetic": 0,
     "damage_explosive": 0,
     "fx": "laser",
-    "ref_typeid": 456
+    "ref_typeid": 456,
+    "icon": "res://assets/ui/equipment/weapon_medium_laser.png"
   },
   "weapon_large_cannon": {
     "id": "weapon_large_cannon",
@@ -128,7 +131,8 @@
     "damage_kinetic": 256.128,
     "damage_explosive": 1280.64,
     "fx": "cannon",
-    "ref_typeid": 498
+    "ref_typeid": 498,
+    "icon": "res://assets/ui/equipment/weapon_large_cannon.png"
   },
   "weapon_remote_armor_m": {
     "id": "weapon_remote_armor_m",
@@ -140,7 +144,8 @@
     "heal_armor": 196,
     "fx": "repair",
     "ref_typeid": 11357,
-    "optimal_m": 8750
+    "optimal_m": 8750,
+    "icon": "res://assets/ui/equipment/weapon_remote_armor_m.png"
   },
   "implant_sniper": {
     "id": "implant_sniper",
@@ -186,7 +191,8 @@
     "damage_kinetic": 0,
     "damage_explosive": 0,
     "fx": "laser",
-    "ref_typeid": 453
+    "ref_typeid": 453,
+    "icon": "res://assets/ui/equipment/weapon_small_laser.png"
   },
   "weapon_large_laser": {
     "id": "weapon_large_laser",
@@ -203,7 +209,8 @@
     "damage_kinetic": 0,
     "damage_explosive": 0,
     "fx": "laser",
-    "ref_typeid": 462
+    "ref_typeid": 462,
+    "icon": "res://assets/ui/equipment/weapon_large_laser.png"
   },
   "weapon_small_cannon": {
     "id": "weapon_small_cannon",
@@ -220,7 +227,8 @@
     "damage_kinetic": 7.425,
     "damage_explosive": 14.85,
     "fx": "cannon",
-    "ref_typeid": 485
+    "ref_typeid": 485,
+    "icon": "res://assets/ui/equipment/weapon_small_cannon.png"
   },
   "weapon_medium_cannon": {
     "id": "weapon_medium_cannon",
@@ -237,7 +245,8 @@
     "damage_kinetic": 17.325,
     "damage_explosive": 34.65,
     "fx": "cannon",
-    "ref_typeid": 491
+    "ref_typeid": 491,
+    "icon": "res://assets/ui/equipment/weapon_medium_cannon.png"
   },
   "weapon_small_rail": {
     "id": "weapon_small_rail",
@@ -254,7 +263,8 @@
     "damage_kinetic": 34.65,
     "damage_explosive": 0,
     "fx": "rail",
-    "ref_typeid": 561
+    "ref_typeid": 561,
+    "icon": "res://assets/ui/equipment/weapon_small_rail.png"
   },
   "weapon_medium_rail": {
     "id": "weapon_medium_rail",
@@ -271,7 +281,8 @@
     "damage_kinetic": 146.16,
     "damage_explosive": 0,
     "fx": "rail",
-    "ref_typeid": 570
+    "ref_typeid": 570,
+    "icon": "res://assets/ui/equipment/weapon_medium_rail.png"
   },
   "weapon_large_rail": {
     "id": "weapon_large_rail",
@@ -288,7 +299,8 @@
     "damage_kinetic": 254.1,
     "damage_explosive": 0,
     "fx": "rail",
-    "ref_typeid": 574
+    "ref_typeid": 574,
+    "icon": "res://assets/ui/equipment/weapon_large_rail.png"
   },
   "weapon_small_missile": {
     "id": "weapon_small_missile",
@@ -309,7 +321,8 @@
     "explosion_radius": 40,
     "explosion_velocity": 170,
     "drf": 0.604,
-    "ref_typeid": 499
+    "ref_typeid": 499,
+    "icon": "res://assets/ui/equipment/weapon_small_missile.png"
   },
   "weapon_medium_missile": {
     "id": "weapon_medium_missile",
@@ -330,7 +343,8 @@
     "explosion_radius": 140,
     "explosion_velocity": 85,
     "drf": 0.682,
-    "ref_typeid": 501
+    "ref_typeid": 501,
+    "icon": "res://assets/ui/equipment/weapon_medium_missile.png"
   },
   "weapon_large_missile": {
     "id": "weapon_large_missile",
@@ -351,7 +365,8 @@
     "explosion_radius": 280,
     "explosion_velocity": 63.75,
     "drf": 0.682,
-    "ref_typeid": 13320
+    "ref_typeid": 13320,
+    "icon": "res://assets/ui/equipment/weapon_large_missile.png"
   },
   "weapon_remote_armor_s": {
     "id": "weapon_remote_armor_s",
@@ -363,7 +378,8 @@
     "heal_armor": 49,
     "fx": "repair",
     "optimal_m": 7000,
-    "ref_typeid": 11355
+    "ref_typeid": 11355,
+    "icon": "res://assets/ui/equipment/weapon_remote_armor_s.png"
   },
   "weapon_remote_armor_l": {
     "id": "weapon_remote_armor_l",
@@ -375,7 +391,8 @@
     "heal_armor": 392,
     "fx": "repair",
     "optimal_m": 12000,
-    "ref_typeid": 11359
+    "ref_typeid": 11359,
+    "icon": "res://assets/ui/equipment/weapon_remote_armor_l.png"
   },
   "weapon_remote_shield_s": {
     "id": "weapon_remote_shield_s",
@@ -387,7 +404,8 @@
     "heal_shield": 65,
     "fx": "repair",
     "optimal_m": 4000,
-    "ref_typeid": 3586
+    "ref_typeid": 3586,
+    "icon": "res://assets/ui/equipment/weapon_remote_shield_s.png"
   },
   "weapon_remote_shield_m": {
     "id": "weapon_remote_shield_m",
@@ -399,7 +417,8 @@
     "heal_shield": 260,
     "fx": "repair",
     "optimal_m": 5000,
-    "ref_typeid": 3596
+    "ref_typeid": 3596,
+    "icon": "res://assets/ui/equipment/weapon_remote_shield_m.png"
   },
   "weapon_remote_shield_l": {
     "id": "weapon_remote_shield_l",
@@ -411,7 +430,8 @@
     "heal_shield": 520,
     "fx": "repair",
     "optimal_m": 6700,
-    "ref_typeid": 3606
+    "ref_typeid": 3606,
+    "icon": "res://assets/ui/equipment/weapon_remote_shield_l.png"
   },
   "armor_repairer_s": {
     "id": "armor_repairer_s",

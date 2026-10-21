@@ -901,6 +901,7 @@ func _on_start() -> void:
 		ai_facs.append(ai_fac)
 	layout["ai_factions"] = ai_facs
 	layout["pilots"] = _build_pilots()
+	layout["roster_applied"] = true
 	_save_prefs()
 	var f := FileAccess.open(CUSTOM_LAYOUT_PATH, FileAccess.WRITE)
 	if f == null:

@@ -1,7 +1,7 @@
 extends RefCounted
 class_name MpZoneSched
-## Sim zones from occupation and unit factions, packed by measured throughput.
-## Cold/hot only marks write rate. About 10% of cost is ticked twice; higher throughput publishes.
+## Sim zones from occupation and ship counts, packed by measured throughput.
+## Cold/hot only marks write rate. About 10% of cost is ticked twice; the primary peer publishes.
 
 const HOT_MUL := 4.0
 const GLOBAL_COST := 2.0
@@ -9,7 +9,7 @@ const OVERLAP := 0.10
 const GLOBAL_IDS: Array[String] = ["clock", "victory", "diplo"]
 
 
-static func partition(layout: Dictionary, owners: Dictionary, unit_facs: Dictionary) -> Array:
+static func partition(layout: Dictionary, owners: Dictionary, unit_facs: Dictionary, ship_counts: Dictionary = {}) -> Array:
 	var parent: Dictionary = {}
 	var systems: Array = layout.get("systems", [])
 	for s_v in systems:
@@ -51,10 +51,10 @@ static func partition(layout: Dictionary, owners: Dictionary, unit_facs: Diction
 		for m_v in members:
 			var m := str(m_v)
 			var uf: Array = _facs(unit_facs, m)
-			unit_n += uf.size()
+			unit_n += int(ship_counts.get(m, uf.size()))
 			for f_v in uf:
 				facs[int(f_v)] = true
-			sov_n += _sov_count(layout, m)
+			sov_n += _occupied_count(layout, m)
 			if hot.has(m):
 				is_hot = true
 		var cost := float(unit_n + sov_n)
@@ -69,8 +69,9 @@ static func partition(layout: Dictionary, owners: Dictionary, unit_facs: Diction
 			"hot": is_hot,
 			"facs": facs.keys(),
 		})
-	_link_neighbors(layout, zones)
-	return zones
+	var split := _split_heavy(zones)
+	_link_neighbors(layout, split)
+	return split
 
 
 static func contact_systems(layout: Dictionary, unit_facs: Dictionary) -> Dictionary:
@@ -248,6 +249,8 @@ static func _overlap(zones: Array, peers: Array, primary: Dictionary, globals: D
 		var z2: Dictionary = z2_v
 		var zid := str(z2.get("id", ""))
 		var cost := float(z2.get("cost", 1.0))
+		if cost > budget + 0.01:
+			continue
 		var first := int(primary.get(zid, 0))
 		var second := _pick_other(peers, remaining, first)
 		if second == 0 or second == first:
@@ -258,6 +261,10 @@ static func _overlap(zones: Array, peers: Array, primary: Dictionary, globals: D
 	for gid in GLOBAL_IDS:
 		if budget <= 0.0:
 			break
+		#（全局重叠不够一份成本就不派）26.10.22 01:52 s
+		if GLOBAL_COST > budget + 0.01:
+			continue
+		#（全局重叠不够一份成本就不派）26.10.22 01:52 e
 		var gfirst := int(globals.get(gid, 0))
 		var gsecond := _pick_other(peers, remaining, gfirst)
 		if gsecond == 0 or gsecond == gfirst:
@@ -445,6 +452,65 @@ static func _facs(unit_facs: Dictionary, sid: String) -> Array:
 	if raw is Array:
 		return raw
 	return []
+
+
+static func _occupied_count(layout: Dictionary, sid: String) -> int:
+	for s_v in layout.get("systems", []):
+		if typeof(s_v) != TYPE_DICTIONARY:
+			continue
+		if str((s_v as Dictionary).get("id", "")) != sid:
+			continue
+		var n := 0
+		for c_v in (s_v as Dictionary).get("cells", []):
+			if typeof(c_v) != TYPE_DICTIONARY:
+				continue
+			if int((c_v as Dictionary).get("owner", 0)) != 0:
+				n += 1
+		return n
+	return 0
+
+
+static func _split_heavy(zones: Array) -> Array:
+	var total := 0.0
+	for z_v in zones:
+		if typeof(z_v) == TYPE_DICTIONARY:
+			total += float((z_v as Dictionary).get("cost", 1.0))
+	var cap := maxf(total * OVERLAP, 1.0)
+	var out: Array = []
+	for z_v in zones:
+		if typeof(z_v) != TYPE_DICTIONARY:
+			continue
+		var z: Dictionary = z_v
+		var systems: Array = z.get("systems", [])
+		var cost := float(z.get("cost", 1.0))
+		if systems.size() <= 1 or cost <= cap:
+			out.append(z)
+			continue
+		var share := cost / float(systems.size())
+		var bucket: Array = []
+		var acc := 0.0
+		var n := 0
+		for sid_v in systems:
+			if acc + share > cap and not bucket.is_empty():
+				out.append(_piece(z, bucket, acc, n))
+				bucket = []
+				acc = 0.0
+				n += 1
+			bucket.append(sid_v)
+			acc += share
+		if not bucket.is_empty():
+			out.append(_piece(z, bucket, acc, n))
+	return out
+
+
+static func _piece(z: Dictionary, systems: Array, cost: float, n: int) -> Dictionary:
+	return {
+		"id": "%s#%d" % [str(z.get("id", "z")), n],
+		"systems": systems.duplicate(),
+		"cost": maxf(cost, 1.0),
+		"hot": bool(z.get("hot", false)),
+		"facs": z.get("facs", []),
+	}
 
 
 static func _sov_count(layout: Dictionary, sid: String) -> int:

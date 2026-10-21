@@ -15,6 +15,10 @@ static func load_portrait(portrait_key: String = "", alt_keys: PackedStringArray
 	var keys: Array = []
 	var pk := portrait_key.strip_edges()
 	if pk.begins_with("user://") or pk.begins_with("res://"):
+		if pk.ends_with(".json") and FileAccess.file_exists(pk):
+			var played := _play_anim(pk)
+			if played != null:
+				return played
 		if ResourceLoader.exists(pk):
 			var direct := load(pk) as Texture2D
 			if direct != null:
@@ -41,6 +45,31 @@ static func load_portrait(portrait_key: String = "", alt_keys: PackedStringArray
 			return tex
 	return null
 
+
+static func _play_anim(path: String) -> Texture2D:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return null
+	var frames: Array = (parsed as Dictionary).get("frames", [])
+	if frames.is_empty():
+		return null
+	var delays: Array = (parsed as Dictionary).get("delays", [])
+	var anim := AnimatedTexture.new()
+	anim.frames = frames.size()
+	anim.speed_scale = 1.0
+	for i in frames.size():
+		var img := Image.new()
+		var fp := str(frames[i])
+		if img.load(ProjectSettings.globalize_path(fp)) != OK:
+			return null
+		anim.set_frame_texture(i, ImageTexture.create_from_image(img))
+		var delay := 0.1
+		if i < delays.size():
+			delay = float(delays[i])
+		if delay <= 0.0:
+			delay = 0.1
+		anim.set_frame_duration(i, delay)
+	return anim
 
 
 static func load_merged() -> Array:
@@ -166,6 +195,9 @@ static func crew_equipment(row: Dictionary) -> Dictionary:
 		"name": str(row.get("name", mid)),
 		"kind": "crew",
 	}
+	var pack = load("res://game/board/pilots/custom_member_pack.gd")
+	if pack != null:
+		pack.fit_bonus(row)
 	var bonus := str(row.get("bonus", "")).strip_edges()
 	if bonus.is_empty():
 		return eq
