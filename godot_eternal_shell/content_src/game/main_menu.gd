@@ -47,6 +47,7 @@ var _menu_bg_dynamic: bool = false
 
 
 func _ready() -> void:
+	DebugSessionLog.install_scaffold()
 	# #region agent log
 	_play_mode_reveal.set("on_slide_step", Callable(self, "_on_play_mode_slide_step"))
 	_tertiary_reveal.set("on_slide_step", Callable(self, "_on_tertiary_slide_step"))
@@ -57,6 +58,7 @@ func _ready() -> void:
 	print("[menu-bg] dynamic=%s phys=%d" % [menu_dynamic, PlayerSettings.physical_memory_bytes()])
 	_apply_menu_bg(menu_dynamic)
 	_start_announce_cycle()
+	_reopen_mp_room_if_needed()
 
 
 func _process(_dt: float) -> void:
@@ -274,6 +276,7 @@ func _build_solo_secondary() -> Control:
 	_load_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_load_list.add_theme_constant_override("separation", 8)
 	scroll.add_child(_load_list)
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(scroll)
 	var chrome := _make_secondary_chrome(scroll)
 	chrome.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_load_tertiary_host.add_child(chrome)
@@ -306,6 +309,7 @@ func _build_options_secondary() -> Control:
 	root.add_child(box)
 	box.add_child(_menu_btn("图鉴", _open_codex_overlay))
 	box.add_child(_menu_btn("导入团员包", _import_member_pack))
+	box.add_child(_menu_btn("多人对战记录", _open_mp_history))
 	box.add_child(_menu_btn("设置", _on_settings_open))
 	return root
 
@@ -646,6 +650,14 @@ func _mp_session() -> MpCampaignNet:
 		return null
 	var existing := gs.get_node_or_null("MpCampaignNet")
 	if existing is MpCampaignNet:
+		#（回到主菜单后重新接上进房信号，避免人进了房却不弹出房间）26.10.22 16:25 s
+		for conn in existing.joined.get_connections():
+			existing.joined.disconnect(conn["callable"])
+		for conn2 in existing.failed.get_connections():
+			existing.failed.disconnect(conn2["callable"])
+		existing.joined.connect(_open_mp_room)
+		existing.failed.connect(_on_mp_failed)
+		#（回到主菜单后重新接上进房信号，避免人进了房却不弹出房间）26.10.22 16:25 e
 		return existing
 	var created := MpCampaignNet.new()
 	created.name = "MpCampaignNet"
@@ -655,10 +667,98 @@ func _mp_session() -> MpCampaignNet:
 	return created
 
 
+func _reopen_mp_room_if_needed() -> void:
+	var gs := get_node_or_null("/root/GameSession")
+	if gs == null:
+		return
+	var net := gs.get_node_or_null("MpCampaignNet")
+	if net == null or not bool(net.get("reopen_room")):
+		return
+	net.reopen_room = false
+	_open_mp_room()
+
+
+func _open_mp_history() -> void:
+	var dlg := Window.new()
+	dlg.title = "多人对战记录"
+	dlg.size = Vector2i(640, 480)
+	dlg.close_requested.connect(dlg.queue_free)
+	add_child(dlg)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dlg.add_child(scroll)
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(box)
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(scroll)
+	var arr := MpCampaignNet.read_history()
+	if arr.is_empty():
+		var empty := Label.new()
+		empty.text = "还没有多人对战结算"
+		box.add_child(empty)
+	else:
+		for i in range(arr.size() - 1, -1, -1):
+			if typeof(arr[i]) != TYPE_DICTIONARY:
+				continue
+			var rec: Dictionary = arr[i]
+			var stamp := Time.get_datetime_string_from_unix_time(int(rec.get("at", 0)))
+			var kind := "离场结算" if bool(rec.get("provisional", false)) else "最终结算"
+			var b := Button.new()
+			b.text = "%s   %s   %s" % [stamp, kind, str(rec.get("reason", ""))]
+			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			b.pressed.connect(_open_mp_history_detail.bind(rec))
+			box.add_child(b)
+	dlg.popup_centered()
+
+
+func _open_mp_history_detail(rec: Dictionary) -> void:
+	var dlg := Window.new()
+	dlg.title = "结算详情"
+	dlg.size = Vector2i(640, 480)
+	dlg.close_requested.connect(dlg.queue_free)
+	add_child(dlg)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dlg.add_child(scroll)
+	var rtl := RichTextLabel.new()
+	rtl.fit_content = true
+	rtl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rtl.text = _history_detail(rec)
+	scroll.add_child(rtl)
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(scroll)
+	dlg.popup_centered()
+
+
+func _history_detail(rec: Dictionary) -> String:
+	var stamp := Time.get_datetime_string_from_unix_time(int(rec.get("at", 0)))
+	var kind := "离场结算" if bool(rec.get("provisional", false)) else "最终结算"
+	var lines: PackedStringArray = PackedStringArray()
+	lines.append("%s  %s  %s" % [stamp, kind, str(rec.get("reason", ""))])
+	var detail := str(rec.get("detail", ""))
+	if detail != "":
+		lines.append(detail)
+	for row_v in rec.get("rows", []):
+		if typeof(row_v) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_v
+		lines.append("%s  制造%d  击毁%d  损失%d  占领%.0f" % [
+			str(row.get("name", "")), int(row.get("built", 0)), int(row.get("kills", 0)),
+			int(row.get("losses", 0)), float(row.get("occupy", 0.0)),
+		])
+	return "\n".join(lines)
+
+
 func _open_mp_room() -> void:
 	var net := _mp_session()
 	if net == null:
 		return
+	# #region agent log
+	DebugSessionLog.append("NET", "main_menu._open_mp_room", "show", {
+		"host": net.is_host,
+		"members": (net.room.get("members", []) as Array).size(),
+		"runId": "post-fix",
+	})
+	# #endregion
 	if _overlay != null and _overlay is MpCampaignRoom:
 		return
 	var room := MpCampaignRoom.new()

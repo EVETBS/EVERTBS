@@ -123,6 +123,7 @@ func _build() -> void:
 	left_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	left_box.add_theme_constant_override("separation", 10)
 	left_scroll.add_child(left_box)
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(left_scroll)
 	var head := HBoxContainer.new()
 	left_box.add_child(head)
 	var title := Label.new()
@@ -181,6 +182,7 @@ func _build() -> void:
 	right_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right.add_child(right_scroll)
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(right_scroll)
 	_detail = VBoxContainer.new()
 	_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_detail.add_theme_constant_override("separation", 8)

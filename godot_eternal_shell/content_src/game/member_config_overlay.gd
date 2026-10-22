@@ -3,10 +3,12 @@ extends Control
 ## Four-column grid of ALL members; per member: 场上/场下, 首发, default ship.
 
 signal closed
+signal size_selected(n: int)
 
 const MemberTableScr := preload("res://game/board/pilots/member_table.gd")
 const RosterTemplatesScr := preload("res://game/board/pilots/roster_templates.gd")
 const EquipIconScr := preload("res://game/board/equip_icon.gd")
+const DragScrollScr := preload("res://game/ui/drag_scroll.gd")
 
 const PANEL_BG := Color(0.08, 0.1, 0.14, 0.15)
 const PANEL_BORDER := Color(0.7, 0.75, 0.82, 0.55)
@@ -25,12 +27,18 @@ var _ship_defs: Dictionary = {}
 var _equip: Dictionary = {}
 var _grid: GridContainer
 var _status: Label
+var _loaded := false
 
 
 func _ready() -> void:
 	_load_data()
 	_build()
-	_select_size(RosterTemplatesScr.active_size())
+	var n := RosterTemplatesScr.active_size()
+	if has_meta("mp_scale"):
+		var room_n := int(get_meta("mp_scale"))
+		if RosterTemplatesScr.SIZES.has(room_n):
+			n = room_n
+	_select_size(n)
 
 
 func _load_data() -> void:
@@ -93,6 +101,19 @@ func _build() -> void:
 		_remember_and_close()
 	)
 	head.add_child(back)
+	#（单机才改自己的势力名称）26.10.22 11:25 s
+	if not has_meta("mp_room"):
+		var name_row := HBoxContainer.new()
+		name_row.add_theme_constant_override("separation", 8)
+		root.add_child(name_row)
+		name_row.add_child(_lab("修改自己的势力名称"))
+		var name_edit := LineEdit.new()
+		name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_edit.placeholder_text = "单机对局里显示的势力名"
+		name_edit.text = _read_faction_name()
+		name_edit.text_changed.connect(_write_faction_name)
+		name_row.add_child(name_edit)
+	#（单机才改自己的势力名称）26.10.22 11:25 e
 	var mode_row := HBoxContainer.new()
 	mode_row.add_theme_constant_override("separation", 8)
 	root.add_child(mode_row)
@@ -119,10 +140,15 @@ func _build() -> void:
 	_grid.add_theme_constant_override("h_separation", 8)
 	_grid.add_theme_constant_override("v_separation", 8)
 	scroll.add_child(_grid)
+	DragScrollScr.attach(scroll)
 
 
 func _select_size(n: int) -> void:
-	_persist()
+	#（未加载的空名单不能写进 20 人档）26.10.22 21:40 s
+	var switching := _loaded
+	if _loaded:
+		_persist()
+	#（未加载的空名单不能写进 20 人档）26.10.22 21:40 e
 	_size = n
 	var e: Dictionary = RosterTemplatesScr.get_entry(n)
 	_onfield.clear()
@@ -134,7 +160,12 @@ func _select_size(n: int) -> void:
 	for c in get_children():
 		_refresh_size_toggles(c)
 	_sync_grid()
+	_loaded = true
 	_refresh_status()
+	#（房间人数和主菜单当前档是同一份）26.10.22 22:10 s
+	if switching and has_meta("mp_room"):
+		size_selected.emit(n)
+	#（房间人数和主菜单当前档是同一份）26.10.22 22:10 e
 
 
 func _refresh_size_toggles(node: Node) -> void:
@@ -163,39 +194,42 @@ func _refresh_status() -> void:
 	if st_n > cap:
 		parts.append("（超额，进局时随机保留 %d）" % cap)
 	parts.append("  首发第一艘船 1 秒造完")
+	if has_meta("mp_room"):
+		var match_n := int(get_meta("mp_scale", _size))
+		if match_n == _size:
+			parts.append("  本局使用 %d 人档" % match_n)
+		else:
+			parts.append("  正在编辑 %d 人档，本局仍是 %d 人" % [_size, match_n])
 	_status.text = "".join(parts)
 
 
 func _display_order() -> PackedStringArray:
-	## 自定义整组在前，内置默认在后。组内：场上且首发，其次场上，其余。同一档保持团员表原序。
-	var custom := PackedStringArray()
-	var builtin := PackedStringArray()
+	## 首发，上场自定义，上场默认，不上场自定义，不上场默认。同一档保持团员表原序。
 	var builtin_ids := MemberTableScr.builtin_ids()
-	for mid in _member_order:
-		if builtin_ids.has(mid):
-			builtin.append(mid)
-		else:
-			custom.append(mid)
-	var out := _tier_order(custom)
-	out.append_array(_tier_order(builtin))
-	return out
-
-
-func _tier_order(ids: PackedStringArray) -> PackedStringArray:
 	var starters := PackedStringArray()
-	var fielded := PackedStringArray()
-	var rest := PackedStringArray()
-	for mid in ids:
+	var field_custom := PackedStringArray()
+	var field_default := PackedStringArray()
+	var bench_custom := PackedStringArray()
+	var bench_default := PackedStringArray()
+	for mid in _member_order:
 		var on := _onfield.has(mid)
+		var custom := not builtin_ids.has(mid)
 		if on and _starters.has(mid):
 			starters.append(mid)
+		elif on and custom:
+			field_custom.append(mid)
 		elif on:
-			fielded.append(mid)
+			field_default.append(mid)
+		elif custom:
+			bench_custom.append(mid)
 		else:
-			rest.append(mid)
-	starters.append_array(fielded)
-	starters.append_array(rest)
-	return starters
+			bench_default.append(mid)
+	var out := starters
+	out.append_array(field_custom)
+	out.append_array(field_default)
+	out.append_array(bench_custom)
+	out.append_array(bench_default)
+	return out
 
 
 func _rebuild_grid() -> void:
@@ -264,19 +298,6 @@ func _cell(mid: String) -> Control:
 	name_lab.size_flags_horizontal = Control.SIZE_SHRINK_END
 	name_lab.add_theme_color_override("font_color", Color.WHITE)
 	top.add_child(name_lab)
-	for media_key in ["name_media", "bio_media"]:
-		var media_path := str(mem.get(media_key, "")).strip_edges()
-		if media_path == "":
-			continue
-		var media_tex := MemberTableScr.load_portrait(media_path)
-		if media_tex == null:
-			continue
-		var media := TextureRect.new()
-		media.custom_minimum_size = Vector2(36, 36)
-		media.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		media.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		media.texture = media_tex
-		top.add_child(media)
 	var prefs := MemberTableScr.pref_list(mem)
 	for i in 4:
 		var eid := str(prefs[i]) if i < prefs.size() else ""
@@ -312,6 +333,11 @@ func _cell(mid: String) -> Control:
 	st_btn.text = "首发" if is_st else "非首发"
 	st_btn.disabled = not on
 	st_btn.toggled.connect(func(v: bool) -> void:
+		#（场下不能被手势误开成首发）26.10.23 00:24 s
+		if v and not _onfield.has(mid):
+			st_btn.set_pressed_no_signal(false)
+			return
+		#（场下不能被手势误开成首发）26.10.23 00:24 e
 		if v:
 			_starters[mid] = true
 		else:
@@ -328,9 +354,14 @@ func _cell(mid: String) -> Control:
 	var ship_ob := OptionButton.new()
 	ship_ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var unlocked := _unlocked_ships(mem)
-	var cur := str(mem.get("default_ship", ""))
+	var stored := str(mem.get("default_ship", ""))
+	var cur := stored
+	#（无效默认舰写回列表里的第一艘）26.10.22 21:40 s
 	if cur == "" or cur not in unlocked:
 		cur = str(unlocked[0]) if not unlocked.is_empty() else "gila_cc2"
+		if cur != "" and cur != stored:
+			_set_default_ship(mid, cur)
+	#（无效默认舰写回列表里的第一艘）26.10.22 21:40 e
 	var ssel := 0
 	for si in range(unlocked.size()):
 		var sid: String = str(unlocked[si])
@@ -394,11 +425,12 @@ func _remember_and_close() -> void:
 
 func _exit_tree() -> void:
 	## Any close path writes the current size once for the next match.
-	_persist()
+	if _loaded:
+		_persist()
 
 
 func _persist() -> void:
-	if _size <= 0:
+	if not _loaded or _size <= 0:
 		return
 	var onfield := PackedStringArray()
 	var starters := PackedStringArray()
@@ -443,6 +475,10 @@ func _pref_blocked(eid: String, eq: Dictionary) -> bool:
 	if bool(eq.get("parked", false)) or str(eq.get("size", "")) == "XL":
 		return true
 	var kind := str(eq.get("kind", ""))
+	#（偏好装备不含远程维修）26.10.22 11:25 s
+	if kind in ["remote_armor", "remote_shield"] or eid.begins_with("weapon_remote_"):
+		return true
+	#（偏好装备不含远程维修）26.10.22 11:25 e
 	if kind in ["weapon", "missile", "pd", "command_burst", "guard_shield", "guard_armor", "no_max_loss", "pd_repair_max_loss"]:
 		return true
 	if eid.begins_with("weapon_") or eid.begins_with("pd_") or eid.begins_with("command_burst_"):
@@ -455,23 +491,56 @@ func _pref_blocked(eid: String, eq: Dictionary) -> bool:
 
 
 func _pick_pref(mid: String, index: int) -> void:
-	var popup := PopupMenu.new()
-	add_child(popup)
-	popup.add_item("空", 0)
-	popup.set_item_metadata(0, "")
-	var n := 1
+	#（偏好装备单用拖动翻页，不用点不开的弹出菜单）26.10.22 16:25 s
+	var old := get_node_or_null("PrefSheet")
+	if old:
+		old.queue_free()
+	var sheet := PanelContainer.new()
+	sheet.name = "PrefSheet"
+	sheet.z_index = 40
+	sheet.set_anchors_preset(Control.PRESET_CENTER)
+	sheet.custom_minimum_size = Vector2(420, 480)
+	sheet.position = Vector2(80, 40)
+	add_child(sheet)
+	var box := VBoxContainer.new()
+	sheet.add_child(box)
+	var head := HBoxContainer.new()
+	box.add_child(head)
+	var title := Label.new()
+	title.text = "偏好装备"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var close := Button.new()
+	close.text = "关闭"
+	close.pressed.connect(sheet.queue_free)
+	head.add_child(close)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(400, 420)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	DragScrollScr.attach(scroll)
+	var empty := Button.new()
+	empty.text = "空"
+	empty.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	empty.pressed.connect(func() -> void:
+		_set_pref(mid, index, "")
+		sheet.queue_free()
+	)
+	list.add_child(empty)
 	for eid in _equip.keys():
 		var eq: Dictionary = _equip[eid]
 		if _pref_blocked(str(eid), eq):
 			continue
-		popup.add_item(str(eq.get("name", eid)), n)
-		popup.set_item_metadata(n, str(eid))
-		n += 1
-	popup.id_pressed.connect(func(id: int) -> void:
-		_set_pref(mid, index, str(popup.get_item_metadata(id)))
-		popup.queue_free()
-	)
-	popup.popup_centered()
+		var b := Button.new()
+		b.text = str(eq.get("name", eid))
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.pressed.connect(_set_pref.bind(mid, index, str(eid)))
+		b.pressed.connect(sheet.queue_free)
+		list.add_child(b)
+	#（偏好装备单用拖动翻页，不用点不开的弹出菜单）26.10.22 16:25 e
 
 
 func _set_pref(mid: String, index: int, eid: String) -> void:
@@ -541,6 +610,55 @@ func _scrub_templates(mid: String) -> void:
 		templates[key] = entry
 	doc["templates"] = templates
 	RosterTemplatesScr.save_all(doc)
+
+
+func _menu_icon(eq: Dictionary) -> Texture2D:
+	var base := EquipIconScr.for_row(eq)
+	if base == null:
+		return null
+	var size_s := str(eq.get("size", "")).to_lower()
+	if size_s == "" or bool(eq.get("implant", false)):
+		return base
+	var bpath := "res://assets/ui/sprites/equipment_size_badges/size_%s.png" % size_s
+	if not ResourceLoader.exists(bpath):
+		return base
+	var img := base.get_image()
+	var badge := load(bpath) as Texture2D
+	if img == null or badge == null:
+		return base
+	img = img.duplicate()
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	var bi := badge.get_image()
+	if bi == null:
+		return base
+	bi = bi.duplicate()
+	if bi.get_format() != Image.FORMAT_RGBA8:
+		bi.convert(Image.FORMAT_RGBA8)
+	var bw := mini(img.get_width(), maxi(8, int(img.get_width() / 3)))
+	bi.resize(bw, bw, Image.INTERPOLATE_NEAREST)
+	img.blend_rect(bi, Rect2i(0, 0, bw, bw), Vector2i(img.get_width() - bw, 0))
+	return ImageTexture.create_from_image(img)
+
+
+func _faction_name_path() -> String:
+	return "user://content_runtime/data/board/local_faction_name.txt"
+
+
+func _read_faction_name() -> String:
+	var path := _faction_name_path()
+	if not FileAccess.file_exists(path):
+		return ""
+	return FileAccess.get_file_as_string(path).strip_edges()
+
+
+func _write_faction_name(text: String) -> void:
+	var path := _faction_name_path()
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path).get_base_dir())
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(text.strip_edges())
 
 
 func _lab(t: String) -> Label:

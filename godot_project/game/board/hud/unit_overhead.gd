@@ -49,6 +49,7 @@ const GREEN_HOLD_S := 0.5
 const GREEN_FADE_S := 1.0
 ## Name wraps when wider than HP ring diameter * this factor.
 const NAME_WRAP_MUL := 1.2
+const NAME_FONT_PATH := "res://assets/fonts/simhei.ttf"
 ## Tactical nameplate only (战场视角 uses face_camera dist scale — never font_scale).
 const TACTICAL_SC := 7.7
 const TACTICAL_REF_DIST := 560.0
@@ -95,6 +96,8 @@ func _ready() -> void:
 	name_lab = Label3D.new()
 	name_lab.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	name_lab.font_size = 96
+	if ResourceLoader.exists(NAME_FONT_PATH):
+		name_lab.font = load(NAME_FONT_PATH) as Font
 	# Contrast 1px edge (outermost stroke), not a thick halo
 	name_lab.outline_size = 2
 	name_lab.outline_modulate = Color(0.05, 0.05, 0.08, 1.0)
@@ -103,6 +106,7 @@ func _ready() -> void:
 	name_lab.rotation_degrees = Vector3(0, 180, 0)
 	name_lab.no_depth_test = true
 	name_lab.render_priority = 25
+	name_lab.extra_cull_margin = 80.0
 	name_lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lab.autowrap_mode = TextServer.AUTOWRAP_OFF
 	add_child(name_lab)
@@ -611,11 +615,9 @@ func _apply_name_wrap() -> void:
 	if name_lab.text == _wrap_text:
 		return
 	_wrap_text = name_lab.text
-	## Label3D.width is in *pixels* (Godot 4), not world units.
-	## Convert ring diameter to px via Label3D.pixel_size (default 0.005).
+	#（名字超过铭牌 1.2 倍就换行）26.10.22 13:34 s
 	var px: float = maxf(name_lab.pixel_size, 0.0001)
 	var limit_px: float = (_bar_local_diameter() * NAME_WRAP_MUL) / px
-	name_lab.width = limit_px
 	var font: Font = name_lab.font
 	if font == null:
 		font = ThemeDB.fallback_font
@@ -625,10 +627,12 @@ func _apply_name_wrap() -> void:
 			name_lab.text, HORIZONTAL_ALIGNMENT_LEFT, -1, name_lab.font_size
 		).x
 	if text_px > limit_px + 0.5 and limit_px > 1.0:
-		name_lab.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		name_lab.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+		name_lab.width = limit_px
 	else:
 		name_lab.autowrap_mode = TextServer.AUTOWRAP_OFF
 		name_lab.width = 0.0
+	#（名字超过铭牌 1.2 倍就换行）26.10.22 13:34 e
 
 func set_selected_highlight(on: bool) -> void:
 	## Tactical-only yellow halo a=0.05. No ring/line.
@@ -664,6 +668,38 @@ static func icon_circum_radius_world() -> float:
 	## Circumscribed-circle radius of square tonnage icon (TACTICAL_TOPDOWN VFX width).
 	var side := BADGE_WU * maxf(font_scale, 0.01)
 	return side * 0.5 * sqrt(2.0)
+
+func tactical_name_world_width() -> float:
+	return tactical_plate_world_size().x
+
+
+func tactical_plate_world_size() -> Vector2:
+	## Wrapped plate in world units (node scale included). Width stops at 1.2× ring.
+	var fs := maxf(font_scale, 0.01)
+	var ring := _bar_local_diameter()
+	var limit := ring * NAME_WRAP_MUL
+	var text_local := 0.0
+	var lines := 1
+	if not _compact_icon_only and name_lab != null and name_lab.text != "":
+		var font: Font = name_lab.font
+		if font == null:
+			font = ThemeDB.fallback_font
+		if font != null:
+			var px := font.get_string_size(name_lab.text, HORIZONTAL_ALIGNMENT_LEFT, -1, name_lab.font_size).x
+			text_local = px * maxf(name_lab.pixel_size, 0.0001)
+			if text_local > limit and limit > 0.01:
+				lines = maxi(int(ceili(text_local / limit)), 1)
+				text_local = limit
+	var local_w := maxf(ring, text_local)
+	var line_h := 0.48
+	if name_lab != null:
+		line_h = float(name_lab.font_size) * maxf(name_lab.pixel_size, 0.0001)
+	var name_y := 1.55
+	if name_lab != null:
+		name_y = absf(name_lab.position.y)
+	var local_h := name_y + line_h * (float(lines) * 0.5 + 0.35) + ring * 0.5
+	return Vector2(local_w, local_h) * fs
+
 
 func place_tactical(cam: Camera3D, world_pos: Vector3) -> void:
 	## Screen-parallel under nadir (follow cam yaw/roll); fixed world scale.

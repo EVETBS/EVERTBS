@@ -53,10 +53,7 @@ var _status: Label
 var _start_btn: Button
 var _preview_list: ItemList
 var _birth_box: VBoxContainer
-var _station_slider: HSlider
-var _resource_slider: HSlider
-var _station_lab: Label
-var _resource_lab: Label
+var _ratio: RatioDualSlider
 var _gen_panel: Control
 var _map_view: Control
 var _annihilate_spin: SpinBox
@@ -152,6 +149,7 @@ func _build() -> void:
 	scroll.anchor_right = 0.58
 	scroll.offset_right = -8
 	add_child(scroll)
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(scroll)
 	var margin := MarginContainer.new()
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.add_theme_constant_override("margin_left", 24)
@@ -485,6 +483,7 @@ func _section_map() -> Control:
 			stock_list.select(si)
 			break
 	box.add_child(stock_list)
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(stock_list)
 	_gen_panel = _build_gen_panel()
 	_gen_panel.visible = false
 	box.add_child(_gen_panel)
@@ -526,6 +525,7 @@ func _section_map() -> Control:
 	_preview_list.custom_minimum_size = Vector2(480, 180)
 	box.add_child(_lab("预览（星系 / 类型 / 连线数）"))
 	box.add_child(_preview_list)
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(_preview_list)
 	return _wrap_panel(box)
 
 
@@ -578,57 +578,19 @@ func _build_gen_panel() -> Control:
 		_regen()
 	)
 	sp.add_child(sp_sl)
-	box.add_child(_lab("空间站 / 资源占比（双滑块，互不越过，和≤100%）"))
-	var dual := VBoxContainer.new()
-	box.add_child(dual)
-	_station_lab = _lab("")
-	dual.add_child(_station_lab)
-	_station_slider = HSlider.new()
-	_station_slider.min_value = 0.0
-	_station_slider.max_value = 100.0
-	_station_slider.step = 1.0
-	_station_slider.value = _station_pct
-	_station_slider.value_changed.connect(_on_station_pct)
-	dual.add_child(_station_slider)
-	_resource_lab = _lab("")
-	dual.add_child(_resource_lab)
-	_resource_slider = HSlider.new()
-	_resource_slider.min_value = 0.0
-	_resource_slider.max_value = 100.0
-	_resource_slider.step = 1.0
-	_resource_slider.value = _resource_pct
-	_resource_slider.value_changed.connect(_on_resource_pct)
-	dual.add_child(_resource_slider)
-	_update_pct_labels()
+	_ratio = RatioDualSlider.new()
+	_ratio.set_ratio(_station_pct, _resource_pct)
+	_ratio.drag_finished.connect(func(station: float, resource: float) -> void:
+		_station_pct = station
+		_resource_pct = resource
+		_regen()
+	)
+	box.add_child(_ratio)
 	var regen := Button.new()
 	regen.text = "重新生成"
 	regen.pressed.connect(_regen)
 	box.add_child(regen)
 	return box
-
-
-func _on_station_pct(v: float) -> void:
-	_station_pct = minf(v, 100.0 - _resource_pct)
-	if absf(_station_slider.value - _station_pct) > 0.01:
-		_station_slider.set_value_no_signal(_station_pct)
-	_update_pct_labels()
-	_regen()
-
-
-func _on_resource_pct(v: float) -> void:
-	_resource_pct = minf(v, 100.0 - _station_pct)
-	if absf(_resource_slider.value - _resource_pct) > 0.01:
-		_resource_slider.set_value_no_signal(_resource_pct)
-	_update_pct_labels()
-	_regen()
-
-
-func _update_pct_labels() -> void:
-	var normal := 100.0 - _station_pct - _resource_pct
-	if _station_lab:
-		_station_lab.text = "空间站 %.0f%%" % _station_pct
-	if _resource_lab:
-		_resource_lab.text = "资源 %.0f%%（普通 %.0f%%）" % [_resource_pct, normal]
 
 
 func _section_birth() -> Control:
@@ -877,6 +839,11 @@ func _clear_mp_residue() -> void:
 
 
 func _on_start() -> void:
+	# #region agent log
+	DebugSessionLog.append("UI", "custom_campaign._on_start", "solo_start", {
+		"runId": "post-fix", "hypothesisId": "SOLO", "birth": _birth_ok(),
+	})
+	# #endregion
 	_clear_mp_residue()
 	if not _birth_ok():
 		return

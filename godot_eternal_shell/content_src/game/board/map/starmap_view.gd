@@ -2777,9 +2777,15 @@ func rebuild_labels(pilots: Array) -> void:
 			continue
 		var key := "%s:%d" % [str(c.get_meta("edge_sid")), int(c.get_meta("edge_cell"))]
 		holders[key] = c
-		var old_n := c.get_node_or_null("PilotName")
-		if old_n:
-			old_n.queue_free()
+		#（换持有人时马上去掉旧名字）26.10.22 23:58 s
+		var old_names: Array = []
+		for child in c.get_children():
+			if str(child.name).begins_with("PilotName"):
+				old_names.append(child)
+		for old_n in old_names:
+			c.remove_child(old_n)
+			old_n.free()
+		#（换持有人时马上去掉旧名字）26.10.22 23:58 e
 	var attached := 0
 	for sid in map.systems.keys():
 		var sys: Dictionary = map.systems[sid]

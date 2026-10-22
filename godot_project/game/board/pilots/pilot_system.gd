@@ -14,11 +14,14 @@ func make_pilot(p: Dictionary) -> Dictionary:
 	var member: Dictionary = {}
 	if data != null and member_id != "":
 		member = data.member_by_id(member_id)
-	var ship_id := str(member.get("default_ship", "")).strip_edges()
-	if ship_id == "":
-		ship_id = str(p.get("ship", "")).strip_edges()
+	#（席位上的舰优先于团员表默认舰）26.10.22 21:40 s
+	var ship_id := str(p.get("ship", "")).strip_edges()
+	var picked: Dictionary = data.ship_def(ship_id) if ship_id != "" else {}
+	if ship_id == "" or picked.is_empty() or bool(picked.get("npc_hull", false)):
+		ship_id = str(member.get("default_ship", "")).strip_edges()
 	if ship_id == "":
 		ship_id = "gila_cc2"
+	#（席位上的舰优先于团员表默认舰）26.10.22 21:40 e
 	var def: Dictionary = data.ship_def(ship_id)
 	var display_name := str(p.get("name", ""))
 	if display_name.is_empty() and not member.is_empty():
@@ -60,11 +63,22 @@ func make_pilot(p: Dictionary) -> Dictionary:
 
 func make_ship_instance(ship_id: String, crew_eq: Dictionary = {}) -> Dictionary:
 	var def: Dictionary = data.ship_def(ship_id)
-	var hp_mul := MemberTableScr.effect_mul(crew_eq, "hp_mul")
-	var shield := float(def["shield"]) * hp_mul * MemberTableScr.effect_mul(crew_eq, "shield_mul")
-	var armor := float(def["armor"]) * hp_mul * MemberTableScr.effect_mul(crew_eq, "armor_mul")
-	var structure := float(def["structure"]) * hp_mul * MemberTableScr.effect_mul(crew_eq, "structure_mul")
+	#（人物加成不再乘血量）26.10.22 11:25 s
+	var shield := float(def["shield"]) * MemberTableScr.effect_mul(crew_eq, "shield_mul")
+	var armor := float(def["armor"]) * MemberTableScr.effect_mul(crew_eq, "armor_mul")
+	var structure := float(def["structure"]) * MemberTableScr.effect_mul(crew_eq, "structure_mul")
+	#（人物加成不再乘血量）26.10.22 11:25 e
 	var cap := float(def["cap"]) * MemberTableScr.effect_mul(crew_eq, "cap_mul")
+	#（造舰负血量收成零）26.10.22 10:25 s
+	if not is_finite(shield) or shield < 0.0:
+		shield = 0.0
+	if not is_finite(armor) or armor < 0.0:
+		armor = 0.0
+	if not is_finite(structure) or structure < 0.0:
+		structure = 0.0
+	if not is_finite(cap) or cap < 0.0:
+		cap = 0.0
+	#（造舰负血量收成零）26.10.22 10:25 e
 	return {
 		"ship_id": ship_id,
 		"pristine_s": shield,
@@ -223,4 +237,9 @@ func _crew_eq(pilot: Dictionary) -> Dictionary:
 	return eq if typeof(eq) == TYPE_DICTIONARY else {}
 
 func _scaled_build_s(pilot: Dictionary, base_s: float) -> float:
-	return base_s * MemberTableScr.effect_mul(_crew_eq(pilot), "build_mul")
+	#（制造倍率不是正数时退回基础秒）26.10.22 10:25 s
+	var scaled := base_s * MemberTableScr.effect_mul(_crew_eq(pilot), "build_mul")
+	if not is_finite(scaled) or scaled <= 0.0:
+		return base_s
+	#（制造倍率不是正数时退回基础秒）26.10.22 10:25 e
+	return scaled

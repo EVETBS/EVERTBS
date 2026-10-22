@@ -4,7 +4,7 @@ class_name TacticalCalloutLayer
 
 const COLS := 6
 ## Slot world size per font_scale unit (calibrated to prior SLOT@SC=5.0625).
-const SLOT_W0 := 4.15  ## name wrap width so plates do not overlap
+const SLOT_W0 := 4.15  ## minimum slot; widened to the wrapped plate
 const SLOT_H0 := 4.40
 const FRAME_PAD0 := 0.178
 const RING_GAP := 3.2
@@ -17,6 +17,8 @@ const RELAX_ITERS := 12
 const RELAX_GAP := 1.2
 
 var font_scale: float = 7.7
+## unit id -> Vector2 world size of the wrapped tactical nameplate.
+var plate_size_fn: Callable = Callable()
 ## Matches BoardCamera.tactical_yaw — frame/slots stay screen-parallel.
 var view_yaw: float = 0.0
 var _map: BoardMapModel
@@ -164,6 +166,21 @@ func _ensure_cell(key: String, unit_ids: Array) -> void:
 	var fs := maxf(font_scale, 0.25)
 	var slot_w := SLOT_W0 * fs
 	var slot_h := SLOT_H0 * fs
+	#（callout 框包住换行后的铭牌）26.10.22 13:34 s
+	if plate_size_fn.is_valid():
+		var widest := 0.0
+		var tallest := 0.0
+		for uid_w in unit_ids:
+			var got: Variant = plate_size_fn.call(str(uid_w))
+			if got is Vector2:
+				var sz: Vector2 = got
+				widest = maxf(widest, sz.x)
+				tallest = maxf(tallest, sz.y)
+		if widest > 0.0:
+			slot_w = maxf(slot_w, widest + 0.35 * fs)
+		if tallest > 0.0:
+			slot_h = maxf(slot_h, tallest + 0.35 * fs)
+	#（callout 框包住换行后的铭牌）26.10.22 13:34 e
 	var frame_pad := FRAME_PAD0 * fs
 	var horiz_len := HORIZ_LEN0 * fs
 	var box_w := float(ncols) * slot_w + frame_pad * 2.0
@@ -738,6 +755,14 @@ func hit_frame(cam: Camera3D, screen: Vector2) -> Dictionary:
 				"unit_ids": (d.get("unit_ids", []) as Array).duplicate(),
 			}
 	return best
+
+
+func has_slot(unit_id: String, sys: String, cell: int) -> bool:
+	var key := "%s:%d" % [sys, cell]
+	if not _cells.has(key):
+		return false
+	var slots: Dictionary = _cells[key].get("slots", {})
+	return slots.has(unit_id)
 
 
 func slot_pos_for(unit_id: String, sys: String, cell: int) -> Vector3:

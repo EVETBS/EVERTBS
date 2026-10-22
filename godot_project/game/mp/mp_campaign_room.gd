@@ -12,6 +12,10 @@ const DEPUTIES: Array = [
 	["i", "I"],
 ]
 const SCALES: Array[int] = [10, 15, 20, 40, 60]
+const STAR_OPTS: Array[int] = [12, 16, 20, 24, 30, 40, 50]
+const STOCK_LAYOUT := "res://data/board/layout.json"
+const RatioSliderScr := preload("res://game/ui/ratio_dual_slider.gd")
+const RosterTemplatesScr := preload("res://game/board/pilots/roster_templates.gd")
 
 var net: MpCampaignNet
 var _map_view: Control
@@ -21,15 +25,20 @@ var _members_box: GridContainer
 var _ai_box: VBoxContainer
 var _ready_box: BaseButton
 var _fog: CheckBox
-var _scale: OptionButton
+var _scale_row: HBoxContainer
 var _deputy: OptionButton
 var _limit: SpinBox
 var _goal: SpinBox
-var _star_slider: HSlider
-var _dens_slider: HSlider
-var _ratio: RatioDualSlider
+var _star_row: HBoxContainer
+var _stock_list: ItemList
+var _gen_panel: Control
+var _ratio
+var _map_mode := "stock"
+var _stock_layouts: Array = []
+var _selected_stock := STOCK_LAYOUT
 var _star_count := 20
 var _lane_density := 1.0
+var _avg_spacing := 120.0
 var _station_pct := 35.0
 var _resource_pct := 25.0
 var _filling := false
@@ -79,17 +88,18 @@ func _ready() -> void:
 	top.text = "配置团员"
 	top.pressed.connect(_open_members)
 	left.add_child(top)
+	_scan_stock_layouts()
 	_add_map_controls(left)
-	var gen := Button.new()
-	gen.text = "随机星图"
-	gen.pressed.connect(_on_generate)
-	left.add_child(gen)
-	_scale = OptionButton.new()
-	for i in range(SCALES.size()):
-		_scale.add_item(str(SCALES[i]), i)
-	_scale.item_selected.connect(_on_scale)
-	_touch_target(_scale)
-	left.add_child(_scale)
+	_scale_row = HBoxContainer.new()
+	_scale_row.add_theme_constant_override("separation", 6)
+	for n in SCALES:
+		var scale_btn := Button.new()
+		scale_btn.text = str(n)
+		scale_btn.toggle_mode = true
+		scale_btn.pressed.connect(_on_scale_btn.bind(n))
+		_touch_target(scale_btn)
+		_scale_row.add_child(scale_btn)
+	left.add_child(_scale_row)
 	_fog = CheckBox.new()
 	_fog.text = "战争迷雾"
 	_fog.toggled.connect(_on_fog)
@@ -106,7 +116,7 @@ func _ready() -> void:
 	left.add_child(rules)
 	rules.add_child(_lab("时限分"))
 	_limit = SpinBox.new()
-	_limit.min_value = 5
+	_limit.min_value = 10
 	_limit.max_value = 240
 	_limit.step = 5
 	_limit.value = 90
@@ -114,8 +124,8 @@ func _ready() -> void:
 	rules.add_child(_limit)
 	rules.add_child(_lab("歼灭数"))
 	_goal = SpinBox.new()
-	_goal.min_value = 1
-	_goal.max_value = 500
+	_goal.min_value = 10
+	_goal.max_value = 1000
 	_goal.step = 1
 	_goal.value = 50
 	_goal.value_changed.connect(_on_goal)
@@ -182,7 +192,7 @@ func _ready() -> void:
 	chat_panel.add_child(chat_edit)
 	_rebuild()
 	if net.is_host and (net.room.get("layout", {}) as Dictionary).is_empty():
-		_on_generate()
+		_apply_stock_map(_selected_stock)
 
 
 func _process(_delta: float) -> void:
@@ -191,47 +201,289 @@ func _process(_delta: float) -> void:
 		_apply_room()
 
 
+func _scan_stock_layouts() -> void:
+	_stock_layouts = [{"path": STOCK_LAYOUT, "name": "试验局七系"}]
+	var pool_dir := "res://data/board/pool"
+	var extras: Array = [
+		{"path": pool_dir + "/tour_duel_midpoint.json", "fallback": "双人锦标赛标准图 中点"},
+		{"path": pool_dir + "/tour_trio_crowded.json", "fallback": "三人锦标赛标准图 拥挤"},
+		{"path": pool_dir + "/tour_duel_four_sides.json", "fallback": "双人人锦标赛标准图 四面"},
+	]
+	for item in extras:
+		var path := str(item["path"])
+		if not FileAccess.file_exists(path):
+			continue
+		var display := str(item["fallback"])
+		var raw = JSON.parse_string(FileAccess.get_file_as_string(path))
+		if typeof(raw) == TYPE_DICTIONARY:
+			var nm := str(raw.get("map_name", raw.get("name", "")))
+			if not nm.is_empty():
+				display = nm
+		_stock_layouts.append({"path": path, "name": display})
+
+
 func _add_map_controls(left: VBoxContainer) -> void:
-	var star_row := HBoxContainer.new()
-	left.add_child(star_row)
-	star_row.add_child(_lab("星系数量"))
-	_star_slider = HSlider.new()
-	_star_slider.min_value = 8
-	_star_slider.max_value = 48
-	_star_slider.step = 1
-	_star_slider.value = _star_count
-	_star_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_star_slider.custom_minimum_size = Vector2(160, 28)
-	_bind_slider(_star_slider)
-	_star_slider.value_changed.connect(func(v: float) -> void:
-		_star_count = int(v)
+	var mode_row := HBoxContainer.new()
+	left.add_child(mode_row)
+	var stock_btn := Button.new()
+	stock_btn.text = "现有地图"
+	stock_btn.toggle_mode = true
+	stock_btn.button_pressed = true
+	mode_row.add_child(stock_btn)
+	var rand_btn := Button.new()
+	rand_btn.text = "随机生成"
+	rand_btn.toggle_mode = true
+	mode_row.add_child(rand_btn)
+	_stock_list = ItemList.new()
+	_stock_list.custom_minimum_size = Vector2(280, 96)
+	for item in _stock_layouts:
+		_stock_list.add_item(str(item["name"]))
+	_stock_list.select(0)
+	_stock_list.item_selected.connect(_on_stock_picked)
+	left.add_child(_stock_list)
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(_stock_list)
+	_gen_panel = _build_gen_panel()
+	_gen_panel.visible = false
+	left.add_child(_gen_panel)
+	stock_btn.pressed.connect(func() -> void:
+		stock_btn.set_pressed_no_signal(_map_mode != "random")
+		rand_btn.set_pressed_no_signal(_map_mode == "random")
+		_host_edit("现有地图", _stock_name(_selected_stock), func() -> void:
+			_map_mode = "stock"
+			stock_btn.set_pressed_no_signal(true)
+			rand_btn.set_pressed_no_signal(false)
+			_stock_list.visible = true
+			_gen_panel.visible = false
+			_apply_stock_map(_selected_stock)
+		)
 	)
-	star_row.add_child(_star_slider)
-	var dens_row := HBoxContainer.new()
-	left.add_child(dens_row)
-	dens_row.add_child(_lab("连接密度"))
-	_dens_slider = HSlider.new()
-	_dens_slider.min_value = 0.25
-	_dens_slider.max_value = 3.0
-	_dens_slider.step = 0.05
-	_dens_slider.value = _lane_density
-	_dens_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_dens_slider.custom_minimum_size = Vector2(160, 28)
-	_bind_slider(_dens_slider)
-	_dens_slider.value_changed.connect(func(v: float) -> void:
+	rand_btn.pressed.connect(func() -> void:
+		stock_btn.set_pressed_no_signal(_map_mode != "random")
+		rand_btn.set_pressed_no_signal(_map_mode == "random")
+		_host_edit("随机生成", "开", func() -> void:
+			_map_mode = "random"
+			stock_btn.set_pressed_no_signal(false)
+			rand_btn.set_pressed_no_signal(true)
+			_stock_list.visible = false
+			_gen_panel.visible = true
+			_regen_random()
+		)
+	)
+
+
+func _build_gen_panel() -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	_star_row = HBoxContainer.new()
+	box.add_child(_star_row)
+	_star_row.add_child(_lab("星系数"))
+	for n in STAR_OPTS:
+		var b := Button.new()
+		b.text = str(n)
+		b.toggle_mode = true
+		b.button_pressed = n == _star_count
+		b.pressed.connect(_on_star_btn.bind(n))
+		_touch_target(b)
+		_star_row.add_child(b)
+	box.add_child(_slider_row("跳桥密度", 0.25, 3.0, 0.05, _lane_density, "跳桥密度", func(v: float) -> void:
 		_lane_density = v
-	)
-	dens_row.add_child(_dens_slider)
-	_ratio = RatioDualSlider.new()
+		_regen_random()
+	))
+	box.add_child(_slider_row("平均间距", 60.0, 200.0, 1.0, _avg_spacing, "平均间距", func(v: float) -> void:
+		_avg_spacing = v
+		_regen_random()
+	))
+	_ratio = RatioSliderScr.new()
 	_ratio.set_ratio(_station_pct, _resource_pct)
+	_ratio.set_meta("before_station", _station_pct)
+	_ratio.set_meta("before_resource", _resource_pct)
 	_ratio.ratio_changed.connect(func(station: float, resource: float) -> void:
+		if not bool(_ratio.get_meta("dragging_seen", false)):
+			_ratio.set_meta("before_station", _station_pct)
+			_ratio.set_meta("before_resource", _resource_pct)
+			_ratio.set_meta("dragging_seen", true)
+		_slider_drag = 1
 		_station_pct = station
 		_resource_pct = resource
 	)
-	left.add_child(_ratio)
-	_touch_target(_star_slider)
-	_touch_target(_dens_slider)
+	_ratio.drag_finished.connect(func(station: float, resource: float) -> void:
+		_slider_drag = 0
+		_ratio.set_meta("dragging_seen", false)
+		var normal := 100.0 - station - resource
+		var before_s := float(_ratio.get_meta("before_station", _station_pct))
+		var before_r := float(_ratio.get_meta("before_resource", _resource_pct))
+		#（数值没变不重生成，房客滑块回到原值）26.10.23 00:24 s
+		if is_equal_approx(station, before_s) and is_equal_approx(resource, before_r):
+			_ratio.set_ratio(before_s, before_r)
+			return
+		if not net.is_host:
+			_station_pct = before_s
+			_resource_pct = before_r
+			_ratio.set_ratio(before_s, before_r)
+		#（数值没变不重生成，房客滑块回到原值）26.10.23 00:24 e
+		#（房客改地图只发公屏建议）26.10.22 15:20 s
+		_host_edit("星系比例", "空间站 %.0f%%，资源 %.0f%%，普通 %.0f%%" % [station, resource, normal], func() -> void:
+			_station_pct = station
+			_resource_pct = resource
+			_regen_random()
+		)
+		#（房客改地图只发公屏建议）26.10.22 15:20 e
+	)
 	_touch_target(_ratio)
+	box.add_child(_ratio)
+	var regen := Button.new()
+	regen.text = "重新生成"
+	regen.pressed.connect(func() -> void:
+		_host_edit("重新生成", "再随机一次", _regen_random)
+	)
+	box.add_child(regen)
+	return box
+
+
+func _slider_row(title: String, lo: float, hi: float, step: float, value: float, item: String, apply: Callable) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_child(_lab(title))
+	var slider := _make_slider(lo, hi, step, value)
+	row.add_child(slider)
+	_bind_commit_slider(slider, item, func(v: float) -> void:
+		apply.call(v)
+	)
+	return row
+
+
+func _make_slider(lo: float, hi: float, step: float, value: float) -> HSlider:
+	var slider := HSlider.new()
+	slider.min_value = lo
+	slider.max_value = hi
+	slider.step = step
+	slider.value = value
+	slider.custom_minimum_size = Vector2(160, 28)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_touch_target(slider)
+	return slider
+
+
+func _bind_commit_slider(slider: HSlider, item: String, apply: Callable) -> void:
+	slider.set_meta("before", slider.value)
+	slider.set_meta("drag", 0)
+	slider.drag_started.connect(func() -> void:
+		_slider_drag += 1
+		slider.set_meta("drag", 1)
+		slider.set_meta("before", slider.value)
+	)
+	slider.drag_ended.connect(func(changed: bool) -> void:
+		_slider_drag = maxi(_slider_drag - 1, 0)
+		slider.set_meta("drag", 0)
+		var shown := slider.value
+		var before := float(slider.get_meta("before", shown))
+		#（数值没变不重生成，房客滑块回到原值）26.10.23 00:24 s
+		if not changed or is_equal_approx(shown, before):
+			if not net.is_host:
+				slider.set_value_no_signal(before)
+			return
+		#（数值没变不重生成，房客滑块回到原值）26.10.23 00:24 e
+		_commit_gen_slider(slider, item, shown, before, apply)
+	)
+	slider.value_changed.connect(func(v: float) -> void:
+		if int(slider.get_meta("drag", 0)) == 1:
+			return
+		var before := float(slider.get_meta("before", v))
+		if is_equal_approx(v, before):
+			return
+		_commit_gen_slider(slider, item, v, before, apply)
+	)
+
+
+func _commit_gen_slider(slider: HSlider, item: String, shown: float, before: float, apply: Callable) -> void:
+	#（房客改地图只发公屏建议）26.10.22 15:20 s
+	_host_edit(item, _suggest_number(item, shown), func() -> void:
+		apply.call(shown)
+	)
+	if net.is_host:
+		slider.set_meta("before", shown)
+	else:
+		slider.set_value_no_signal(before)
+	#（房客改地图只发公屏建议）26.10.22 15:20 e
+
+
+func _suggest_number(item: String, shown: float) -> String:
+	if item == "空间站占比" or item == "资源占比":
+		return "%.0f%%" % shown
+	if item == "平均间距":
+		return "%.0f" % shown
+	return "%.2f" % shown
+
+
+func _on_star_btn(n: int) -> void:
+	if _filling:
+		return
+	_sync_star_buttons()
+	_host_edit("星系数", str(n), func() -> void:
+		_star_count = n
+		_sync_star_buttons()
+		_regen_random()
+	)
+
+
+func _sync_star_buttons() -> void:
+	if _star_row == null:
+		return
+	for c in _star_row.get_children():
+		if c is Button:
+			(c as Button).set_pressed_no_signal((c as Button).text == str(_star_count))
+
+
+func _stock_name(path: String) -> String:
+	for item in _stock_layouts:
+		if str(item["path"]) == path:
+			return str(item["name"])
+	return "现有地图"
+
+
+func _on_stock_picked(i: int) -> void:
+	if _filling or i < 0 or i >= _stock_layouts.size():
+		return
+	var path := str(_stock_layouts[i]["path"])
+	var name := str(_stock_layouts[i]["name"])
+	_select_stock_row(_selected_stock)
+	_host_edit("现有地图", name, func() -> void:
+		_selected_stock = path
+		_select_stock_row(path)
+		_apply_stock_map(path)
+	)
+
+
+func _select_stock_row(path: String) -> void:
+	if _stock_list == null:
+		return
+	for i in range(_stock_layouts.size()):
+		if str(_stock_layouts[i]["path"]) == path:
+			_filling = true
+			_stock_list.select(i)
+			_filling = false
+			return
+
+
+func _apply_stock_map(path: String) -> void:
+	if not FileAccess.file_exists(path):
+		return
+	var raw = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if typeof(raw) != TYPE_DICTIONARY:
+		return
+	net.submit_intent("map", {"layout": raw})
+
+
+func _regen_random() -> void:
+	var layout: Dictionary = ProceduralStarmap.generate({
+		"star_count": _star_count,
+		"lane_density": _lane_density,
+		"avg_spacing": _avg_spacing,
+		"station_frac": _station_pct / 100.0,
+		"resource_frac": _resource_pct / 100.0,
+		"faction_count": _wanted_factions(),
+		"seed": randi(),
+	})
+	net.submit_intent("map", {"layout": layout})
 
 
 func _bind_slider(slider: HSlider) -> void:
@@ -344,22 +596,6 @@ func _wanted_factions() -> int:
 	return clampi(maxi(n, 2), 2, 8)
 
 
-func _on_generate() -> void:
-	if not net.is_host:
-		net.submit_intent("suggest", {"item": "地图", "value": "重新随机"})
-		return
-	var layout: Dictionary = ProceduralStarmap.generate({
-		"star_count": _star_count,
-		"lane_density": _lane_density,
-		"avg_spacing": 120.0,
-		"station_frac": _station_pct / 100.0,
-		"resource_frac": _resource_pct / 100.0,
-		"faction_count": _wanted_factions(),
-		"seed": randi(),
-	})
-	net.submit_intent("map", {"layout": layout})
-
-
 func _on_limit(v: float) -> void:
 	if _filling:
 		return
@@ -376,13 +612,24 @@ func _on_goal(v: float) -> void:
 	)
 
 
-func _on_scale(idx: int) -> void:
+func _on_scale_btn(n: int) -> void:
 	if _filling:
 		return
-	var n: int = SCALES[idx]
+	_sync_scale_buttons(n)
 	_host_edit("规模", str(n), func() -> void:
+		#（房间规模写回主菜单当前档）26.10.22 22:10 s
+		RosterTemplatesScr.set_active_size(n)
+		#（房间规模写回主菜单当前档）26.10.22 22:10 e
 		net.submit_intent("rules", {"scale": n})
 	)
+
+
+func _sync_scale_buttons(n: int) -> void:
+	if _scale_row == null:
+		return
+	for c in _scale_row.get_children():
+		if c is Button:
+			(c as Button).set_pressed_no_signal((c as Button).text == str(n))
 
 
 func _on_fog(on: bool) -> void:
@@ -438,7 +685,8 @@ func _on_seat(which: int, peer_id: int, ai_index: int, opt: OptionButton) -> voi
 	if _filling:
 		return
 	var seat := str(opt.get_item_metadata(which))
-	if net.is_host:
+	var mine := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	if net.is_host or (ai_index <= 0 and peer_id == mine):
 		net.submit_intent("seat", {"peer": peer_id, "ai": ai_index, "seat": seat})
 	else:
 		net.submit_intent("suggest", {"item": "席位", "value": _seat_label(seat)})
@@ -463,13 +711,22 @@ func _on_ai_deputy(idx: int, ai_index: int) -> void:
 
 func _open_members() -> void:
 	var conf := (load("res://game/member_config_overlay.gd") as GDScript).new() as Control
+	conf.set_meta("mp_room", true)
+	conf.set_meta("mp_scale", int(net.room.get("scale", 20)))
 	conf.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	conf.z_index = 40
 	add_child(conf)
+	#（改名单先撤销准备）26.10.22 21:40 s
+	net.submit_intent("ready", {"on": false})
+	#（改名单先撤销准备）26.10.22 21:40 e
+	if conf.has_signal("size_selected"):
+		conf.size_selected.connect(func(n: int) -> void:
+			_on_scale_btn(n)
+		)
 	if conf.has_signal("closed"):
 		conf.closed.connect(func() -> void:
 			var pilots: Array = net.build_local_roster(int(net.room.get("scale", 20)))
-			net.submit_intent("roster", {"pilots": pilots})
+			net.submit_intent("roster", {"pilots": pilots, "crew": net.crew_for_roster(pilots)})
 			if is_instance_valid(conf):
 				conf.queue_free()
 		)
@@ -502,12 +759,8 @@ func _on_back() -> void:
 func _ui_busy() -> bool:
 	if _slider_drag > 0 or (_ratio != null and _ratio.dragging):
 		return true
-	var focus: Control = null
-	var vp := get_viewport()
-	if vp != null:
-		focus = vp.gui_get_focus_owner()
-	if focus != null and is_ancestor_of(focus) and (focus is LineEdit or focus is SpinBox):
-		return true
+	#（聊天和数字框不再挡住整个房间刷新）26.10.23 00:24 s
+	#（聊天和数字框不再挡住整个房间刷新）26.10.23 00:24 e
 	var stack: Array = [self]
 	while not stack.is_empty():
 		var node := stack.pop_back() as Node
@@ -533,16 +786,19 @@ func _apply_room() -> void:
 		return
 	_filling = true
 	var scale := int(net.room.get("scale", 20))
-	var si := SCALES.find(scale)
-	if si >= 0 and _scale.selected != si:
-		_scale.select(si)
+	_sync_scale_buttons(scale)
 	_fog.set_pressed_no_signal(bool(net.room.get("fog", false)))
-	_limit.set_value_no_signal(maxi(int(net.room.get("limit_s", 5400)) / 60, 5))
-	_goal.set_value_no_signal(int(net.room.get("annihilate", 50)))
+	var focus: Control = null
+	if get_viewport() != null:
+		focus = get_viewport().gui_get_focus_owner()
+	#（正在改的那一格先保持）26.10.23 00:24 s
+	if focus != _limit:
+		_limit.set_value_no_signal(clampi(maxi(int(net.room.get("limit_s", 5400)) / 60, 10), 10, 240))
+	if focus != _goal:
+		_goal.set_value_no_signal(clampi(int(net.room.get("annihilate", 50)), 10, 1000))
+	#（正在改的那一格先保持）26.10.23 00:24 e
 	var modes: Array = net.room.get("modes", [])
-	for c in _scale.get_parent().get_children():
-		pass
-	var left := _scale.get_parent()
+	var left := _scale_row.get_parent() if _scale_row != null else self
 	for node in left.get_children():
 		if node is HBoxContainer:
 			for cb_v in (node as HBoxContainer).get_children():
@@ -575,6 +831,11 @@ func _apply_room() -> void:
 		if h != "" and h != str(net.room.get("hash", net.rules_hash)):
 			bad = true
 	_status.text = "内容不一致，不能开始" if bad else net.invite_text()
+	for child in get_children():
+		if child.has_meta("mp_scale"):
+			child.set_meta("mp_scale", scale)
+			if child.has_method("_refresh_status"):
+				child.call("_refresh_status")
 	_filling = false
 
 

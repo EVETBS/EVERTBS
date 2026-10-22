@@ -1,6 +1,7 @@
-﻿# EVERTBS dual-end publish (inverted Y, modeled on EVE autochess publish_disv1.ps1):
+# EVERTBS dual-end publish (inverted Y, modeled on EVE autochess publish_disv1.ps1):
 #   one shared packs/game.pck  ->  Windows EVERTBS_Setup.exe (Inno seed) + Android EVERTBS.apk (bundled_content)
-# Output: builds/release/ with exactly two files. Never writes H:\disv1 (EVE autochess release dir).
+# Output: builds/release/ with exactly two files, then copy those two into H:\disv1.
+# Do not pass -OutDir H:\disv1: that folder is cleared, and it also holds EVE autochess files.
 param(
   [string]$Godot = "H:\game\game_dev\EVERTBS\tools\godot\Godot_v4.7.1-stable_win64.exe",
   [string]$OutDir = "",
@@ -147,5 +148,10 @@ if ($BundleContent) {
 
 Write-Host "Published to $OutFull :"
 $files | Format-Table Name, Length, LastWriteTime
+$disv1 = "H:\disv1"
+New-Item -ItemType Directory -Path $disv1 -Force | Out-Null
+Copy-Item $SetupOut (Join-Path $disv1 "EVERTBS_Setup.exe") -Force
+Copy-Item $ApkOut (Join-Path $disv1 "EVERTBS.apk") -Force
+Write-Host "Copied both packages to $disv1 (left EveAutochess files in place)"
 Write-Host "Shell $shellVer; content $(if ($BundleContent) { "$ContentVersion entry=$ContentEntry" } else { 'thin (none bundled)' })"
 exit 0

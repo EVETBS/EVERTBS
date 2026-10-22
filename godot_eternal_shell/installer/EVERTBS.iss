@@ -1,10 +1,11 @@
 ﻿; EVE模拟器：军团 (EVERTBS) Windows installer — Inno Setup 6
-; Same AppId enables upgrade. Before install: silent-uninstall any previous EVE战棋 shell.
+; Same AppId enables upgrade. Do not uninstall the current product (that wipes %APPDATA%\EVERTBS).
+; Legacy other names may still be silent-uninstalled. A real uninstall still deletes the user dir.
 ; No wizard bitmaps: default Inno look (EVE自走棋 artwork must not be reused).
 
 #define MyAppName "EVE模拟器：军团"
 #define MyAppNameEn "EVERTBS"
-#define MyAppVersion "202610.18.4"
+#define MyAppVersion "202610.23.1"
 #define MyAppPublisher "EVERTBS"
 #define MyAppExeName "EVERTBS.exe"
 ; Stable GUID — do not change or upgrades break.
@@ -30,7 +31,7 @@ SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#MyAppExeName}
 UninstallDisplayName={#MyAppName}
-VersionInfoVersion=2026.10.18.4
+VersionInfoVersion=2026.10.23.1
 VersionInfoProductName={#MyAppName}
 UsePreviousAppDir=yes
 UsePreviousGroup=yes
@@ -164,14 +165,21 @@ begin
     RegQueryStringValue(RootKey, SubKey, 'UninstallString', UninstallString);
     if UninstallString = '' then
       Continue;
-    { Only our own product lines. Never match EVE自走棋 / EveAutochess / EVE Online. }
-    if (Pos('EVE模拟器：军团', DisplayName) > 0) or
-       (Pos('EVE战棋', DisplayName) > 0) or
+    { Current product overlay must keep %APPDATA%\EVERTBS. Never match EVE自走棋. }
+    //（覆盖安装不删团员目录）26.10.22 13:34 s
+    if (Pos('{#MyAppUninstallKey}', SubKey) > 0) or
+       (Pos('EVE模拟器：军团', DisplayName) > 0) or
+       (CompareText(DisplayName, 'EVERTBS') = 0) or
+       (Publisher = 'EVERTBS') then
+    begin
+      Log('Overlay keeps user data, skip uninstall: ' + SubKey + ' / ' + DisplayName);
+      Continue;
+    end;
+    //（覆盖安装不删团员目录）26.10.22 13:34 e
+    if (Pos('EVE战棋', DisplayName) > 0) or
        (Pos('eve战棋', DisplayName) > 0) or
-       (Pos('EVERTBS', DisplayName) > 0) or
        (Pos('EVETBS', DisplayName) > 0) or
        (Pos('烬海征服者', DisplayName) > 0) or
-       (Publisher = 'EVERTBS') or
        (Publisher = 'EVETBS') then
     begin
       Log('Found old shell uninstall entry: ' + SubKey + ' / ' + DisplayName);
@@ -239,12 +247,9 @@ begin
   Exec('taskkill.exe', '/F /IM EVERTBS.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('taskkill.exe', '/F /IM EVETBS.exe /T', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
-  { 1) Known AppId uninstall key }
-  TryUninstallFromKey(HKCU, '{#MyAppUninstallKey}');
-  TryUninstallFromKey(HKLM, '{#MyAppUninstallKey}');
-  TryUninstallFromKey(HKLM32, '{#MyAppUninstallKey}');
+  { Same AppId is an overlay: do not run its uninstaller (UninstallDelete would wipe user data). }
 
-  { 2) Other uninstall entries of this product (old names) }
+  { Older product names only. }
   ScanUninstallHive(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall');
   ScanUninstallHive(HKLM, 'Software\Microsoft\Windows\CurrentVersion\Uninstall');
   ScanUninstallHive(HKLM32, 'Software\Microsoft\Windows\CurrentVersion\Uninstall');

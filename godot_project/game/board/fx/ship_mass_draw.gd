@@ -37,7 +37,7 @@ func sync(cam: Camera3D, units: Array, near_ids: Dictionary, battle: bool) -> vo
 		var uid := str(u.get("id", ""))
 		if near_ids.has(uid) or bool(u.get("npc_hull", false)):
 			continue
-		var pos: Vector3 = u.get("pos", Vector3.ZERO)
+		var pos: Vector3 = u.get("draw_pos", u.get("pos", Vector3.ZERO))
 		if cam.is_position_behind(pos):
 			continue
 		if not cam.is_position_in_frustum(pos):
@@ -77,7 +77,7 @@ func _fill_key(key: String, cam: Camera3D) -> void:
 	var sz := 5.5
 	for i in arr.size():
 		var u: Dictionary = arr[i]
-		var pos: Vector3 = u.get("pos", Vector3.ZERO)
+		var pos: Vector3 = u.get("draw_pos", u.get("pos", Vector3.ZERO))
 		var face: Vector3 = u.get("face_dir", Vector3(0, 0, -1))
 		face.y = 0.0
 		if face.length_squared() < 0.0001:

@@ -122,12 +122,16 @@ const DIGIT_DBL_MS := 400
 const BUBBLE_PULSE_S := 45.0
 ## Touch → mouse / cam (BOARD_AND_INPUT §5.1).
 var _touch_pts: Dictionary = {} ## index -> {pos: Vector2, t0: float, moved: bool}
+var _pinch_pair: Array = []
 var _touch_long_fired: Dictionary = {} ## index -> true
 var _pinch_prev_dist := -1.0
 var _pinch_prev_angle := 0.0
 var _touch_panning := false
 var _ui_scroll: Control
 var _ui_scroll_last := Vector2.ZERO
+var _ui_scroll_moved := false
+var _ui_scroll_travel := 0.0
+var _cell_spread_sig: Dictionary = {}
 var _hold_grow := false
 var _hold_origin := Vector2.ZERO
 var _hold_half := 0.0
@@ -140,6 +144,12 @@ const TAP_DBL_S := 0.4
 var _tap_pending := false
 var _tap_pos := Vector2.ZERO
 var _tap_at := 0.0
+var _list_tap_pending := false
+var _list_tap_pos := Vector2.ZERO
+var _list_tap_at := 0.0
+var _zoom_hold_dir := 0
+var _zoom_hold_t := 0.0
+var _zoom_hold_fired := false
 
 var drag_start = Vector2.ZERO
 var dragging = false
@@ -166,6 +176,10 @@ var _detail_dirty = true
 var _box_overlay: ColorRect
 var _order_queue: Array = []  # {id, sys, cell}
 var _move_lines: Dictionary = {}  # unit_id -> MeshInstance3D
+var _render_pos: Dictionary = {}
+var _fx_recent: Array = []
+var _fx_seq := 0
+var _fx_seen: Dictionary = {}
 var _gate_stagger: Dictionary = {}  # "sys:cell" -> next delay
 var popup: PopupMenu
 var hud: CanvasLayer
@@ -423,6 +437,8 @@ func mcp_dump_debug() -> Dictionary:
 	return out
 
 func _ready() -> void:
+	DebugSessionLog.install_scaffold()
+	DebugSessionLog.bind_board(self)
 	var t_ready := Time.get_ticks_msec()
 	rng.randomize()
 	admin = BoardAdminProxy.new()
@@ -474,6 +490,7 @@ func _ready() -> void:
 	if typeof(map.layout) == TYPE_DICTIONARY and (map.layout as Dictionary).has("viewer_faction"):
 		data.diplomacy["viewer_faction"] = int((map.layout as Dictionary).get("viewer_faction", 1))
 	viewer_faction = int(data.diplomacy.get("viewer_faction", 1))
+	_apply_faction_display_names()
 	br_tracker = BR_TRACKER.new()
 	br_tracker.viewer_faction = viewer_faction
 	br_tracker.is_npc_faction = Callable(data, "is_npc_faction")
@@ -814,6 +831,33 @@ func _match_roster() -> Dictionary:
 		if pf > 0 and not (data != null and data.is_npc_faction(pf)):
 			out[pf] = true
 	return out
+
+
+func _apply_faction_display_names() -> void:
+	if data == null:
+		return
+	var names: Dictionary = {}
+	var mp := false
+	if map != null and typeof(map.layout) == TYPE_DICTIONARY:
+		mp = bool((map.layout as Dictionary).get("mp", false))
+		var raw = (map.layout as Dictionary).get("faction_names", {})
+		if typeof(raw) == TYPE_DICTIONARY:
+			names = raw
+	if not mp:
+		var path := "user://content_runtime/data/board/local_faction_name.txt"
+		if FileAccess.file_exists(path):
+			var shown := FileAccess.get_file_as_string(path).strip_edges()
+			if shown != "":
+				names[str(int(viewer_faction))] = shown
+	for f in data.factions.get("factions", []):
+		if typeof(f) != TYPE_DICTIONARY:
+			continue
+		var key := str(int(f.get("id", -1)))
+		var shown_name := str(names.get(key, "")).strip_edges()
+		if shown_name == "":
+			continue
+		f["name"] = shown_name
+		f["abbrev"] = shown_name
 
 
 func _all_playable_factions() -> Dictionary:
@@ -1489,7 +1533,14 @@ func _spawn_garrison_unit(ship_id: String, sys: String, cell: int, faction: int,
 	var inst = pilots_sys.make_ship_instance(ship_id)
 	pilots_sys.apply_fit_resist(inst, ship_id)
 	var def: Dictionary = data.ship_def(ship_id)
-	var uid := _alloc_unit_id()
+	#（冬眠者编号按星系、格子、槽位固定，联机各端同一艘）26.10.22 16:45 s
+	var slot := 0
+	var cell_key := "%s:%d" % [sys, cell]
+	for existing in units:
+		if str(existing.get("garrison_cell_key", "")) == cell_key:
+			slot += 1
+	var uid := "g_%s_%d_%d" % [str(sys).replace(":", "_"), cell, slot]
+	#（冬眠者编号按星系、格子、槽位固定，联机各端同一艘）26.10.22 16:45 e
 	var u = {
 		"id": uid,
 		"pilot_id": "",
@@ -1794,12 +1845,17 @@ func _tick_garrison_cloak_anim(delta: float) -> void:
 		var base := u.get("rest_pos", u.get("pos", Vector3.ZERO)) as Vector3
 		if typeof(base) != TYPE_VECTOR3:
 			base = Vector3(float(u["pos"].x), BoardTypes.UNIT_Y, float(u["pos"].z))
-		u["pos"] = Vector3(base.x, BoardTypes.UNIT_Y - GARRISON_SINK_Y * (1.0 - ease_t), base.z)
+		#（下潜不改拟真坐标）26.10.22 19:40 s
 		u["alpha"] = ease_t
+		#（下潜不改拟真坐标）26.10.22 19:40 e
+		#（下潜只改显示高度）26.10.22 17:58 s
+		var sunk := Vector3(base.x, BoardTypes.UNIT_Y - GARRISON_SINK_Y * (1.0 - ease_t), base.z)
+		_render_pos[str(u.get("id", ""))] = sunk
+		#（下潜只改显示高度）26.10.22 17:58 e
 		if unit_nodes.has(u["id"]):
 			var n: Node3D = unit_nodes[u["id"]]
 			n.visible = u.get("alive", false) or dir < 0.0
-			n.global_position = u["pos"]
+			n.global_position = sunk
 			var fx = n.get_node_or_null("CloakFx") as Sprite3D
 			if fx:
 				fx.visible = t < 0.98 and t > 0.02
@@ -2225,8 +2281,13 @@ func _fill_pref_slots(u: Dictionary) -> void:
 	var fitted: Array = []
 	var pilot := _pilot_by_id(str(u.get("pilot_id", "")))
 	var mid := str(pilot.get("member_id", ""))
-	if mid != "":
-		var prefs := MemberTableScr.pref_list(data.member_by_id(mid))
+	var prefs := PackedStringArray()
+	#（席位偏好不读房主同名团员）26.10.22 21:40 s
+	if str(pilot.get("pref_eq", "")).strip_edges() != "":
+		prefs = MemberTableScr.pref_list({"pref_eq": str(pilot.get("pref_eq", ""))})
+	elif mid != "":
+		prefs = MemberTableScr.pref_list(data.member_by_id(mid))
+	if prefs.size() > 0:
 		var pi := 0
 		for i in slots.size():
 			if slots[i] != null and str(slots[i]) != "":
@@ -2240,6 +2301,7 @@ func _fill_pref_slots(u: Dictionary) -> void:
 			if eid != "" and data.equipment.has(eid):
 				slots[i] = eid
 				fitted.append(eid)
+	#（席位偏好不读房主同名团员）26.10.22 21:40 e
 	u["fit_slots"] = slots
 	u["pref_fitted"] = fitted
 
@@ -2752,6 +2814,8 @@ func _apply_damage_to_unit(
 	## Returns HP actually removed from target (0 if none).
 	if not target.get("alive", false) or raw <= 0.0:
 		return 0.0
+	if _mp != null and attacker != null and not attacker.is_empty() and _mp.has_method("note_player_combat"):
+		_mp.note_player_combat(attacker, target)
 	var atk_eq: Dictionary = {}
 	if attacker and not attacker.is_empty() and typeof(attacker.get("crew_equip", {})) == TYPE_DICTIONARY:
 		atk_eq = attacker.get("crew_equip", {})
@@ -2900,33 +2964,32 @@ func _tick_self_repair(u: Dictionary, delta: float) -> void:
 		if float(r.get("heal_shield", 0)) > 0.0:
 			if float(inst["shield"]) >= float(inst["max_s"]):
 				continue
-			if float(inst["cap"]) < float(r["cap"]):
+			if not _pay_cap(inst, r.get("cap", 0)):
 				continue
-			inst["cap"] -= float(r["cap"])
 			var hs = minf(float(r["heal_shield"]), float(inst["max_s"]) - float(inst["shield"]))
 			inst["shield"] = float(inst["shield"]) + hs
 			r["cd"] = float(r["cycle"]) * _shield_rep_cd_mul(u)
-			_play_turret_vfx("heal", _vfx_endpoint(u), _vfx_endpoint(u) + Vector3(0.0, 0.8, 0.0), str(u.get("id", "")))
+			#（自我修复只留飘字，不放维修光束）26.10.22 23:35 s
 			if _fx_ok() and _battle_fx_allowed(str(u.get("id", ""))) and float_text and hs > 0.05:
 				float_text.add_heal(u["pos"], hs, hash(str(u["id"]) + "sr"))
+			#（自我修复只留飘字，不放维修光束）26.10.22 23:35 e
 		elif float(r.get("heal_armor", 0)) > 0.0:
 			if float(inst["armor"]) >= float(inst["max_a"]):
 				continue
-			if float(inst["cap"]) < float(r["cap"]):
+			if not _pay_cap(inst, r.get("cap", 0)):
 				continue
-			inst["cap"] -= float(r["cap"])
 			var ha = minf(float(r["heal_armor"]) * (1.0 + _armor_burst_repair(u)), float(inst["max_a"]) - float(inst["armor"]))
 			inst["armor"] = float(inst["armor"]) + ha
 			r["cd"] = float(r["cycle"])
-			_play_turret_vfx("heal", _vfx_endpoint(u), _vfx_endpoint(u) + Vector3(0.0, 0.8, 0.0), str(u.get("id", "")))
+			#（自我修复只留飘字，不放维修光束）26.10.22 23:35 s
 			if _fx_ok() and _battle_fx_allowed(str(u.get("id", ""))) and float_text and ha > 0.05:
 				float_text.add_heal(u["pos"], ha, hash(str(u["id"]) + "ar"))
+			#（自我修复只留飘字，不放维修光束）26.10.22 23:35 e
 		elif float(r.get("heal_structure", 0)) > 0.0:
 			if float(inst["structure"]) >= float(inst["max_h"]):
 				continue
-			if float(inst["cap"]) < float(r["cap"]):
+			if not _pay_cap(inst, r.get("cap", 0)):
 				continue
-			inst["cap"] -= float(r["cap"])
 			var hh = minf(float(r["heal_structure"]), float(inst["max_h"]) - float(inst["structure"]))
 			inst["structure"] = float(inst["structure"]) + hh
 			r["cd"] = float(r["cycle"])
@@ -2955,6 +3018,17 @@ func _tick_shield_regen(u: Dictionary, delta: float) -> void:
 	if _fx_ok() and _battle_fx_allowed(str(u.get("id", ""))) and float_text and heal > 0.05:
 		float_text.add_heal(u["pos"], heal, hash(str(u["id"]) + "sregen"))
 
+func _pay_cap(inst: Dictionary, cost_v: Variant) -> bool:
+	#（负耗电或非有限耗电不开火）26.10.22 10:25 s
+	var cost := float(cost_v)
+	if not is_finite(cost) or cost < 0.0:
+		return false
+	if float(inst.get("cap", 0.0)) < cost:
+		return false
+	inst["cap"] = float(inst["cap"]) - cost
+	#（负耗电或非有限耗电不开火）26.10.22 10:25 e
+	return true
+
 func _tick_cap_regen(u: Dictionary, delta: float) -> void:
 	if not u.get("cap_regen_on", false):
 		return
@@ -2968,8 +3042,10 @@ func _tick_regen_and_repair(delta: float) -> void:
 	for u in units:
 		if not u.get("alive", false):
 			continue
-		if not _mp_sim_unit(u):
+		#（非权威端不积分维修）26.10.22 17:58 s
+		if not _mp_authority_unit(u):
 			continue
+		#（非权威端不积分维修）26.10.22 17:58 e
 		_tick_self_repair(u, delta)
 		_tick_command_bursts(u, delta)
 		_tick_shield_regen(u, delta)
@@ -3160,9 +3236,8 @@ func _fire_weapon(u: Dictionary, w: Dictionary, tgt: Dictionary) -> void:
 	var inst: Dictionary = u["inst"]
 	if _weapon_is_damage(w) and _unit_between_cells(tgt):
 		return
-	if float(inst["cap"]) < float(w.get("cap", 0)):
+	if not _pay_cap(inst, w.get("cap", 0)):
 		return
-	inst["cap"] -= float(w.get("cap", 0))
 	if str(w.get("kind", "")) == "remote_armor":
 		var heal = float(w.get("heal_armor", 0)) * _dph_mul(u) * (1.0 + _armor_burst_repair(tgt))
 		var tinst: Dictionary = tgt["inst"]
@@ -3178,7 +3253,7 @@ func _fire_weapon(u: Dictionary, w: Dictionary, tgt: Dictionary) -> void:
 			if not tgt.get("armor_support_buff", false):
 				tgt["armor_support_buff"] = true
 				tinst["resist"] = int(tinst.get("resist", 0)) + int(imp.get("res_pct", 10))
-		_play_turret_vfx(str(w.get("fx", "repair")), _vfx_emit_point(u), _vfx_hit_point(tgt), str(u.get("id", "")))
+		_play_turret_vfx(str(w.get("fx", "repair")), _vfx_emit_point(u), _vfx_hit_point(tgt), str(u.get("id", "")), true, str(tgt.get("id", "")), true, 0)
 		if _fx_ok() and _battle_fx_allowed(str(tgt.get("id", ""))) and float_text and heal > 0.05:
 			float_text.add_heal(tgt["pos"], heal, hash(str(tgt["id"]) + "rr"))
 		# #region agent log
@@ -3197,7 +3272,7 @@ func _fire_weapon(u: Dictionary, w: Dictionary, tgt: Dictionary) -> void:
 			inst["cap"] += float(w.get("cap", 0))
 			return
 		tinst_s["shield"] = float(tinst_s["shield"]) + heal_s
-		_play_turret_vfx(str(w.get("fx", "repair")), _vfx_emit_point(u), _vfx_hit_point(tgt), str(u.get("id", "")))
+		_play_turret_vfx(str(w.get("fx", "repair")), _vfx_emit_point(u), _vfx_hit_point(tgt), str(u.get("id", "")), true, str(tgt.get("id", "")), true, 0)
 		if _fx_ok() and _battle_fx_allowed(str(tgt.get("id", ""))) and float_text and heal_s > 0.05:
 			float_text.add_heal(tgt["pos"], heal_s, hash(str(tgt["id"]) + "rs"))
 		return
@@ -3273,22 +3348,37 @@ func _missile_splash(att: Dictionary, primary: Dictionary, raw: float, radius: i
 		_apply_damage_to_unit(att, o, raw, int(o["inst"]["resist"]))
 
 func _vfx_endpoint(u: Dictionary) -> Vector3:
-	## Tactical top-down: plate↔plate (same or cross callout); battle view: ship pos.
+	## Tactical: tonnage-icon center. Battle: ship position.
 	if cam and cam.tactical_mode and not cam.starmap_mode:
 		var uid := str(u.get("id", ""))
+		#（战术光束锚在 callout 槽，不跟被父节点拖回的船体）26.10.22 23:35 s
+		if tactical_callouts != null:
+			var anc := _callout_anchor_for_unit(u)
+			var sid := str(anc.get("sys", ""))
+			var cell := int(anc.get("cell", -1))
+			if sid != "" and cell >= 0 and tactical_callouts.has_slot(uid, sid, cell):
+				var slot: Vector3 = tactical_callouts.slot_pos_for(uid, sid, cell)
+				var icon_at: Vector3 = tactical_callouts.overhead_world_pos(uid, slot)
+				if Engine.get_process_frames() % 120 == 0:
+					_dbg59("VFX", "board_root._vfx_endpoint", "slot", {
+						"uid": uid, "x": icon_at.x, "z": icon_at.z, "runId": "post-fix"
+					})
+				return icon_at
+		#（战术光束锚在 callout 槽，不跟被父节点拖回的船体）26.10.22 23:35 e
 		if unit_nodes.has(uid):
 			var oh = unit_nodes[uid].get_node_or_null("Overhead") as Node3D
-			if oh != null and is_instance_valid(oh):
-				var gp: Vector3 = oh.global_position
-				if gp.length_squared() > 0.01:
-					# #region agent log
-					if Engine.get_process_frames() % 120 == 0:
-						_dbg59("VFX", "board_root._vfx_endpoint", "plate", {
-							"uid": uid, "y": gp.y, "runId": "vfx-plate"
-						})
-					# #endregion
-					return gp
-	return u.get("pos", Vector3.ZERO) as Vector3
+			if oh != null and is_instance_valid(oh) and oh.visible:
+				#（战术互动锚在吨位图标中心）26.10.22 20:10 s
+				var spr := oh.get("ton_spr") as Node3D
+				var gp: Vector3 = spr.global_position if spr != null and is_instance_valid(spr) else oh.global_position
+				if Engine.get_process_frames() % 120 == 0:
+					_dbg59("VFX", "board_root._vfx_endpoint", "icon", {
+						"uid": uid, "dx": gp.x - oh.global_position.x, "dz": gp.z - oh.global_position.z,
+						"runId": "vfx-icon"
+					})
+				return gp
+				#（战术互动锚在吨位图标中心）26.10.22 20:10 e
+	return u.get("draw_pos", u.get("pos", Vector3.ZERO)) as Vector3
 
 func _unit_art_model(u: Dictionary) -> Node3D:
 	var uid := str(u.get("id", ""))
@@ -3340,10 +3430,15 @@ func _vfx_miss_endpoint(att: Dictionary, tgt: Dictionary, shot_n: int, aim_from:
 		if lat.length_squared() < 0.0001:
 			lat = Vector3.RIGHT
 		var lat_n := lat.normalized()
-		var side := 1.0
-		if absi(hash(key)) % 2 != 0:
-			side = -1.0
-		var miss := anchor + lat_n * side * graze_r + dir_n * (graze_r * 0.8)
+		#（未命中落点按攻击者散开）26.10.22 20:10 s
+		var turn := float(posmod(absi(hash(key)), 360)) / 360.0 * TAU
+		var radial := lat_n * cos(turn) + dir_n * sin(turn)
+		if radial.length_squared() < 0.0001:
+			radial = lat_n
+		else:
+			radial = radial.normalized()
+		var miss := anchor + radial * graze_r
+		#（未命中落点按攻击者散开）26.10.22 20:10 e
 		miss.y += 0.25
 		return miss
 	var hull := _unit_art_model(tgt)
@@ -3360,7 +3455,7 @@ func _play_weapon_vfx(u: Dictionary, w: Dictionary, tgt: Dictionary, hit: bool) 
 	var fx := str(w.get("fx", "laser"))
 	var from := _vfx_emit_point(u, shot_n, fx)
 	var dest := _vfx_hit_point(tgt) if hit else _vfx_miss_endpoint(u, tgt, shot_n, from)
-	_play_turret_vfx(fx, from, dest, str(u.get("id", "")))
+	_play_turret_vfx(fx, from, dest, str(u.get("id", "")), true, str(tgt.get("id", "")), hit, shot_n)
 
 func _play_pd_vfx(u: Dictionary, g: Dictionary, tgt: Dictionary, hit: bool) -> void:
 	var shot_n := int(g.get("shot_n", 0))
@@ -3368,7 +3463,7 @@ func _play_pd_vfx(u: Dictionary, g: Dictionary, tgt: Dictionary, hit: bool) -> v
 	var fx := str(g.get("fx", "rail"))
 	var from := _vfx_emit_point(u, shot_n, fx)
 	var dest := _vfx_hit_point(tgt) if hit else _vfx_miss_endpoint(u, tgt, shot_n, from)
-	_play_turret_vfx(fx, from, dest, str(u.get("id", "")))
+	_play_turret_vfx(fx, from, dest, str(u.get("id", "")), true, str(tgt.get("id", "")), hit, shot_n)
 
 func _build_scene_nodes() -> void:
 	# sky (panorama; race plate still better than broken UV dome)
@@ -3427,6 +3522,13 @@ func _build_scene_nodes() -> void:
 	c3.current = true
 	cam.add_child(c3)
 	add_child(cam)
+	# #region agent log
+	DebugSessionLog.append("CAM", "board_root._build_scene_nodes", "camera_ready", {
+		"cam": cam != null,
+		"current": c3.current,
+		"runId": "post-fix",
+	})
+	# #endregion
 	if not cam.tactical_changed.is_connected(_on_tactical_changed):
 		cam.tactical_changed.connect(_on_tactical_changed)
 	if cam.has_signal("view_tier_changed") and not cam.view_tier_changed.is_connected(_on_view_tier_changed):
@@ -3435,10 +3537,11 @@ func _build_scene_nodes() -> void:
 		cam.starmap_changed.connect(_on_starmap_changed)
 	cam.block_input_fn = func() -> bool:
 		var mp := get_viewport().get_mouse_position()
-		return _hover_is_hud_control() or _mouse_over_blocking_hud(mp)
+		return sim_paused or _hover_is_hud_control() or _mouse_over_blocking_hud(mp)
 	tactical_callouts = CALLOUT_SCR.new()
 	tactical_callouts.name = "TacticalCallouts"
 	tactical_callouts.setup(map, starmap_view)
+	tactical_callouts.plate_size_fn = _tactical_plate_world_size
 	tactical_callouts.font_scale = TACTICAL_FONT_SCALE
 	BoardUnitOverhead.font_scale = TACTICAL_FONT_SCALE
 	tactical_callouts.set_active(false)
@@ -3575,10 +3678,10 @@ func _ensure_unit_node(u: Dictionary) -> void:
 func _is_battle_view() -> bool:
 	return cam != null and not cam.tactical_mode and not cam.starmap_mode
 
-func _battle_fx_allowed(uid: String) -> bool:
-	if not _is_battle_view():
-		return true
-	return _battle_model_ids.has(uid)
+func _battle_fx_allowed(_uid: String) -> bool:
+	#（弹道不看模型预算）26.10.22 17:58 s
+	return true
+	#（弹道不看模型预算）26.10.22 17:58 e
 
 func _tick_battle_model_budget(delta: float) -> void:
 	## Battle: nearest hulls, sticky hysteresis so pan/zoom does not thrash the cutoff.
@@ -4908,7 +5011,7 @@ func _build_game_menu(parent: Control) -> void:
 	menu_window.always_on_top = true
 	menu_window.visible = false
 	menu_window.min_size = Vector2i(300, 280)
-	menu_window.size = Vector2i(320, 440)
+	menu_window.size = Vector2i(320, 520)
 	menu_window.close_requested.connect(_close_game_menu)
 	add_child(menu_window)
 	var root := PanelContainer.new()
@@ -4929,13 +5032,20 @@ func _build_game_menu(parent: Control) -> void:
 	menu_page = VBoxContainer.new()
 	menu_page.add_theme_constant_override("separation", 4)
 	box.add_child(menu_page)
-	for item in [
+	var menu_items: Array = [
 		{"t": "继续游戏", "id": "continue"},
 		{"t": "读取存档", "id": "load"},
 		{"t": "保存存档", "id": "save"},
-		{"t": "回到主菜单", "id": "main"},
-		{"t": "设置", "id": "settings"},
-	]:
+	]
+	#（联机离开仍留在房间，认输单独一颗）26.10.22 15:10 s
+	if _layout_is_mp():
+		menu_items.append({"t": "离开房间并回到主菜单", "id": "leave"})
+		menu_items.append({"t": "主动认输并离开", "id": "concede"})
+	else:
+		menu_items.append({"t": "回到主菜单", "id": "main"})
+	#（联机离开仍留在房间，认输单独一颗）26.10.22 15:10 e
+	menu_items.append({"t": "设置", "id": "settings"})
+	for item in menu_items:
 		var b := Button.new()
 		b.text = str(item["t"])
 		b.custom_minimum_size = Vector2(260, 32)
@@ -5009,6 +5119,12 @@ func _on_game_menu_item(item_id: String) -> void:
 		"main":
 			_close_game_menu()
 			get_tree().change_scene_to_file("res://game/main_menu.tscn")
+		"leave":
+			_close_game_menu()
+			_mp_leave_match(false)
+		"concede":
+			_close_game_menu()
+			_mp_leave_match(true)
 		"settings":
 			if menu_page:
 				menu_page.visible = false
@@ -5377,8 +5493,9 @@ func _rebuild_diplomacy_rows() -> void:
 		glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		glyph.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		var rel := _rel_between(viewer_faction, fid)
-		var offer := bool(diplo_offer.get("%d>%d" % [viewer_faction, fid], false))
-		glyph.draw.connect(_draw_diplo_mark.bind(glyph, rel == "ally", offer and rel != "ally"))
+		var mine := bool(diplo_offer.get("%d>%d" % [viewer_faction, fid], false))
+		var theirs := bool(diplo_offer.get("%d>%d" % [fid, viewer_faction], false))
+		glyph.draw.connect(_draw_diplo_mark.bind(glyph, rel == "ally", mine and rel != "ally", theirs and rel != "ally"))
 		mark.add_child(glyph)
 		mark.pressed.connect(_offer_alliance.bind(viewer_faction, fid))
 		row.add_child(mark)
@@ -5390,14 +5507,16 @@ func _fit_diplo_panel() -> void:
 	var ms := diplo_panel.get_combined_minimum_size()
 	diplo_panel.size = Vector2(maxf(ms.x, 200.0), maxf(ms.y, 88.0))
 
-func _draw_diplo_mark(mark: Control, full: bool, half: bool) -> void:
+func _draw_diplo_mark(mark: Control, full: bool, mine: bool, theirs: bool) -> void:
 	var c := mark.size * 0.5
 	var r := 8.0
 	var col := Color(0.3, 0.55, 1, 1)
-	if full:
+	if full or (mine and theirs):
 		mark.draw_arc(c, r, 0.0, TAU, 24, col, 2.0, true)
-	elif half:
+	elif mine:
 		mark.draw_arc(c, r, PI, TAU, 16, col, 2.0, true)
+	elif theirs:
+		mark.draw_arc(c, r, 0.0, PI, 16, col, 2.0, true)
 	else:
 		mark.draw_arc(c, r, 0.0, TAU, 24, Color(0.6, 0.6, 0.6, 0.8), 1.0, true)
 
@@ -5412,32 +5531,39 @@ func _offer_alliance(from_fac: int, to_fac: int) -> void:
 		return
 	var key := "%d>%d" % [from_fac, to_fac]
 	var back := "%d>%d" % [to_fac, from_fac]
-	if _rel_between(from_fac, to_fac) == "ally":
-		_set_alliance(from_fac, to_fac, false)
+	#（发起方再点收回自己的半圆，整圆再点则解约）26.10.22 15:10 s
+	var allied := _rel_between(from_fac, to_fac) == "ally"
+	var mine := bool(diplo_offer.get(key, false))
+	if allied or mine:
 		diplo_offer.erase(key)
-		diplo_offer.erase(back)
 		diplo_ai_wait.erase(key)
-		diplo_ai_wait.erase(back)
+		if allied:
+			diplo_offer.erase(back)
+			diplo_ai_wait.erase(back)
+			_set_alliance(from_fac, to_fac, false)
+		elif not _mp_faction_is_ai(to_fac):
+			_mp_offer_diplo(from_fac, to_fac, false)
 		_rebuild_diplomacy_rows()
 		if map:
 			map.capture_dirty = true
 		return
+	#（发起方再点收回自己的半圆，整圆再点则解约）26.10.22 15:10 e
 	## Human factions wait for the other player. Only ai_factions accept on a timer.
 	var target_is_ai := _mp_faction_is_ai(to_fac)
+	diplo_offer[key] = true
+	if from_fac == viewer_faction:
+		_diplo_chat_offer(to_fac)
 	if target_is_ai:
-		if diplo_ai_wait.has(key):
-			return
-		diplo_offer[key] = true
 		diplo_ai_wait[key] = 1.0
 		_rebuild_diplomacy_rows()
 		return
-	diplo_offer[key] = true
-	if not target_is_ai and from_fac == viewer_faction:
-		_mp_offer_diplo(from_fac, to_fac)
+	if from_fac == viewer_faction:
+		_mp_offer_diplo(from_fac, to_fac, true)
 	if bool(diplo_offer.get(back, false)):
 		_set_alliance(from_fac, to_fac, true)
 		diplo_offer.erase(key)
 		diplo_offer.erase(back)
+		_diplo_chat_allied(from_fac, to_fac)
 	_rebuild_diplomacy_rows()
 	if map:
 		map.capture_dirty = true
@@ -5457,7 +5583,10 @@ func _tick_diplo_offers(delta: float) -> void:
 		diplo_offer.erase(k2)
 		var bits: PackedStringArray = str(k2).split(">")
 		if bits.size() == 2:
-			_set_alliance(int(bits[0]), int(bits[1]), true)
+			var aa := int(bits[0])
+			var bb := int(bits[1])
+			_set_alliance(aa, bb, true)
+			_diplo_chat_allied(aa, bb)
 	_rebuild_diplomacy_rows()
 	if map:
 		map.capture_dirty = true
@@ -5474,6 +5603,23 @@ func _set_alliance(a: int, b: int, on: bool) -> void:
 	rels[str(a)] = ra
 	rels[str(b)] = rb
 	data.diplomacy["relations"] = rels
+
+func _diplo_chat_offer(to_fac: int) -> void:
+	_chat_append("%s（副指挥官）：向%s发起盟约" % [player_deputy_name, _faction_label(to_fac)])
+
+func _diplo_chat_received(from_fac: int) -> void:
+	_chat_append("%s：收到 %s的结盟请求" % [player_deputy_name, _faction_label(from_fac)])
+
+func _diplo_chat_allied(a: int, b: int) -> void:
+	if viewer_faction != a and viewer_faction != b:
+		return
+	var other := b if viewer_faction == a else a
+	_chat_append("%s：已和%s互为盟友" % [player_deputy_name, _faction_label(other)])
+
+func _diplo_chat_cancelled(canceller: int, victim: int) -> void:
+	if viewer_faction != victim:
+		return
+	_chat_append("%s：%s取消了和你的结盟，注意舰队调动。" % [player_deputy_name, _faction_label(canceller)])
 
 func _build_marker_layer(parent: Control) -> void:
 	marker_layer = Control.new()
@@ -5812,9 +5958,10 @@ func _make_pilot_row(p: Dictionary) -> Control:
 	row_sky.material = SHIP_ART.tips_sky_material()
 	row_wrap.add_child(row_sky)
 	row.gui_input.connect(func(ev: InputEvent):
-		if ev is InputEventMouseButton and ev.pressed:
+		if ev is InputEventMouseButton:
 			var mb = ev as InputEventMouseButton
-			if mb.button_index == MOUSE_BUTTON_LEFT:
+			#（单击在抬手时才选中，拖动翻页不选）26.10.22 22:10 s
+			if mb.button_index == MOUSE_BUTTON_LEFT and not mb.pressed:
 				var row_u = _unit_by_id(str(p.get("unit_id", "")))
 				if row_u:
 					selection = [row_u["id"]]
@@ -5823,8 +5970,11 @@ func _make_pilot_row(p: Dictionary) -> Control:
 					if cam and cam.tactical_mode and not cam.starmap_mode and row_u.get("alive", false):
 						cam.set_follow(str(row_u["id"]))
 						cam.update_follow_pos(row_u["pos"])
-			elif mb.button_index == MOUSE_BUTTON_RIGHT:
+			#（单击在抬手时才选中，拖动翻页不选）26.10.22 22:10 e
+			#（安卓左栏双击打开命令菜单）26.10.22 12:45 s
+			elif mb.pressed and (mb.button_index == MOUSE_BUTTON_RIGHT or (_is_mobile_board() and mb.double_click)):
 				_open_pilot_menu(p, get_viewport().get_mouse_position())
+			#（安卓左栏双击打开命令菜单）26.10.22 12:45 e
 	)
 	var hb = HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 8)
@@ -5897,8 +6047,8 @@ func _make_pilot_row(p: Dictionary) -> Control:
 	# Ship art: lower-middle of the frame, covers a bit under half of the portrait.
 	var portrait = TextureRect.new()
 	portrait.name = "ShipArt"
-	var art_h = 52.0 * 0.46 * 1.2
-	var art_w = 40.0 * 1.2
+	var art_h = 52.0 * 0.46 * 1.2 * 1.2
+	var art_w = 40.0 * 1.2 * 1.2
 	portrait.position = Vector2((52.0 - art_w) * 0.5, 52.0 - art_h + 10.0)
 	portrait.size = Vector2(art_w, art_h)
 	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -6509,19 +6659,15 @@ func _build_zoom_buttons(row: HBoxContainer) -> void:
 	up.text = "↑"
 	up.custom_minimum_size = Vector2(44, 36)
 	up.mouse_filter = Control.MOUSE_FILTER_STOP
-	up.pressed.connect(func() -> void:
-		if cam:
-			cam.zoom_by_factor(0.9)
-	)
+	up.button_down.connect(_arm_zoom_hold.bind(-1))
+	up.button_up.connect(_release_zoom_hold)
 	var down := Button.new()
 	down.name = "ZoomOut"
 	down.text = "↓"
 	down.custom_minimum_size = Vector2(44, 36)
 	down.mouse_filter = Control.MOUSE_FILTER_STOP
-	down.pressed.connect(func() -> void:
-		if cam:
-			cam.zoom_by_factor(1.1)
-	)
+	down.button_down.connect(_arm_zoom_hold.bind(1))
+	down.button_up.connect(_release_zoom_hold)
 	_apply_ui_font(up)
 	_apply_ui_font(down)
 	row.add_child(up)
@@ -7265,11 +7411,63 @@ func _pilot_by_id(id: String) -> Dictionary:
 			return p
 	return {}
 
+func _notification(what: int) -> void:
+	#（系统返回只关掉浮层，不退出对局）26.10.22 22:50 s
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		var closed := ""
+		if popup != null and popup.visible:
+			popup.hide()
+			closed = "popup"
+		elif menu_window != null and menu_window.visible:
+			_close_game_menu()
+			closed = "menu"
+		# #region agent log
+		_dbg59("BACK", "board_root._notification", "go_back", {
+			"closed": closed, "runId": "post-fix"
+		})
+		# #endregion
+	#（系统返回只关掉浮层，不退出对局）26.10.22 22:50 e
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT or what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		_cancel_board_gestures()
+
+
+func _exit_tree() -> void:
+	_cancel_board_gestures()
+
+
+func _cancel_board_gestures() -> void:
+	#（暂停、失焦、离场清掉拖动和中键残留）26.10.22 15:20 s
+	_touch_pts.clear()
+	_pinch_pair.clear()
+	_touch_long_fired.clear()
+	_touch_panning = false
+	_hold_grow = false
+	_pinch_prev_dist = -1.0
+	_ui_scroll = null
+	_tap_pending = false
+	_list_tap_pending = false
+	dragging = false
+	box_selecting = false
+	_left_dragging = false
+	_left_box_selecting = false
+	_lmb_press_latch = false
+	_lmb_release_latch = false
+	_zoom_hold_dir = 0
+	_marker_drag_kind = ""
+	if cam:
+		cam.panning = false
+		cam.rotating = false
+		cam.cut_edge_pan()
+	#（暂停、失焦、离场清掉拖动和中键残留）26.10.22 15:20 e
+
+
 func _tick_edge_pan() -> void:
 	## CNC-style: invisible bands. Intent only — camera integrates velocity in tick_breathe.
 	if cam == null:
 		return
-	if cam.panning or cam.rotating or _marker_drag_kind != "" \
+	if _is_mobile_board() or not _touch_pts.is_empty() or _touch_panning \
+			or not DisplayServer.window_is_focused() \
+			or cam.panning or cam.rotating or _marker_drag_kind != "" \
 			or (popup != null and popup.visible) \
 			or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) \
 			or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) \
@@ -7320,6 +7518,8 @@ func _tick_command_layer(wall: float) -> void:
 	_tick_mouse_hint(wall)
 	_tick_touch_long_press()
 	_tick_pending_touch_tap()
+	_tick_pending_list_tap()
+	_tick_zoom_hold(wall)
 	_consume_lmb_gesture()
 	_consume_rmb_order()
 	if cam and cam.has_method("tick_breathe"):
@@ -7356,7 +7556,16 @@ func _sync_mass_and_bars(wall: float, spiked: bool) -> void:
 	var battle := _is_battle_view()
 	var star := cam != null and cam.starmap_mode
 	if _mass_draw and _mass_draw.has_method("sync"):
-		_mass_draw.sync(cam.cam if cam else null, units, _battle_model_ids, battle)
+		#（迷雾里不画远处舰船替身）26.10.22 13:42 s
+		var draw_units: Array = units
+		if _mp != null and _mp.fog_on:
+			draw_units = []
+			for u_fog in units:
+				if typeof(u_fog) == TYPE_DICTIONARY and _mp_hide_unit(u_fog):
+					continue
+				draw_units.append(u_fog)
+		#（迷雾里不画远处舰船替身）26.10.22 13:42 e
+		_mass_draw.sync(cam.cam if cam else null, draw_units, _battle_model_ids, battle)
 	if _hp_batch and _hp_batch.has_method("sync_units"):
 		var host: Dictionary = {}
 		for u2 in units:
@@ -7364,8 +7573,11 @@ func _sync_mass_and_bars(wall: float, spiked: bool) -> void:
 				continue
 			if _rel_for(int(u2.get("faction", 0))) == "hostile":
 				host[str(u2.get("id", ""))] = true
+		#（战术俯视血环全程显示）26.10.22 19:40 s
+		var rings_always := settings_battle_full_plates or (cam != null and cam.tactical_mode and not star)
+		#（战术俯视血环全程显示）26.10.22 19:40 e
 		_hp_batch.sync_units(
-			cam.cam if cam else null, units, selection, settings_battle_full_plates, wall, star,
+			cam.cam if cam else null, units, selection, rings_always, wall, star,
 			unit_nodes, host
 		)
 	if _imp_baker and _imp_baker.has_method("tick_idle"):
@@ -7391,10 +7603,7 @@ func _process(delta: float) -> void:
 		_rmb_held = false
 		_left_dragging = false
 		_left_box_selecting = false
-		if cam:
-			cam.rotating = false
-			cam.panning = false
-			cam.cut_edge_pan()
+		_cancel_board_gestures()
 		_refresh_dilate_hint()
 		return
 	_fight_n = _fighting_unit_count()
@@ -7486,6 +7695,7 @@ func _process(delta: float) -> void:
 	var arcs_moving := map.tick_smooth_arcs(sim_dt) if map else false
 	## Arc/scale morph: clamp idle into cell (no polar-slot chase; BH-38).
 	_soft_follow_cell_slots(sim_dt, arcs_moving or occ_changed_frame)
+	_ease_cell_spread(sim_dt)
 	if starmap_view:
 		var scaled = starmap_view.tick_smooth_scales(sim_dt)
 		starmap_view.tick_screen_const_icons()
@@ -7505,7 +7715,9 @@ func _process(delta: float) -> void:
 			"runId": "post-fix"
 		})
 	# #endregion
-	_separate_stacked_units(sim_dt)
+	#（待机不再每帧互推）26.10.22 17:58 s
+	# Hold still. Slot spread happens once on spawn or landing, not every frame.
+	#（待机不再每帧互推）26.10.22 17:58 e
 	_curtain_acc += sim_dt
 	if _curtain_acc >= 0.12:
 		_curtain_acc = 0.0
@@ -7539,10 +7751,12 @@ func _process(delta: float) -> void:
 	if cam and cam.tactical_mode and not cam.starmap_mode and tactical_callouts:
 		var callout_units: Array = []
 		for uu in units:
-			if _is_hostile_on_empty_cell(uu):
-				continue
 			if not _sleeper_plate_expanded(uu) and bool(uu.get("garrison", false)):
 				continue
+			#（迷雾外不画战术 callout）26.10.22 13:34 s
+			if _mp_hide_unit(uu):
+				continue
+			#（迷雾外不画战术 callout）26.10.22 13:34 e
 			callout_units.append(uu)
 		tactical_callouts.view_yaw = float(cam.tactical_yaw)
 		tactical_callouts.sync_occupied(callout_units, Callable(self, "_callout_claimant_ids"), sim_dt)
@@ -7566,8 +7780,10 @@ func _process(delta: float) -> void:
 	_sync_mass_and_bars(delta, spiked)
 
 func _add_cell_weight(sid: String, cell_i: int, amt: float) -> void:
-	if amt <= 0.0 or not map.systems.has(sid) or _mp_fog_arc(sid):
+	#（迷雾里格子弧长照常变）26.10.22 13:42 s
+	if amt <= 0.0 or not map.systems.has(sid):
 		return
+	#（迷雾里格子弧长照常变）26.10.22 13:42 e
 	var cells: Array = map.systems[sid]["cells"]
 	if cell_i < 0 or cell_i >= cells.size():
 		return
@@ -7576,8 +7792,6 @@ func _add_cell_weight(sid: String, cell_i: int, amt: float) -> void:
 func _refresh_occupancy() -> Dictionary:
 	## Per-cell weight → arc width. Quantize soft weights so arcs don't dirty every frame.
 	for sid in map.systems.keys():
-		if _mp_fog_arc(str(sid)):
-			continue
 		for c in map.systems[sid]["cells"]:
 			c["weight"] = 1.0
 	var sys_ships: Dictionary = {}
@@ -7788,8 +8002,10 @@ func _tick_movement(delta: float) -> void:
 	for u in units:
 		if not u.get("alive", false):
 			continue
-		if not _mp_sim_unit(u):
+		#（非权威端不积分位移）26.10.22 17:58 s
+		if not _mp_authority_unit(u):
 			continue
+		#（非权威端不积分位移）26.10.22 17:58 e
 		if bool(u.get("garrison", false)):
 			_abort_garrison_travel(u)
 		match int(u["phase"]):
@@ -7817,6 +8033,15 @@ func _tick_movement(delta: float) -> void:
 					u["pos"] = _clamp_pos_to_cell(str(u["sys"]), int(u["cell"]), np)
 				if u["phase_t"] <= 0.0:
 					## Prep finished → commit current dest (may have been retargeted).
+					#（有新路线时不再执行旧的停下标记）26.10.23 01:04 s
+					if bool(u.get("hold_after_prep", false)) and (u.get("path", []) as Array).is_empty():
+					#（有新路线时不再执行旧的停下标记）26.10.23 01:04 e
+						u.erase("hold_after_prep")
+						u["phase"] = BoardTypes.MovePhase.IDLE
+						u["phase_t"] = 0.0
+						u["path"] = []
+						_note_motion(u, "PREP_HOLD")
+						continue
 					if u.has("order_dest_sys") and str(u["order_dest_sys"]) == str(u.get("sys", "")) \
 							and str(u.get("step_kind", "intra")) != "jump":
 						var od = int(u.get("order_dest_cell", u["to_cell"]))
@@ -7863,8 +8088,11 @@ func _tick_movement(delta: float) -> void:
 						## INVULN belongs to no cell. Keep departure index until landing.
 					if u["phase_t"] <= 0.0:
 						if u.get("step_kind") == "jump":
+							u["handoff_from"] = str(u.get("from_sys", u.get("sys", "")))
+							u["handoff_until"] = float(_sim_clock) + 2.0
 							u["sys"] = u["to_sys"]
 							u["cell"] = u["to_cell"]
+							_note_motion(u, "LAND_COMMIT")
 							_mark_cell_enter(u, str(u["sys"]), int(u["cell"]))
 							starmap_view.transit_gates.erase("%s:%d" % [u.get("from_sys", u["sys"]), int(u.get("from_cell", 0))])
 							if br_tracker:
@@ -7873,6 +8101,8 @@ func _tick_movement(delta: float) -> void:
 							if u.get("nav_standby_on_sys_enter", false) \
 									and str(u["sys"]) == str(u.get("order_dest_sys", "")):
 								u["path"] = []
+								u.erase("order_dest_sys")
+								u.erase("order_dest_cell")
 								u.erase("nav_standby_on_sys_enter")
 								# #region agent log
 								_dbg59("SSB", "board_root.jump_land", "standby_on_enter", {
@@ -7882,6 +8112,7 @@ func _tick_movement(delta: float) -> void:
 								# #endregion
 						else:
 							u["cell"] = u["to_cell"]
+							_note_motion(u, "LAND_COMMIT")
 						_mark_cell_enter(u, str(u["sys"]), int(u["cell"]))
 						u["phase"] = BoardTypes.MovePhase.LANDING
 						u["phase_t"] = _landing_phase_t(u)
@@ -7928,46 +8159,11 @@ func _tick_movement(delta: float) -> void:
 						_sync_try_clear_gid(u)
 		_apply_figure8(u)
 
-func _apply_figure8(u: Dictionary) -> void:
-	## Combat: small figure-8 on XZ. Peaceful breathe is model-local Y in _update_unit_visuals.
-	if int(u["phase"]) != BoardTypes.MovePhase.IDLE:
-		return
-	var base: Vector3 = u.get("rest_pos", Vector3.ZERO)
-	if base == Vector3.ZERO:
-		base = _cell_pos_visual(u["sys"], int(u["cell"]), BoardTypes.UNIT_Y)
-		u["rest_pos"] = base
-	var in_combat = bool(u.get("took_damage", false)) or float(u.get("dealt_timer", 0.0)) > 0.0
-	if not in_combat:
-		return
-	var sc = starmap_view.visual_scale_of(u["sys"]) if starmap_view else float(map.systems[u["sys"]].get("scale", 1.0))
-	var band = (float(map.layout.get("ring_outer", 26)) - float(map.layout.get("ring_inner", 12))) * sc
-	var amp = band * 0.03
-	var cycle = BoardTypes.FIGURE8_CYCLE_K * float(u["inertia"]) * 2.0
-	var freq = 1.0 + float(u.get("float_freq", 0.0))
-	var t = float(u["float_t"]) / maxf(cycle, 0.1) * TAU * freq
-	var x = amp * sin(t)
-	var z = amp * sin(t) * cos(t)
-	var xr = (x - z) * 0.707
-	var zr = (x + z) * 0.707
-	var raw = Vector3(base.x + xr, BoardTypes.UNIT_Y, base.z + zr)
-	u["pos"] = _clamp_pos_to_cell(u["sys"], int(u["cell"]), raw)
-	# #region agent log
-	if int(Time.get_ticks_msec() / 800.0) != int(u.get("_dbg_t", -1)):
-		u["_dbg_t"] = int(Time.get_ticks_msec() / 800.0)
-		var sysd: Dictionary = map.systems[u["sys"]]
-		var ccell: Dictionary = sysd["cells"][int(u["cell"])]
-		var center: Vector3 = sysd["center"]
-		var local = Vector3(u["pos"].x - center.x, 0, u["pos"].z - center.z)
-		var ang = atan2(local.x, -local.z)
-		var ac = float(ccell["angle_center"])
-		var ah = float(ccell["angle_half"])
-		var dlt = absf(fposmod(ang - ac + PI, TAU) - PI)
-		if dlt > ah * 0.98:
-			_agent_dbg("H3", "board_root._apply_figure8", "out_of_cell", {
-				"unit": u["id"], "dlt": dlt, "ah": ah, "sys": u["sys"], "cell": u["cell"],
-				"runId": "post-fix"
-			})
-	# #endregion
+func _apply_figure8(_u: Dictionary) -> void:
+	## Idle holds the sim position. The model does not wander inside the cell.
+	#（待机不改拟真坐标）26.10.22 17:58 s
+	return
+	#（待机不改拟真坐标）26.10.22 17:58 e
 
 
 func _make_flat_ring_mesh(r0: float, r1: float, segs: int) -> ArrayMesh:
@@ -7984,7 +8180,7 @@ func _make_flat_ring_mesh(r0: float, r1: float, segs: int) -> ArrayMesh:
 		st.add_vertex(p00); st.add_vertex(p11); st.add_vertex(p01)
 	return st.commit()
 
-func _clamp_pos_to_cell(sys: String, cell: int, pos: Vector3) -> Vector3:
+func _clamp_pos_to_cell(sys: String, cell: int, pos: Vector3, hull_pad: bool = false) -> Vector3:
 	var sysd: Dictionary = map.systems[sys]
 	var center: Vector3 = sysd["center"]
 	var c: Dictionary = sysd["cells"][cell]
@@ -7999,6 +8195,8 @@ func _clamp_pos_to_cell(sys: String, cell: int, pos: Vector3) -> Vector3:
 	var ang = atan2(local.x, -local.z)
 	var ac = float(c["angle_center"])
 	var ah = maxf(float(c["angle_half"]) - gap, 0.02) * 0.90
+	if hull_pad:
+		ah = maxf(ah - 1.2 / maxf(r, 1.0), 0.02)
 	var dlt = fposmod(ang - ac + PI, TAU) - PI
 	dlt = clampf(dlt, -ah, ah)
 	var a = ac + dlt
@@ -8109,8 +8307,20 @@ func _start_step(u: Dictionary) -> void:
 		return
 	if _cell_interdicted(str(u.get("sys", "")), int(u.get("cell", -1))):
 		return
+	#（新的一步清掉准备结束就停下）26.10.23 01:04 s
+	u.erase("hold_after_prep")
+	#（新的一步清掉准备结束就停下）26.10.23 01:04 e
 	var step: Dictionary = u["path"].pop_front()
+	#（关上的门不按旧路线跳）26.10.22 20:10 s
+	if str(step.get("kind", "")) == "jump":
+		var gate_cell := int(step.get("from", u.get("cell", -1)))
+		if int(u.get("cell", -1)) != gate_cell or not map.can_pass_gate(str(u.get("sys", "")), gate_cell, int(u.get("faction", 0)), data.diplomacy):
+			u["path"] = []
+			_note_motion(u, "GATE_CLOSED")
+			return
+	#（关上的门不按旧路线跳）26.10.22 20:10 e
 	u["from_cell"] = int(u["cell"])
+	_note_motion(u, "NAV_START")
 	u["to_cell"] = int(step["to"])
 	u["step_kind"] = step["kind"]
 	u["from_sys"] = u["sys"]
@@ -8121,8 +8331,13 @@ func _start_step(u: Dictionary) -> void:
 		u["to_pos"] = starmap_view.gate_outer_point(u["to_sys"], u["sys"]) if starmap_view else map.cell_world_pos(u["to_sys"], u["to_cell"], BoardTypes.UNIT_Y)
 		u["to_pos"].y = BoardTypes.UNIT_Y
 		var gk = "%s:%d" % [u["sys"], int(u["from_cell"])]
-		var stag = float(_gate_stagger.get(gk, 0.0))
-		_gate_stagger[gk] = stag + rng.randf_range(0.1, 0.5)
+		#（过门错峰按下一空档计，门闲下来就过期）26.10.23 01:04 s
+		var next_free := float(_gate_stagger.get(gk, 0.0))
+		if next_free < _sim_clock:
+			next_free = _sim_clock
+		var stag := next_free - _sim_clock
+		_gate_stagger[gk] = next_free + rng.randf_range(0.1, 0.5)
+		#（过门错峰按下一空档计，门闲下来就过期）26.10.23 01:04 e
 		u["step_invuln"] = _dev_jump(u) + stag
 		starmap_view.transit_gates[gk] = true
 	else:
@@ -8199,6 +8414,16 @@ func _tick_capture(delta: float) -> void:
 	var saved := _mp_before_capture()
 	var flips = capture.tick(map, units, delta)
 	_mp_after_capture(saved)
+	#（非权威端不结算占领翻转）26.10.22 17:58 s
+	if _mp != null and _mp.active():
+		var kept: Array = []
+		for f_v in flips:
+			if typeof(f_v) != TYPE_DICTIONARY:
+				continue
+			if _mp.authority_zone(_mp._zone_of(str((f_v as Dictionary).get("sys", "")))):
+				kept.append(f_v)
+		flips = kept
+	#（非权威端不结算占领翻转）26.10.22 17:58 e
 	if map.capture_dirty or not flips.is_empty():
 		# force link style refresh after ownership change
 		if starmap_view and not flips.is_empty():
@@ -8341,8 +8566,10 @@ func _tick_combat(delta: float) -> void:
 	for u in units:
 		if not u.get("alive", false):
 			continue
-		if not _mp_sim_unit(u):
+		#（非权威端不积分开火）26.10.22 17:58 s
+		if not _mp_authority_unit(u):
 			continue
+		#（非权威端不积分开火）26.10.22 17:58 e
 		if int(u["phase"]) == BoardTypes.MovePhase.INVULN or int(u["phase"]) == BoardTypes.MovePhase.LANDING:
 			continue
 		var pd_claimed: Dictionary = {}
@@ -8417,8 +8644,13 @@ func _combat_distance_m(a: Dictionary, b: Dictionary) -> float:
 		return 999999.0
 	var d: float = Vector3(a["pos"].x, 0, a["pos"].z).distance_to(Vector3(b["pos"].x, 0, b["pos"].z))
 	var cell_m = BoardTypes.METERS_PER_CELL
-	# map units: ring ~26 -> treat 1 world unit 鈮?cell fraction
-	var cells = d / ((float(map.layout.get("ring_outer", 26)) - float(map.layout.get("ring_inner", 12))) + 0.001)
+	# map units: ring ~26 -> treat 1 world unit as a cell fraction
+	#（距离分母用正宽度）26.10.22 10:25 s
+	var width := float(map.layout.get("ring_outer", 26)) - float(map.layout.get("ring_inner", 12))
+	if not is_finite(width) or width <= 0.0:
+		width = 14.0
+	var cells = d / width
+	#（距离分母用正宽度）26.10.22 10:25 e
 	cells = maxf(cells, BoardTypes.MIN_SAME_CELL_FRAC)
 	return cells * cell_m
 
@@ -9009,15 +9241,125 @@ func _order_move_ai(u: Dictionary, to_sys: String, to_cell: int) -> void:
 		})
 	# #endregion
 
+func _note_motion(u: Dictionary, reason: String) -> void:
+	var old_seq := int(u.get("motion_seq", 0))
+	u["motion_seq"] = old_seq + 1
+	if int(u.get("_mot_log", -2)) == int(Time.get_ticks_msec() / 200):
+		return
+	u["_mot_log"] = int(Time.get_ticks_msec() / 200)
+	_dbg59("MOT", "board_root._note_motion", reason, {
+		"id": str(u.get("id", "")), "seq": int(u.get("motion_seq", 0)),
+		"sys": str(u.get("sys", "")), "cell": int(u.get("cell", -1)),
+		"phase": int(u.get("phase", 0)), "runId": "motion-fence"
+	})
+
+
+func _chase_render_pos(u: Dictionary, delta: float) -> Vector3:
+	var sim: Vector3 = u["pos"]
+	var id := str(u.get("id", ""))
+	var cloak := float(u.get("cloak_t", 1.0))
+	if bool(u.get("garrison", false)) and cloak < 0.999:
+		var ease := cloak * cloak * (3.0 - 2.0 * cloak)
+		sim.y = BoardTypes.UNIT_Y - GARRISON_SINK_Y * (1.0 - ease)
+	var sys_now := str(u.get("sys", ""))
+	if str(u.get("_render_sys", "")) != sys_now or not _render_pos.has(id):
+		u["_render_sys"] = sys_now
+		_render_pos[id] = sim
+		u["draw_pos"] = sim
+		return sim
+	var cur: Vector3 = _render_pos[id]
+	var dist := cur.distance_to(sim)
+	if dist > 2.0 and not _mp_authority_unit(u) and int(Time.get_ticks_msec() / 1000) != int(get_meta("_dbg_chase", -1)):
+		set_meta("_dbg_chase", int(Time.get_ticks_msec() / 1000))
+		DebugSessionLog.append("RENDER", "board_root._chase_render_pos", "chase", {"id": id, "dist": dist, "runId": "post-fix"})
+	#（显示追上跳跃，不把速度卡在 40）26.10.22 19:40 s
+	var k := 1.0 - exp(-delta / 0.12)
+	var nxt := sim if dist < 0.05 else cur.lerp(sim, k)
+	#（静止显示夹在归属格，跃迁航迹不夹回出发格）26.10.22 21:05 s
+	var ph_draw := int(u.get("phase", 0))
+	#（准备段缓动不再被内圈夹回去）26.10.22 23:58 s
+	if ph_draw != BoardTypes.MovePhase.INVULN and ph_draw != BoardTypes.MovePhase.PREP and map != null and map.systems.has(sys_now):
+	#（准备段缓动不再被内圈夹回去）26.10.22 23:58 e
+		var cell_draw := int(u.get("cell", -1))
+		if cell_draw >= 0:
+			nxt = _clamp_pos_to_cell(sys_now, cell_draw, nxt, true)
+	#（静止显示夹在归属格，跃迁航迹不夹回出发格）26.10.22 21:05 e
+	#（显示追上跳跃，不把速度卡在 40）26.10.22 19:40 e
+	_render_pos[id] = nxt
+	u["draw_pos"] = nxt
+	return nxt
+
+
+func _push_fx_event(fx_kind: String, from: Vector3, to: Vector3, src_id: String, tgt_id: String, hit: bool, shot_n: int = 0) -> void:
+	if _mp == null or not _mp.active() or src_id == "":
+		return
+	var u := _unit_by_id(src_id)
+	if u.is_empty() or not _mp_authority_unit(u):
+		return
+	_fx_seq += 1
+	var eid := "%d:%d" % [_mp._me(), _fx_seq]
+	_fx_recent.append({
+		"id": eid,
+		"fx": fx_kind,
+		"src": src_id,
+		"tgt": tgt_id,
+		"hit": hit,
+		"n": shot_n,
+		"a": [from.x, from.y, from.z],
+		"b": [to.x, to.y, to.z],
+	})
+	while _fx_recent.size() > 16:
+		_fx_recent.pop_front()
+	if int(Time.get_ticks_msec() / 1000) != int(get_meta("_dbg_fx", -1)):
+		set_meta("_dbg_fx", int(Time.get_ticks_msec() / 1000))
+		DebugSessionLog.append("FX", "board_root._push_fx_event", "queued", {"id": eid, "fx": fx_kind, "runId": "post-fix"})
+
+
+func play_replicated_fx(ev: Dictionary) -> void:
+	var eid := str(ev.get("id", ""))
+	if eid == "" or _fx_seen.has(eid):
+		return
+	_fx_seen[eid] = true
+	if _fx_seen.size() > 240:
+		_fx_seen.erase(_fx_seen.keys()[0])
+	var a: Array = ev.get("a", [])
+	var b: Array = ev.get("b", [])
+	if a.size() < 3 or b.size() < 3:
+		return
+	var from_v := Vector3(float(a[0]), float(a[1]), float(a[2]))
+	var to_v := Vector3(float(b[0]), float(b[1]), float(b[2]))
+	#（观察端按本机吨位图标重锚）26.10.22 20:10 s
+	if cam != null and cam.tactical_mode and not cam.starmap_mode:
+		var att := _unit_by_id(str(ev.get("src", "")))
+		var tgt := _unit_by_id(str(ev.get("tgt", "")))
+		if not att.is_empty():
+			from_v = _vfx_endpoint(att)
+		if not tgt.is_empty():
+			to_v = _vfx_endpoint(tgt) if bool(ev.get("hit", true)) else _vfx_miss_endpoint(att, tgt, int(ev.get("n", 0)), from_v)
+	#（观察端按本机吨位图标重锚）26.10.22 20:10 e
+	_play_turret_vfx(str(ev.get("fx", "laser")), from_v, to_v, str(ev.get("src", "")), false)
+	if int(Time.get_ticks_msec() / 1000) != int(get_meta("_dbg_fxp", -1)):
+		set_meta("_dbg_fxp", int(Time.get_ticks_msec() / 1000))
+		DebugSessionLog.append("FX", "board_root.play_replicated_fx", "played", {"id": eid, "runId": "post-fix"})
+
+
 func _update_unit_visuals(delta: float) -> void:
 	var viewer_fight := _viewer_combat_plate_ids()
 	for u in units:
-		if float(u.get("dealt_timer", 0.0)) > 0.0:
+		if _mp_authority_unit(u) and float(u.get("dealt_timer", 0.0)) > 0.0:
 			u["dealt_timer"] = maxf(0.0, float(u["dealt_timer"]) - delta)
 			if float(u["dealt_timer"]) <= 0.0:
 				u["took_damage"] = false
 		if not unit_nodes.has(u["id"]):
-			continue
+			#（远端舰补显示节点）26.10.22 17:58 s
+			if u.get("alive", false) and has_node("Units"):
+				_ensure_unit_node(u)
+				if unit_nodes.has(u["id"]) and int(Time.get_ticks_msec() / 1000) != int(get_meta("_dbg_node", -1)):
+					set_meta("_dbg_node", int(Time.get_ticks_msec() / 1000))
+					DebugSessionLog.append("NODE", "board_root._update_unit_visuals", "created", {"id": str(u["id"]), "runId": "post-fix"})
+			#（远端舰补显示节点）26.10.22 17:58 e
+			if not unit_nodes.has(u["id"]):
+				continue
 		var n: Node3D = unit_nodes[u["id"]]
 		var oh = n.get_node_or_null("Overhead")
 		if not u.get("alive", false):
@@ -9031,23 +9373,20 @@ func _update_unit_visuals(delta: float) -> void:
 			if oh:
 				oh.visible = false
 			continue
-		## 战术俯视：空白格敌对不展示。
-		if cam and cam.tactical_mode and _is_hostile_on_empty_cell(u):
-			n.visible = false
-			if oh:
-				oh.visible = false
-			continue
 		n.visible = true
 		if _mp_hide_unit(u):
 			n.visible = false
 			if oh:
 				oh.visible = false
 			continue
-		n.global_position = u["pos"]
+		#（模型追拟真位置）26.10.22 17:58 s
+		var shown := _chase_render_pos(u, delta)
+		n.global_position = shown
+		#（模型追拟真位置）26.10.22 17:58 e
 		## RTS: off-frustum units skip plates / trails / look_at (engine still culls the mesh).
 		var in_frustum := true
 		if cam != null and cam.cam != null:
-			in_frustum = cam.cam.is_position_in_frustum(u["pos"] as Vector3)
+			in_frustum = cam.cam.is_position_in_frustum(shown)
 		if not in_frustum:
 			if oh:
 				oh.visible = false
@@ -9063,12 +9402,22 @@ func _update_unit_visuals(delta: float) -> void:
 		# Face movement direction (Model/Proxy yaw)
 		var aim: Vector3 = u.get("to_pos", Vector3.ZERO) - u["pos"]
 		aim.y = 0.0
+		#（别人的船用快照朝向）26.10.22 23:58 s
+		if not _mp_authority_unit(u):
+			aim = u.get("face_dir", Vector3.ZERO)
+			aim.y = 0.0
+			if aim.length_squared() < 0.0001:
+				aim = u.get("to_pos", u["pos"]) - u["pos"]
+				aim.y = 0.0
+		#（别人的船用快照朝向）26.10.22 23:58 e
 		if aim.length_squared() < 0.0001:
 			aim = u.get("face_dir", Vector3.ZERO)
 			aim.y = 0.0
 		if aim.length_squared() > 0.0001:
-			u["face_dir"] = aim.normalized()
-			var look = n.global_position + u["face_dir"]
+			aim = aim.normalized()
+			if _mp_authority_unit(u):
+				u["face_dir"] = aim
+			var look = n.global_position + aim
 			look.y = n.global_position.y
 			if n.global_position.distance_squared_to(look) > 0.0001:
 				n.look_at(look, Vector3.UP)
@@ -9224,7 +9573,7 @@ func _update_unit_visuals(delta: float) -> void:
 			# #endregion
 		if cam.follow_unit_id == u["id"]:
 			## Follow always uses ship world pos (never callout/icon).
-			cam.update_follow_pos(u["pos"])
+			cam.update_follow_pos(u.get("draw_pos", u["pos"]))
 			# #region agent log
 			if Engine.get_process_frames() % 30 == 0 and cam.cam:
 				_agent_dbg("A3", "board_root.follow", "follow_center", {
@@ -9252,16 +9601,74 @@ func _spread_jump_wave(sys: String, cell: int) -> void:
 		group.append(uu)
 	if group.is_empty():
 		return
-	group.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return str(a.get("id", "")) < str(b.get("id", ""))
-	)
-	var n := group.size()
-	for i in n:
-		var p: Vector3 = _cell_slot_pos(sys, cell, i, n)
-		var ship: Dictionary = group[i]
-		ship["pos"] = p
-		ship["rest_pos"] = p
-		ship["land_pos"] = p
+	#（进格后整格缓向均匀槽，这里只清标记）26.10.22 22:30 s
+	for ship_v in group:
+		(ship_v as Dictionary).erase("jump_wave")
+	#（进格后整格缓向均匀槽，这里只清标记）26.10.22 22:30 e
+
+
+func _ease_cell_spread(dt: float) -> void:
+	## Authority eases idle ships onto one even inner grid. Clamp keeps the logical cell.
+	if map == null:
+		return
+	var groups: Dictionary = {}
+	for u in units:
+		if not u.get("alive", false) or bool(u.get("garrison", false)):
+			continue
+		var ph := int(u.get("phase", 0))
+		if ph != BoardTypes.MovePhase.IDLE and ph != BoardTypes.MovePhase.LANDING:
+			continue
+		if not _mp_authority_unit(u):
+			continue
+		var key := "%s:%d" % [str(u.get("sys", "")), int(u.get("cell", -1))]
+		if not groups.has(key):
+			groups[key] = []
+		groups[key].append(u)
+	var k := 1.0 - exp(-maxf(dt, 0.0) / 0.45)
+	for key in groups.keys():
+		var group: Array = groups[key]
+		group.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return str(a.get("id", "")) < str(b.get("id", ""))
+		)
+		var ids := PackedStringArray()
+		for row in group:
+			ids.append(str((row as Dictionary).get("id", "")))
+		var sig := "|".join(ids)
+		var fresh := str(_cell_spread_sig.get(key, "")) != sig
+		if fresh:
+			_cell_spread_sig[key] = sig
+		var parts := str(key).split(":")
+		var sys_k := parts[0]
+		var cell_k := int(parts[1]) if parts.size() > 1 else -1
+		if cell_k < 0 or not map.systems.has(sys_k):
+			continue
+		var n := group.size()
+		for i in n:
+			var ship: Dictionary = group[i]
+			if fresh:
+				var tgt: Vector3 = _clamp_pos_to_cell(sys_k, cell_k, _cell_slot_pos(sys_k, cell_k, i, n), true)
+				ship["spread_to"] = tgt
+				ship["crowd_slot"] = i
+				ship["crowd_sys"] = sys_k
+				ship["crowd_cell"] = cell_k
+			if not ship.has("spread_to"):
+				continue
+			var dest: Vector3 = ship["spread_to"]
+			var cur: Vector3 = ship.get("pos", dest)
+			var nxt := cur.lerp(dest, k)
+			nxt = _clamp_pos_to_cell(sys_k, cell_k, nxt, true)
+			ship["pos"] = nxt
+			ship["rest_pos"] = nxt
+			if nxt.distance_to(dest) < 0.25:
+				ship["pos"] = dest
+				ship["rest_pos"] = dest
+				ship.erase("spread_to")
+		# #region agent log
+		if fresh:
+			_dbg59("SPREAD", "board_root._ease_cell_spread", "even", {
+				"cell": key, "n": n, "runId": "post-fix", "hypothesisId": "SPREAD",
+			})
+		# #endregion
 
 
 func _fan_cell_slots_xz(sys: String, cell: int) -> void:
@@ -9361,6 +9768,10 @@ func _soft_follow_cell_slots(_delta: float, force: bool) -> void:
 		for u in units:
 			if not u.get("alive", false):
 				continue
+			#（观察端不改权威位置）26.10.22 17:58 s
+			if not _mp_authority_unit(u):
+				continue
+			#（观察端不改权威位置）26.10.22 17:58 e
 			if int(u.get("phase", 0)) != BoardTypes.MovePhase.PREP:
 				continue
 			var sys_p = str(u.get("from_sys", u["sys"]))
@@ -9370,6 +9781,10 @@ func _soft_follow_cell_slots(_delta: float, force: bool) -> void:
 	for u in units:
 		if not u.get("alive", false):
 			continue
+		#（观察端不改权威位置）26.10.22 17:58 s
+		if not _mp_authority_unit(u):
+			continue
+		#（观察端不改权威位置）26.10.22 17:58 e
 		var ph: int = int(u.get("phase", 0))
 		if ph != BoardTypes.MovePhase.IDLE and ph != BoardTypes.MovePhase.PREP:
 			continue
@@ -9703,12 +10118,23 @@ func _sync_start_blocked(u: Dictionary) -> bool:
 		var ph = int(o["phase"])
 		if ph == BoardTypes.MovePhase.PREP or ph == BoardTypes.MovePhase.INVULN or ph == BoardTypes.MovePhase.LANDING:
 			return true
-		## Has dest but no path yet (drain lag) and not already there.
+		## Dest with no path: still waiting on the first path result, or already proven unreachable.
 		if ph == BoardTypes.MovePhase.IDLE and o["path"].is_empty() and o.has("order_dest_sys"):
 			var at := str(o.get("sys", "")) == str(o.get("order_dest_sys", "")) \
 				and int(o.get("cell", -1)) == int(o.get("order_dest_cell", -2))
-			if not at:
-				return true
+			if at:
+				continue
+			#（没有路的组员退出这一轮同步）26.10.23 01:04 s
+			if bool(o.get("path_miss", false)):
+				continue
+			#（没有路的组员退出这一轮同步）26.10.23 01:04 e
+			# #region agent log
+			_dbg59("S1", "board_root._sync_start_blocked", "wait_path", {
+				"unit": uid, "blocker": str(o.get("id", "")), "dest": [str(o.get("order_dest_sys", "")), int(o.get("order_dest_cell", -1))],
+				"runId": "stall-fix"
+			})
+			# #endregion
+			return true
 	if not wave.is_empty():
 		return true
 	if u["path"].is_empty():
@@ -9721,10 +10147,12 @@ func _sync_start_blocked(u: Dictionary) -> bool:
 	return true
 
 func _sync_step_total(o: Dictionary) -> float:
-	## Gate: gate time only. Intra-system: align prep + cross time.
+	## Gate: gate time plus the stagger this ship will actually take. Intra-system: align prep + cross time.
 	var step: Dictionary = o["path"][0]
 	if str(step.get("kind", "")) == "jump":
-		return _dev_jump(o)
+		var gk := "%s:%d" % [str(o.get("sys", "")), int(step.get("from", o.get("cell", -1)))]
+		var next_free := float(_gate_stagger.get(gk, 0.0))
+		return _dev_jump(o) + maxf(0.0, next_free - _sim_clock)
 	return _dev_prep(o) + _dev_move(o)
 
 func _sync_next_key(o: Dictionary) -> String:
@@ -9986,6 +10414,28 @@ func _every_faction_surrendered() -> bool:
 			return false
 	return any
 
+func _last_human_after_concede() -> int:
+	var ai := {}
+	if map != null and typeof(map.layout) == TYPE_DICTIONARY:
+		for v in (map.layout as Dictionary).get("ai_factions", []):
+			ai[int(v)] = true
+	var alive: Array = []
+	var conceded := 0
+	for fid_v in _match_roster().keys():
+		var fid := int(fid_v)
+		if data != null and data.is_npc_faction(fid):
+			continue
+		if ai.has(fid):
+			continue
+		if _faction_out.has(fid):
+			conceded += 1
+		else:
+			alive.append(fid)
+	if conceded >= 1 and alive.size() == 1:
+		return int(alive[0])
+	return -1
+
+
 func _standing_factions() -> Array:
 	var standing: Array = []
 	for f in data.factions.get("factions", []):
@@ -10051,6 +10501,17 @@ func _tick_match_victory_checks() -> void:
 	if _every_faction_surrendered():
 		_end_match(-1, "同时投降")
 		return
+	#（其余玩家认输离开后，给最后留下的人判胜）26.10.22 16:25 s
+	var last_human := _last_human_after_concede()
+	if last_human > 0:
+		# #region agent log
+		DebugSessionLog.append("WIN", "board_root._tick_match_victory_checks", "last_human", {
+			"winner": last_human, "runId": "post-fix",
+		})
+		# #endregion
+		_end_match(last_human, "其余玩家已认输离开")
+		return
+	#（其余玩家认输离开后，给最后留下的人判胜）26.10.22 16:25 e
 	if _match_has("gu_dou"):
 		if standing.size() == 2:
 			_cancel_all_alliances()
@@ -10194,8 +10655,11 @@ func _show_settlement() -> void:
 	dl.pressed.connect(_download_settle_csv)
 	row.add_child(dl)
 	var close_btn := Button.new()
-	close_btn.text = "关闭"
+	close_btn.text = "返回房间" if _layout_is_mp() else "关闭"
 	close_btn.pressed.connect(func() -> void:
+		if _layout_is_mp():
+			get_tree().change_scene_to_file("res://game/main_menu.tscn")
+			return
 		_settle_layer.visible = false
 	)
 	row.add_child(close_btn)
@@ -10510,6 +10974,7 @@ func _input(event: InputEvent) -> void:
 	if sim_paused:
 		return
 	if _handle_touch_input(event):
+		get_viewport().set_input_as_handled()
 		return
 	## LMB: latch press/release only. UI hit-test gates the press, never the release
 	## (Mindustry keyRelease(select) commits the rect even after the cursor enters UI).
@@ -10528,7 +10993,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and dragging and _is_mobile_board() and _touch_pts.is_empty() and event.device >= 0:
 		var mm := event as InputEventMouseMotion
 		if cam and not _pointer_blocks_gesture_start(mm.position):
-			cam.pan_by_screen_delta(mm.relative)
+			cam.pan_by_screen_points(mm.position - mm.relative, mm.position)
 			_touch_panning = true
 		get_viewport().set_input_as_handled()
 		return
@@ -10569,10 +11034,21 @@ func _input(event: InputEvent) -> void:
 					if scroll_at:
 						_ui_scroll = scroll_at
 						_ui_scroll_last = mb.position
+						_ui_scroll_moved = false
+						_ui_scroll_travel = 0.0
 						_lmb_press_on_left_list = false
 						_lmb_press_on_ui = true
-			elif _ui_scroll and mb.device >= 0:
+			elif mb.device >= 0 and (_ui_scroll != null or _ui_scroll_moved):
+				#（翻页之后抬手不再点中原来的控件）26.10.22 22:10 s
+				var scrolled := _ui_scroll_moved
 				_ui_scroll = null
+				_ui_scroll_moved = false
+				_ui_scroll_travel = 0.0
+				if scrolled:
+					_release_zoom_hold()
+					get_viewport().set_input_as_handled()
+					return
+				#（翻页之后抬手不再点中原来的控件）26.10.22 22:10 e
 			else:
 				_lmb_release_latch = true
 				_lmb_release_pos = mb.position
@@ -10623,10 +11099,47 @@ func _handle_touch_input(event: InputEvent) -> bool:
 		var st := event as InputEventScreenTouch
 		var idx := int(st.index)
 		if st.pressed:
+			#（第二指落在界面上也只参加双指手势，不滚动、不点界面）26.10.22 16:45 s
+			if not _touch_pts.is_empty():
+				_touch_pts[idx] = {
+					"pos": st.position,
+					"start": st.position,
+					"t0": Time.get_ticks_msec() / 1000.0,
+					"moved": true,
+					"owner": "gesture",
+				}
+				_promote_pinch()
+				return true
+			#（第二指落在界面上也只参加双指手势，不滚动、不点界面）26.10.22 16:45 e
 			var scroll_at := _scroll_at(st.position)
-			if scroll_at:
+			#（左栏连点两次打开命令菜单）26.10.22 12:45 s
+			if scroll_at == left_scroll:
+				_touch_pts[idx] = {
+					"pos": st.position,
+					"start": st.position,
+					"t0": Time.get_ticks_msec() / 1000.0,
+					"moved": false,
+					"owner": "left",
+					"left_list": true,
+				}
 				_ui_scroll = scroll_at
 				_ui_scroll_last = st.position
+				_ui_scroll_moved = false
+				_ui_scroll_travel = 0.0
+				return true
+			#（左栏连点两次打开命令菜单）26.10.22 12:45 e
+			if scroll_at:
+				_touch_pts[idx] = {
+					"pos": st.position,
+					"start": st.position,
+					"t0": Time.get_ticks_msec() / 1000.0,
+					"moved": false,
+					"owner": "ui",
+				}
+				_ui_scroll = scroll_at
+				_ui_scroll_last = st.position
+				_ui_scroll_moved = false
+				_ui_scroll_travel = 0.0
 				return true
 			var blocked := _pointer_blocks_gesture_start(st.position)
 			# #region agent log
@@ -10640,8 +11153,10 @@ func _handle_touch_input(event: InputEvent) -> bool:
 				return true
 			_touch_pts[idx] = {
 				"pos": st.position,
+				"start": st.position,
 				"t0": Time.get_ticks_msec() / 1000.0,
 				"moved": false,
+				"owner": "board",
 			}
 			_touch_long_fired.erase(idx)
 			if _touch_pts.size() >= 2:
@@ -10649,11 +11164,21 @@ func _handle_touch_input(event: InputEvent) -> bool:
 				_pinch_prev_dist = -1.0
 			return true
 		## Release
-		if _ui_scroll != null and _touch_pts.is_empty():
-			_ui_scroll = null
-			return true
 		var info: Dictionary = _touch_pts.get(idx, {})
 		_touch_pts.erase(idx)
+		if bool(info.get("left_list", false)):
+			if not _touch_has_owner("left") and not _touch_has_owner("ui"):
+				_ui_scroll = null
+			if not bool(info.get("moved", false)):
+				_note_left_list_tap(st.position)
+			return true
+		if str(info.get("owner", "")) == "ui" or str(info.get("owner", "")) == "gesture":
+			if not _touch_has_owner("ui") and not _touch_has_owner("left"):
+				_ui_scroll = null
+			if _touch_pts.size() < 2:
+				_pinch_pair.clear()
+				_pinch_prev_dist = -1.0
+			return true
 		var was_long := bool(_touch_long_fired.get(idx, false))
 		var was_growing := bool(info.get("growing", false))
 		_touch_long_fired.erase(idx)
@@ -10675,62 +11200,56 @@ func _handle_touch_input(event: InputEvent) -> bool:
 		return true
 	if event is InputEventScreenDrag:
 		var sd := event as InputEventScreenDrag
-		if _ui_scroll != null:
-			_apply_ui_scroll(sd.position)
-			get_viewport().set_input_as_handled()
-			return true
 		var idx2 := int(sd.index)
 		if not _touch_pts.has(idx2):
 			return true
 		var info2: Dictionary = _touch_pts[idx2]
 		var prev_pos: Vector2 = info2.get("pos", sd.position)
 		var pos_delta: Vector2 = sd.position - prev_pos
+		var start_pos: Vector2 = info2.get("start", prev_pos)
+		var from_start: Vector2 = sd.position - start_pos
 		info2["pos"] = sd.position
+		#（框选出现后中心跟随触摸点）26.10.22 12:45 s
+		if bool(info2.get("growing", false)):
+			info2["origin"] = sd.position
+			_touch_pts[idx2] = info2
+			_hold_origin = sd.position
+			_hold_half = float(info2.get("half", _hold_half))
+			return true
+		var owner := str(info2.get("owner", "board"))
+		if _touch_pts.size() >= 2 or owner == "gesture":
+			info2["owner"] = "gesture"
+			info2["moved"] = true
+			_touch_pts[idx2] = info2
+			_ui_scroll = null
+			_apply_pinch_or_rotate()
+			return true
+		if owner == "left" or owner == "ui":
+			#（从按下点累计过门槛才算拖，慢拖不再被当成没动）26.10.22 15:20 s
+			if not bool(info2.get("moved", false)) and from_start.length() >= _touch_slop_px():
+				info2["moved"] = true
+			_touch_pts[idx2] = info2
+			if bool(info2.get("moved", false)):
+				_apply_ui_scroll(sd.position)
+			#（从按下点累计过门槛才算拖，慢拖不再被当成没动）26.10.22 15:20 e
+			return true
+		#（框选出现后中心跟随触摸点）26.10.22 12:45 e
 		var slop := _touch_slop_px()
-		if sd.relative.length() >= slop * 0.5 or pos_delta.length() >= slop:
+		if not bool(info2.get("moved", false)) and from_start.length() >= slop:
 			info2["moved"] = true
 			info2["growing"] = false
 			_hold_grow = false
 		_touch_pts[idx2] = info2
 		if _touch_pts.size() >= 2:
-			# #region agent log
-			if Engine.get_process_frames() % 10 == 0:
-				_dbg59("E", "board_root._handle_touch_input", "pinch_path", {
-					"pts": _touch_pts.size(), "rel": [sd.relative.x, sd.relative.y],
-					"pos_d": [pos_delta.x, pos_delta.y], "runId": "pre-fix"
-				})
-			# #endregion
 			_apply_pinch_or_rotate()
 			return true
-		## Single-finger drag → middle-button pan
+		## Single-finger drag → grab-map pan. No per-mode Y flip.
 		if cam and bool(info2.get("moved", false)):
 			_touch_panning = true
-			var pan_d: Vector2 = sd.relative
-			## H-C: stretch/Android often reports relative=0; fall back to position delta.
-			if pan_d.length_squared() < 0.0001:
-				pan_d = pos_delta
-			# #region agent log
-			if Engine.get_process_frames() % 6 == 0:
-				var look0: Vector3 = cam.look_at_point if cam else Vector3.ZERO
-				cam.pan_by_screen_delta(pan_d)
-				_dbg59("C", "board_root._handle_touch_input", "single_drag_pan", {
-					"rel": [sd.relative.x, sd.relative.y], "pos_d": [pos_delta.x, pos_delta.y],
-					"used": [pan_d.x, pan_d.y], "tac": cam.tactical_mode if cam else false,
-					"look0": [look0.x, look0.z], "look1": [cam.look_at_point.x, cam.look_at_point.z],
-					"runId": "pre-fix"
-				})
-			else:
-				cam.pan_by_screen_delta(pan_d)
-			# #endregion
-		else:
-			# #region agent log
-			if Engine.get_process_frames() % 15 == 0:
-				_dbg59("A", "board_root._handle_touch_input", "drag_no_pan", {
-					"moved": bool(info2.get("moved", false)), "has_cam": cam != null,
-					"rel": [sd.relative.x, sd.relative.y], "pos_d": [pos_delta.x, pos_delta.y],
-					"runId": "pre-fix"
-				})
-			# #endregion
+			var pan_from: Vector2 = sd.position - sd.relative
+			if sd.relative.length_squared() < 0.0001:
+				pan_from = prev_pos
+			cam.pan_by_screen_points(pan_from, sd.position)
 		return true
 	# #region agent log
 	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
@@ -10744,10 +11263,37 @@ func _handle_touch_input(event: InputEvent) -> bool:
 	# #endregion
 	return false
 
+func _promote_pinch() -> void:
+	if _touch_pts.size() < 2:
+		return
+	_ui_scroll = null
+	_pinch_prev_dist = -1.0
+	_touch_panning = false
+	var ids: Array = _touch_pts.keys()
+	ids.sort()
+	_pinch_pair = [ids[0], ids[1]]
+	for id in _pinch_pair:
+		var info: Dictionary = _touch_pts[id]
+		info["owner"] = "gesture"
+		info["moved"] = true
+		_touch_pts[id] = info
+	# #region agent log
+	_dbg59("GEST", "board_root._promote_pinch", "ui_joined", {
+		"n": _touch_pts.size(), "pair": _pinch_pair, "runId": "post-fix",
+	})
+	# #endregion
+
+
 func _apply_pinch_or_rotate() -> void:
 	if cam == null or _touch_pts.size() < 2:
 		return
-	var keys: Array = _touch_pts.keys()
+	var keys: Array = _pinch_pair.duplicate()
+	if keys.size() < 2 or not _touch_pts.has(keys[0]) or not _touch_pts.has(keys[1]):
+		keys = _touch_pts.keys()
+		keys.sort()
+		if keys.size() < 2:
+			return
+		_pinch_pair = [keys[0], keys[1]]
 	var a: Dictionary = _touch_pts[keys[0]]
 	var b: Dictionary = _touch_pts[keys[1]]
 	var pa: Vector2 = a["pos"]
@@ -10760,8 +11306,9 @@ func _apply_pinch_or_rotate() -> void:
 		return
 	var dd := dist - _pinch_prev_dist
 	if absf(dd) > 1.5:
-		## Pinch open → zoom out (wheel down); pinch close → zoom in.
-		var factor := 1.0 - clampf(dd * 0.004, -0.12, 0.12)
+		#（双指张开拉远）26.10.22 12:45 s
+		var factor := 1.0 + clampf(dd * 0.004, -0.12, 0.12)
+		#（双指张开拉远）26.10.22 12:45 e
 		cam.zoom_by_factor(factor)
 	var dang := ang - _pinch_prev_angle
 	while dang > PI:
@@ -10776,6 +11323,13 @@ func _apply_pinch_or_rotate() -> void:
 
 func _is_mobile_board() -> bool:
 	return OS.get_name() == "Android" or OS.has_feature("mobile")
+
+
+func _touch_has_owner(owner: String) -> bool:
+	for info_v in _touch_pts.values():
+		if typeof(info_v) == TYPE_DICTIONARY and str((info_v as Dictionary).get("owner", "")) == owner:
+			return true
+	return false
 
 
 func _touch_slop_px() -> float:
@@ -10801,6 +11355,79 @@ func _tick_pending_touch_tap() -> void:
 		return
 	if Time.get_ticks_msec() / 1000.0 - _tap_at > TAP_DBL_S:
 		_flush_touch_tap()
+
+
+func _note_left_list_tap(pos: Vector2) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	if _list_tap_pending and now - _list_tap_at <= TAP_DBL_S and pos.distance_to(_list_tap_pos) <= _touch_slop_px():
+		_list_tap_pending = false
+		var p := _pilot_row_at(pos)
+		if p.is_empty():
+			p = _pilot_row_at(_list_tap_pos)
+		if not p.is_empty():
+			_open_pilot_menu(p, pos)
+		return
+	_list_tap_pending = true
+	_list_tap_pos = pos
+	_list_tap_at = now
+
+
+func _tick_pending_list_tap() -> void:
+	if not _list_tap_pending:
+		return
+	if Time.get_ticks_msec() / 1000.0 - _list_tap_at > TAP_DBL_S:
+		_list_tap_pending = false
+
+
+func _pilot_row_at(pos: Vector2) -> Dictionary:
+	if left_rows == null:
+		return {}
+	for row in left_rows.get_children():
+		var node := row as Control
+		if node == null or not node.get_global_rect().has_point(pos):
+			continue
+		return _pilot_by_id(str(node.get_meta("pilot", "")))
+	return {}
+
+
+func _arm_zoom_hold(dir: int) -> void:
+	_zoom_hold_dir = dir
+	_zoom_hold_t = 0.0
+	_zoom_hold_fired = false
+
+
+func _release_zoom_hold() -> void:
+	#（按住镜头键超过半秒才连续缩放）26.10.22 12:45 s
+	if _zoom_hold_dir != 0 and not _zoom_hold_fired and cam:
+		cam.zoom_by_factor(0.9 if _zoom_hold_dir < 0 else 1.1)
+	#（按住镜头键超过半秒才连续缩放）26.10.22 12:45 e
+	_zoom_hold_dir = 0
+	_zoom_hold_fired = false
+
+
+func _tick_zoom_hold(wall: float) -> void:
+	if _zoom_hold_dir == 0 or cam == null:
+		return
+	_zoom_hold_t += wall
+	if _zoom_hold_t < 0.5:
+		return
+	#（按住镜头键超过半秒才连续缩放）26.10.22 12:45 s
+	_zoom_hold_fired = true
+	var step := 0.9 if _zoom_hold_dir < 0 else 1.1
+	cam.zoom_by_factor(pow(step, wall / 0.12))
+	#（按住镜头键超过半秒才连续缩放）26.10.22 12:45 e
+
+
+func _tactical_plate_world_size(uid: String) -> Vector2:
+	if not unit_nodes.has(uid):
+		return Vector2.ZERO
+	var n: Node = unit_nodes[uid]
+	var oh := n.get_node_or_null("Overhead")
+	if oh != null and oh.has_method("tactical_plate_world_size"):
+		var got: Variant = oh.call("tactical_plate_world_size")
+		if got is Vector2:
+			return got
+	return Vector2.ZERO
 
 
 func _flush_touch_tap() -> void:
@@ -10832,7 +11459,7 @@ func _tick_touch_long_press() -> void:
 	if bool(_touch_long_fired.get(idx, false)):
 		return
 	var info: Dictionary = _touch_pts[idx]
-	if bool(info.get("moved", false)):
+	if str(info.get("owner", "board")) != "board" or bool(info.get("moved", false)):
 		_hold_grow = false
 		return
 	var now := Time.get_ticks_msec() / 1000.0
@@ -10954,6 +11581,9 @@ func _apply_ui_scroll(pos: Vector2) -> void:
 		return
 	var delta := pos - _ui_scroll_last
 	_ui_scroll_last = pos
+	_ui_scroll_travel += delta.length()
+	if _ui_scroll_travel >= 18.0:
+		_ui_scroll_moved = true
 	if _ui_scroll is ScrollContainer:
 		var sc := _ui_scroll as ScrollContainer
 		if sc.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED:
@@ -11074,6 +11704,11 @@ func _finish_lmb_gesture(pos: Vector2) -> void:
 		was_box = box_selecting or dist >= BoardTypes.BOX_DRAG_PX
 	dragging = false
 	box_selecting = false
+	#（移动端兼容拖动松手不再补一次点击）26.10.22 16:45 s
+	if _is_mobile_board() and _touch_panning:
+		_touch_panning = false
+		return
+	#（移动端兼容拖动松手不再补一次点击）26.10.22 16:45 e
 	if Time.get_ticks_msec() / 1000.0 < _suppress_lmb_until:
 		return
 	# #region agent log
@@ -11572,6 +12207,16 @@ func _order_attack_focus(tgt: Dictionary) -> void:
 		for un2 in movers:
 			if str(un2["sys"]) != dest_sys or int(un2["cell"]) != dest_cell:
 				_queue_unit_move(un2, dest_sys, dest_cell)
+			else:
+				_mp_on_path(un2, dest_sys, dest_cell)
+	else:
+		for un3 in movers:
+			_mp_on_path(un3, str(un3.get("sys", "")), int(un3.get("cell", 0)))
+	# #region agent log
+	DebugSessionLog.append("ATK", "board_root._order_attack_focus", "focus_sent", {
+		"tgt": tid, "n": movers.size(), "move": need_move, "runId": "post-fix",
+	})
+	# #endregion
 	_detail_dirty = true
 
 func _order_player_move(u: Dictionary, to_sys: String, to_cell: int) -> void:
@@ -11760,14 +12405,20 @@ func _drain_order_queue(budget: int) -> void:
 			})
 		# #endregion
 
-func _pathfind_apply(u: Dictionary, to_sys: String, to_cell: int) -> void:
+func _pathfind_apply(u: Dictionary, to_sys: String, to_cell: int, broadcast: bool = true) -> void:
 	u["player_hold"] = true
-	_mp_on_path(u, to_sys, to_cell)
+	if broadcast:
+		_mp_on_path(u, to_sys, to_cell)
 	u["order_dest_sys"] = to_sys
 	u["order_dest_cell"] = to_cell
 	var ph: int = int(u.get("phase", 0))
 	## INVULN / LANDING: remember dest only — current hop locked.
 	if ph == BoardTypes.MovePhase.INVULN or ph == BoardTypes.MovePhase.LANDING:
+		#（新命令只作废还没开始的后续段）26.10.22 21:05 s
+		u["path"] = []
+		u["command_id"] = int(u.get("command_id", 0)) + 1
+		_note_motion(u, "RETARGET_LOCK")
+		#（新命令只作废还没开始的后续段）26.10.22 21:05 e
 		_ensure_move_line(u, to_sys, to_cell)
 		# #region agent log
 		_dbg59("PREP", "board_root._pathfind_apply", "dest_queued_locked", {
@@ -11798,10 +12449,22 @@ func _pathfind_apply(u: Dictionary, to_sys: String, to_cell: int) -> void:
 			u["sys"], u["cell"], to_sys, to_cell,
 			prep, _dev_move(u), _dev_land(u), _dev_jump(u)
 		)
+	var at_goal := str(u["sys"]) == to_sys and int(u["cell"]) == to_cell
+	var was_miss := bool(u.get("path_miss", false))
+	#（没有路的组员退出这一轮同步）26.10.23 01:04 s
+	if u["path"].is_empty() and not at_goal:
+		u["path_miss"] = true
+		if int(u.get("sync_gid", 0)) > 0:
+			u.erase("sync_gid")
+	else:
+		u.erase("path_miss")
+		u.erase("hold_after_prep")
+	if (not u["path"].is_empty()) or (bool(u.get("path_miss", false)) and not was_miss):
+		_note_motion(u, "PATH")
+	#（没有路的组员退出这一轮同步）26.10.23 01:04 e
 	# #region agent log
 	var blocked := false
 	if str(u["sys"]) != to_sys:
-		var at_goal := str(u["sys"]) == to_sys and int(u["cell"]) == to_cell
 		blocked = not at_goal and u["path"].is_empty()
 		if not u["path"].is_empty():
 			var last: Dictionary = u["path"][u["path"].size() - 1]
@@ -11846,7 +12509,14 @@ func _retarget_during_prep(u: Dictionary, to_sys: String, to_cell: int) -> void:
 			prep, _dev_move(u), _dev_land(u), _dev_jump(u)
 		)
 		if path.is_empty():
+			#（新路线还没有时停在出发格，不继续旧段）26.10.22 21:05 s
 			u["path"] = []
+			u["to_sys"] = from_sys
+			u["to_cell"] = from_cell
+			u["step_kind"] = "intra"
+			u["hold_after_prep"] = true
+			_note_motion(u, "PREP_WAIT")
+			#（新路线还没有时停在出发格，不继续旧段）26.10.22 21:05 e
 			_ensure_move_line(u, to_sys, to_cell)
 			# #region agent log
 			_dbg59("PREP", "board_root._retarget_during_prep", "blocked", {
@@ -11855,6 +12525,15 @@ func _retarget_during_prep(u: Dictionary, to_sys: String, to_cell: int) -> void:
 			# #endregion
 			return
 		var step: Dictionary = path.pop_front()
+		if str(step.get("kind", "")) == "jump":
+			var gate_cell := int(step.get("from", from_cell))
+			if not map.can_pass_gate(from_sys, gate_cell, int(u.get("faction", 0)), data.diplomacy):
+				u["path"] = []
+				u["to_sys"] = from_sys
+				u["to_cell"] = from_cell
+				u["hold_after_prep"] = true
+				_note_motion(u, "PREP_GATE")
+				return
 		u["path"] = path
 		u["to_cell"] = int(step["to"])
 		u["step_kind"] = step["kind"]
@@ -11869,6 +12548,11 @@ func _retarget_during_prep(u: Dictionary, to_sys: String, to_cell: int) -> void:
 			u["step_invuln"] = _dev_jump(u)
 			## Gate transit never waits on align prep.
 			_assign_reserve(u)
+			#（有效改终点清掉旧的停下标记并提高移动序号）26.10.23 01:04 s
+			u.erase("hold_after_prep")
+			u.erase("path_miss")
+			_note_motion(u, "PREP_RETARGET")
+			#（有效改终点清掉旧的停下标记并提高移动序号）26.10.23 01:04 e
 			_enter_step_invuln(u)
 			_ensure_move_line(u, to_sys, to_cell)
 			admin.request("board.move", {"unit": u["id"], "phase": "invuln"})
@@ -11879,6 +12563,11 @@ func _retarget_during_prep(u: Dictionary, to_sys: String, to_cell: int) -> void:
 			u["to_cell"] = dest2
 			u["step_invuln"] = _dev_move(u)
 		_assign_reserve(u)
+	#（有效改终点清掉旧的停下标记并提高移动序号）26.10.23 01:04 s
+	u.erase("hold_after_prep")
+	u.erase("path_miss")
+	_note_motion(u, "PREP_RETARGET")
+	#（有效改终点清掉旧的停下标记并提高移动序号）26.10.23 01:04 e
 	_ensure_move_line(u, to_sys, to_cell)
 	# #region agent log
 	_dbg59("PREP", "board_root._retarget_during_prep", "retarget", {
@@ -11900,6 +12589,7 @@ func _cancel_prep_standby(u: Dictionary) -> void:
 	u["path"] = []
 	u["sys"] = from_sys
 	u["cell"] = from_cell
+	_note_motion(u, "CANCEL_PREP")
 	u.erase("order_dest_sys")
 	u.erase("order_dest_cell")
 	_clear_reserve(u)
@@ -11928,6 +12618,8 @@ func _tick_nav_resume(delta: float) -> void:
 			continue
 		if int(u.get("phase", 0)) != BoardTypes.MovePhase.IDLE:
 			continue
+		if not _mp_authority_unit(u):
+			continue
 		if not u["path"].is_empty():
 			continue
 		if not u.has("order_dest_sys"):
@@ -11945,7 +12637,7 @@ func _tick_nav_resume(delta: float) -> void:
 		u["nav_retry_acc"] = 0.0
 		var before_len: int = u["path"].size()
 		if bool(u.get("player_hold", false)):
-			_pathfind_apply(u, ds, dc)
+			_pathfind_apply(u, ds, dc, false)
 		else:
 			var prep_r = _dev_prep(u)
 			u["path"] = BoardPlayerNav.find_path(
@@ -11953,6 +12645,14 @@ func _tick_nav_resume(delta: float) -> void:
 				u["sys"], u["cell"], ds, dc,
 				prep_r, _dev_move(u), _dev_land(u), _dev_jump(u)
 			)
+			#（没有路的组员退出这一轮同步）26.10.23 01:04 s
+			if u["path"].is_empty():
+				u["path_miss"] = true
+				if int(u.get("sync_gid", 0)) > 0:
+					u.erase("sync_gid")
+			else:
+				u.erase("path_miss")
+			#（没有路的组员退出这一轮同步）26.10.23 01:04 e
 		# #region agent log
 		if u["path"].size() != before_len or (not u["path"].is_empty()):
 			_dbg59("NAV", "board_root._tick_nav_resume", "repath", {
@@ -12316,7 +13016,11 @@ func _fx_ok() -> bool:
 	## Tactical top-down keeps plate↔plate beams (TACTICAL_TOPDOWN). Starmap silences FX.
 	return cam == null or not cam.starmap_mode
 
-func _play_turret_vfx(fx_kind: String, from: Vector3, to: Vector3, src_id: String = "") -> void:
+func _play_turret_vfx(fx_kind: String, from: Vector3, to: Vector3, src_id: String = "", record: bool = true, tgt_id: String = "", hit: bool = true, shot_n: int = 0) -> void:
+	#（权威开火记一笔给观察端）26.10.22 17:58 s
+	if record:
+		_push_fx_event(fx_kind, from, to, src_id, tgt_id, hit, shot_n)
+	#（权威开火记一笔给观察端）26.10.22 17:58 e
 	if not _fx_ok() or combat_fx == null:
 		return
 	if src_id != "" and not _battle_fx_allowed(src_id):
@@ -12446,10 +13150,6 @@ func _sync_starmap_rep_badges() -> void:
 			bucket = "self"
 		elif rel == "ally" or rel == "allied" or rel == "friendly" or rel == "fleet":
 			bucket = "ally"
-		## 星图：空白格敌对不统计。
-		if bucket == "hostile" and _is_hostile_on_empty_cell(u):
-			skipped_empty_hostile += 1
-			continue
 		if not counts.has(sid):
 			counts[sid] = {"self": 0, "ally": 0, "hostile": 0}
 		counts[sid][bucket] = int(counts[sid][bucket]) + 1
@@ -12792,7 +13492,7 @@ func _sync_tactical_overheads(_delta: float) -> void:
 	for u in units:
 		if not u.get("alive", false) or not unit_nodes.has(u["id"]):
 			continue
-		if _is_hostile_on_empty_cell(u):
+		if _mp_hide_unit(u):
 			var n_hide: Node3D = unit_nodes[u["id"]]
 			var oh_hide = n_hide.get_node_or_null("Overhead")
 			if oh_hide:
@@ -12808,12 +13508,15 @@ func _sync_tactical_overheads(_delta: float) -> void:
 		var sid := str(anc.get("sys", u.get("sys", "")))
 		var cell := int(anc.get("cell", u.get("cell", 0)))
 		var key := "%s:%d" % [sid, cell]
-		var slot: Vector3 = tactical_callouts.slot_pos_for(uid, sid, cell)
-		if slot == Vector3.ZERO:
-			## No callout slot yet — keep overhead off the board (no compact tonnage icon).
+		#（原点槽位也显示完整铭牌）26.10.22 11:25 s
+		if not tactical_callouts.has_slot(uid, sid, cell):
+			#（有 callout 槽才留完整铭牌）26.10.22 19:42 s
 			oh.visible = false
 			_unit_oh_cell.erase(uid)
+			#（有 callout 槽才留完整铭牌）26.10.22 19:42 e
 			continue
+		var slot: Vector3 = tactical_callouts.slot_pos_for(uid, sid, cell)
+		#（原点槽位也显示完整铭牌）26.10.22 11:25 e
 		oh.visible = true
 		var in_gap := int(u.get("phase", 0)) == BoardTypes.MovePhase.INVULN
 		if in_gap:
@@ -13502,7 +14205,6 @@ func _rel_zh(rel: String) -> String:
 func _describe_crew_equip(pilot_name: String, eq: Dictionary) -> String:
 	var bits: PackedStringArray = PackedStringArray()
 	var labels := {
-		"hp_mul": "血量",
 		"weapon_damage_mul": "单武器伤害",
 		"cap_convert_mul": "上限伤害转化",
 		"move_penalty_mul": "移速惩罚",
@@ -13770,16 +14472,20 @@ func _mp_sim_unit(u: Dictionary) -> bool:
 	return _mp == null or _mp.sim_unit(u)
 
 
+func _mp_authority_unit(u: Dictionary) -> bool:
+	#（拟真只由一个权威端推进）26.10.22 17:58 s
+	if _mp == null or not _mp.active():
+		return true
+	return _mp.authority_zone(_mp._zone_of(str(u.get("sys", ""))))
+	#（拟真只由一个权威端推进）26.10.22 17:58 e
+
+
 func _mp_owns(which: String) -> bool:
 	return _mp == null or _mp.owns_global(which)
 
 
 func _mp_hide_unit(u: Dictionary) -> bool:
 	return _mp != null and _mp.fog_hides_unit(u)
-
-
-func _mp_fog_arc(sid: String) -> bool:
-	return _mp != null and _mp.fog_blocks_arc(sid)
 
 
 func _mp_ai_units(faction: int, rows: Array) -> Array:
@@ -13834,10 +14540,53 @@ func _mp_after_settlement() -> void:
 		_mp.after_settlement()
 
 
-func _mp_offer_diplo(from_fac: int, to_fac: int) -> void:
+func _mp_offer_diplo(from_fac: int, to_fac: int, on: bool = true) -> void:
 	if _mp != null:
-		_mp.offer_diplo(from_fac, to_fac)
+		_mp.offer_diplo(from_fac, to_fac, on)
 
+func _layout_is_mp() -> bool:
+	return map != null and typeof(map.layout) == TYPE_DICTIONARY and bool((map.layout as Dictionary).get("mp", false))
+
+func _mp_leave_match(concede: bool) -> void:
+	#（离开先记一笔结算，本机接着可以进别的房间）26.10.22 15:10 s
+	if concede and viewer_faction > 0 and not _faction_out.has(viewer_faction):
+		_defeat_faction(viewer_faction)
+	var reason := "认输并离开" if concede else "离开房间"
+	var rec := mp_settlement_record(reason, true)
+	if _mp != null:
+		_mp.leave_match(rec, viewer_faction if concede else 0)
+	#（离开先记一笔结算，本机接着可以进别的房间）26.10.22 15:10 e
+	get_tree().change_scene_to_file("res://game/main_menu.tscn")
+
+func mp_settlement_record(reason: String, provisional: bool) -> Dictionary:
+	_sync_report_counts()
+	var rows: Array = []
+	if data != null:
+		for f in data.factions.get("factions", []):
+			var fac := int(f.get("id", -1))
+			if fac < 0 or bool(f.get("npc", false)) or not _faction_in_match(fac):
+				continue
+			var st := _stat_fac(fac)
+			rows.append({
+				"faction": fac,
+				"name": _faction_label(fac),
+				"built": int(st.get("built", 0)),
+				"kills": int(st.get("kills", 0)),
+				"losses": int(st.get("losses", 0)),
+				"occupy": float(st.get("occupy_score", 0.0)),
+			})
+	var mid := ""
+	if map != null and typeof(map.layout) == TYPE_DICTIONARY:
+		mid = str((map.layout as Dictionary).get("mp_match_id", ""))
+	return {
+		"match_id": mid,
+		"at": int(Time.get_unix_time_from_system()),
+		"reason": reason,
+		"detail": match_msg,
+		"provisional": provisional,
+		"winner": _winner_faction,
+		"rows": rows,
+	}
 
 func _mp_faction_is_ai(fid: int) -> bool:
 	if map == null or typeof(map.layout) != TYPE_DICTIONARY or not bool((map.layout as Dictionary).get("mp", false)):

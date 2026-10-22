@@ -81,6 +81,7 @@ static func fit_bonus(row: Dictionary) -> void:
 	var keys: PackedStringArray = PackedStringArray()
 	var muls: Array = []
 	var acc := 0.0
+	var dropped_hp := false
 	for part in str(row.get("bonus", "")).split("|", false):
 		var piece := str(part).strip_edges()
 		var cut := piece.find("=")
@@ -90,6 +91,11 @@ static func fit_bonus(row: Dictionary) -> void:
 		var raw := piece.substr(cut + 1).strip_edges()
 		if not raw.is_valid_float():
 			continue
+		#（读入时丢掉血量加成）26.10.22 11:25 s
+		if key == "hp_mul":
+			dropped_hp = true
+			continue
+		#（读入时丢掉血量加成）26.10.22 11:25 e
 		var mul := float(raw)
 		if not is_finite(mul):
 			continue
@@ -97,6 +103,11 @@ static func fit_bonus(row: Dictionary) -> void:
 		keys.append(key)
 		muls.append(mul)
 	if acc <= 0.5 or keys.is_empty():
+		if dropped_hp:
+			var kept := PackedStringArray()
+			for i in keys.size():
+				kept.append("%s=%.4f" % [keys[i], float(muls[i])])
+			row["bonus"] = "|".join(kept)
 		return
 	var k := 0.5 / acc
 	var out: PackedStringArray = PackedStringArray()
@@ -119,6 +130,10 @@ static func reject_reason(row: Dictionary) -> String:
 		if cut <= 0:
 			continue
 		var key := piece.substr(0, cut).strip_edges()
+		#（血量字段不再拒绝整行）26.10.22 11:25 s
+		if key == "hp_mul":
+			continue
+		#（血量字段不再拒绝整行）26.10.22 11:25 e
 		if not CrewRankScr.EFFECT_KEYS.has(key):
 			return CAP_MSG
 		var raw := piece.substr(cut + 1).strip_edges()

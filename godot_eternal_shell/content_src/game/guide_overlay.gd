@@ -16,13 +16,20 @@ const MOUSE_LINES: PackedStringArray = [
 ]
 const TOUCH_LINES: PackedStringArray = [
 	"单指点一下：等于左键点一下。",
-	"单指在棋盘空白处拖：移动视角，也可以上下翻。",
+	"单指在棋盘空白处拖：移动视角。指头往上，画面往上。战术俯视同样如此。",
 	"单指在名单、战报、详情、聊天、底栏上拖：这些界面跟着手指翻，不挪棋盘。竖直的上下翻，底栏左右翻。",
-	"单指按住原地大约 1 秒：从按住的地方长出一个框，松手时按当时的框选中。手指移动超过操作灵敏度，就当成拖视角，不开始框选。电脑上仍是拖动拉框。",
-	"双指张开、捏合：拉近、拉远。",
+	"单指按住原地大约 1 秒：从按住的地方长出一个框，松手时按当时的框选中。框出现之前，手指移动超过操作灵敏度，就当成拖视角，不开始框选。框出来之后不松手，框的中心跟着触摸点走。电脑上仍是拖动拉框。",
+	"双指张开拉远，捏合拉近。",
 	"双指按住转动：只在战术俯视里转动朝向。",
-	"底栏上的「↑」「↓」：↑是拉近，↓是拉远，和滚轮同一档。",
+	"底栏上的「↑」「↓」：↑是拉近，↓是拉远，和滚轮同一档。按住超过半秒后连续拉近或拉远，松手停止。",
 	"同一位置连点两次：打开右键菜单。点在空地或格子上是格子菜单；点在己方船上，或点在左栏那一行，是命令菜单。两次都算点，手指不能拖开。这次不会再当作左键下令。",
+]
+const ROSTER_LINES: PackedStringArray = [
+	"可以通过自定义团员增加有特殊加成的团员，可以把你希望与你并肩作战的人写进来哦。",
+	"在配置团员界面决定首发团员，他们制造第一艘船的时间只需要一秒。",
+	"制造战巡需要分配两个资源点给该团员，制造战列需要分配三个，多分配给该团员的资源点能加速舰船制造。",
+	"盾守能抵御来自其他格的攻击，不分敌我，甲链能代为承受格子内自己人受到的装甲伤害。",
+	"轻拦只能吸附敌人改变敌人落点，重拦能阻止敌人离开格子，并且能吸附敌人改变敌人落点。",
 ]
 
 
@@ -75,12 +82,14 @@ func _build() -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	col.add_child(scroll)
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(scroll)
 	var body := VBoxContainer.new()
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 8)
 	scroll.add_child(body)
 	_section(body, "键鼠", MOUSE_LINES)
 	_section(body, "触摸", TOUCH_LINES)
+	_section(body, "团员", ROSTER_LINES)
 
 
 func _section(body: VBoxContainer, heading: String, lines: PackedStringArray) -> void:

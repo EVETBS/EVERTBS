@@ -74,6 +74,14 @@ static func get_entry(size_n: int) -> Dictionary:
 	return {"onfield": onfield, "starters": starters}
 
 
+static func set_active_size(size_n: int) -> void:
+	if not SIZES.has(size_n):
+		return
+	var doc := load_all()
+	doc["active_size"] = size_n
+	save_all(doc)
+
+
 static func active_size() -> int:
 	var n := int(load_all().get("active_size", 20))
 	return n if SIZES.has(n) else 20

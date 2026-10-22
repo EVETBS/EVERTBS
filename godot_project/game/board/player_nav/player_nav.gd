@@ -2,6 +2,11 @@ extends RefCounted
 class_name BoardPlayerNav
 
 const DevBalance := preload("res://game/board/dev_balance.gd")
+const FlowNavScr := preload("res://game/board/player_nav/capture_flow_nav.gd")
+
+static var _flow_sig := ""
+static var _flow_navs: Dictionary = {}
+static var _scale_map: BoardMapModel = null
 
 ## Shortest-time path: start -> gates -> dest. Same-system one hop.
 
@@ -23,17 +28,78 @@ static func find_path(
 	landing_s: float,
 	jump_s: float
 ) -> Array:
-	## Returns array of steps: {sys, cell, kind: "intra"|"jump", duration}
-	if not corridor_on or from_sys == to_sys:
+	## Same system stays one hop. Cross-system shares a reverse distance field per faction and timing.
+	if from_sys == to_sys:
 		return _search(map, diplomacy, faction, from_sys, from_cell, to_sys, to_cell, prep_s, move_s, landing_s, jump_s, false)["path"]
-	var weighted: Dictionary = _search(map, diplomacy, faction, from_sys, from_cell, to_sys, to_cell, prep_s, move_s, landing_s, jump_s, true)
-	var plain: Dictionary = _search(map, diplomacy, faction, from_sys, from_cell, to_sys, to_cell, prep_s, move_s, landing_s, jump_s, false)
-	var c0: float = float(plain.get("real", INF))
-	var real: float = float(weighted.get("real", INF))
-	var one_jump: float = prep_s + jump_s + landing_s
-	if real > maxf(c0 * 1.35, c0 + one_jump):
-		return plain.get("path", [])
-	return weighted.get("path", [])
+	var plain: Dictionary = _flow_result(map, diplomacy, faction, from_sys, from_cell, to_sys, to_cell, prep_s, move_s, landing_s, jump_s, false)
+	var chosen: Dictionary = plain
+	if corridor_on:
+		var weighted: Dictionary = _flow_result(map, diplomacy, faction, from_sys, from_cell, to_sys, to_cell, prep_s, move_s, landing_s, jump_s, true)
+		var c0 := float(plain.get("route_cost", INF))
+		var real := float(weighted.get("route_cost", INF))
+		var one_jump := jump_s + landing_s
+		if is_finite(real) and real <= maxf(c0 * 1.35, c0 + one_jump):
+			chosen = weighted
+	var status := str(chosen.get("status", ""))
+	if status == "READY" or status == "MOVE_TO_CAPTURE":
+		return chosen.get("steps", [])
+	return []
+
+
+static func _corridor_scale(_from_sys: String, to_sys: String) -> float:
+	if _scale_map != null and _sys_in_corridor(_scale_map, to_sys):
+		return 0.65
+	return 1.0
+
+
+static func _flow_signature(map: BoardMapModel, diplomacy: Dictionary) -> String:
+	var parts: PackedStringArray = PackedStringArray()
+	var ids: Array = map.systems.keys()
+	ids.sort()
+	for sid_v in ids:
+		var sid := str(sid_v)
+		for c_v in map.systems[sid]["cells"]:
+			var c: Dictionary = c_v
+			if int(c.get("kind", -1)) != BoardTypes.CellKind.GATE:
+				continue
+			parts.append("%s:%d:%d" % [sid, int(c.get("index", -1)), int(c.get("owner", 0))])
+	return "|".join(parts) + "#" + JSON.stringify(diplomacy.get("relations", {}))
+
+
+static func _flow_result(
+	map: BoardMapModel, diplomacy: Dictionary, faction: int,
+	from_sys: String, from_cell: int, to_sys: String, to_cell: int,
+	prep_s: float, move_s: float, landing_s: float, jump_s: float, corridor: bool
+) -> Dictionary:
+	var sig := _flow_signature(map, diplomacy)
+	if sig != _flow_sig:
+		_flow_sig = sig
+		_flow_navs.clear()
+	var key := "%d|%.3f|%.3f|%.3f|%.3f|%s" % [faction, prep_s, move_s, landing_s, jump_s, "c" if corridor else "p"]
+	var nav: Object = _flow_navs.get(key, null)
+	if nav == null:
+		_scale_map = map
+		nav = FlowNavScr.new()
+		var scale := Callable(BoardPlayerNav, "_corridor_scale") if corridor else Callable()
+		var built: bool = nav.configure_from_board(
+			map, diplomacy, faction,
+			{"prep": prep_s, "move": move_s, "landing": landing_s, "jump": jump_s},
+			BoardTypes.CellKind.GATE,
+			Callable(DevBalance, "land_arc_mul"),
+			func(sys: String, cell: int, fac: int) -> bool:
+				return not map.can_pass_gate(sys, cell, fac, diplomacy),
+			1, scale
+		)
+		if not built:
+			return {"status": "INVALID", "steps": [], "route_cost": INF}
+		_flow_navs[key] = nav
+	var result: Dictionary = nav.plan(FlowNavScr.node_key(from_sys, from_cell), FlowNavScr.node_key(to_sys, to_cell))
+	DebugSessionLog.append("J1", "player_nav._flow_result", "flow", {
+		"from": from_sys, "to": to_sys, "status": str(result.get("status", "")),
+		"steps": (result.get("steps", []) as Array).size(), "corridor": corridor,
+		"runId": "flow-nav"
+	})
+	return result
 
 static func _sys_in_corridor(map: BoardMapModel, sid: String) -> bool:
 	if not corridor_on or not map.systems.has(sid):

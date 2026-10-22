@@ -14,6 +14,18 @@ func load_all() -> void:
 	factions = _load_json("res://data/board/factions.json")
 	diplomacy = _load_json("res://data/board/diplomacy.json")
 	equipment = _load_json("res://data/board/equipment.json")
+	#（跟踪失准负数按零）26.10.22 10:25 s
+	for eid in equipment.keys():
+		var eq = equipment[eid]
+		if typeof(eq) != TYPE_DICTIONARY:
+			continue
+		for key in ["tracking", "falloff_m"]:
+			if not (eq as Dictionary).has(key):
+				continue
+			var n := float((eq as Dictionary)[key])
+			if not is_finite(n) or n < 0.0:
+				(eq as Dictionary)[key] = 0.0
+	#（跟踪失准负数按零）26.10.22 10:25 e
 	_load_members()
 	var ships_root = _load_json("res://data/board/ships.json")
 	ships.clear()

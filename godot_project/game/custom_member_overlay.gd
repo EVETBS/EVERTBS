@@ -61,11 +61,13 @@ func _ready() -> void:
 	_list.item_selected.connect(_on_pick)
 	root.add_child(_list)
 	var scroll := ScrollContainer.new()
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(_list)
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(scroll)
 	_editor = VBoxContainer.new()
 	_editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_editor)
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(scroll)
 	_warn = Label.new()
 	_warn.add_theme_color_override("font_color", Color(1, 0.45, 0.4))
 	root.add_child(_warn)
@@ -138,6 +140,15 @@ func _fill_editor() -> void:
 	face.text = "选择头像"
 	face.pressed.connect(_pick_portrait)
 	_editor.add_child(face)
+	var face_preview := TextureRect.new()
+	face_preview.custom_minimum_size = Vector2(72, 72)
+	face_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	face_preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	face_preview.texture = MemberTableScr.load_portrait(
+		str(_row.get("portrait", "")),
+		PackedStringArray([str(_row.get("id", ""))])
+	)
+	_editor.add_child(face_preview)
 	_editor.add_child(_labeled("背景", str(_row.get("bio", "")), "bio"))
 	_editor.add_child(hint.duplicate())
 	var parsed := _parse_bonus(str(_row.get("bonus", "")))
@@ -190,6 +201,15 @@ func _labeled(title: String, value: String, field: String) -> Control:
 	pic.text = "插入图片"
 	pic.pressed.connect(_pick_side.bind(field))
 	box.add_child(pic)
+	var media_key := "name_media" if field == "name" else "bio_media"
+	var media_path := str(_row.get(media_key, "")).strip_edges()
+	if media_path != "":
+		var media := TextureRect.new()
+		media.custom_minimum_size = Vector2(160, 90)
+		media.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		media.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		media.texture = MemberTableScr.load_portrait(media_path)
+		box.add_child(media)
 	_row[field] = value
 	return box
 

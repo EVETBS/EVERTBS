@@ -103,6 +103,7 @@ func _ready() -> void:
 	_left.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_left.item_selected.connect(_on_left)
 	split.add_child(_left)
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(_left)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -111,6 +112,7 @@ func _ready() -> void:
 	_right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_right.add_theme_constant_override("separation", 6)
 	scroll.add_child(_right)
+	(preload("res://game/ui/drag_scroll.gd") as GDScript).attach(scroll)
 
 func present() -> void:
 	DevBalance.load()
@@ -689,7 +691,7 @@ func _fill_equip() -> void:
 			bag[field] = v
 			DevBalance.equip_num[equip_id] = bag
 			_commit_hidden()
-		_spin(key, cur, changed.bind(key, eid))
+		_spin(key, cur, changed.bind(key, eid), _equip_spin_min(key), _equip_spin_max(key), _equip_spin_step(key))
 
 func _fill_match() -> void:
 	DevBalance.ensure_defaults()
@@ -840,6 +842,29 @@ func _compact_spin(label: String, value: float, on_change: Callable, min_v: floa
 	spin.value_changed.connect(on_change)
 	box.add_child(spin)
 	return box
+
+func _equip_spin_min(_key: String) -> float:
+	#（装备旋钮按字段给步长）26.10.22 10:25 s
+	return 0.0
+	#（装备旋钮按字段给步长）26.10.22 10:25 e
+
+func _equip_spin_max(key: String) -> float:
+	#（装备旋钮按字段给步长）26.10.22 10:25 s
+	if key.ends_with("_m"):
+		return 1000000000000.0
+	return 10000000.0
+	#（装备旋钮按字段给步长）26.10.22 10:25 e
+
+func _equip_spin_step(key: String) -> float:
+	#（装备旋钮按字段给步长）26.10.22 10:25 s
+	if key.ends_with("_mul") or key == "tracking" or key == "drf":
+		return 0.0001
+	if key.ends_with("_m"):
+		return 1.0
+	if key.ends_with("_s"):
+		return 0.1
+	return 1.0
+	#（装备旋钮按字段给步长）26.10.22 10:25 e
 
 func _spin(label: String, value: float, on_change: Callable, min_v: float = 1.0, max_v: float = 10000000.0, step: float = 1.0) -> void:
 	var row := HBoxContainer.new()

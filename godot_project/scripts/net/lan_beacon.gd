@@ -200,6 +200,40 @@ static func _subnet_broadcast_24(ip: String) -> String:
 	return "%s.%s.%s.255" % [parts[0], parts[1], parts[2]]
 
 
+static func _virtual_lan_ips(addrs: PackedStringArray) -> PackedStringArray:
+	var named := {}
+	var ifaces: Variant = IP.get_local_interfaces()
+	if typeof(ifaces) == TYPE_ARRAY:
+		for iface_v: Variant in ifaces:
+			if typeof(iface_v) != TYPE_DICTIONARY:
+				continue
+			var iface: Dictionary = iface_v
+			var label := ("%s %s" % [str(iface.get("name", "")), str(iface.get("friendly", ""))]).to_lower()
+			var virtual_name := label.find("zerotier") >= 0 or label.find("hamachi") >= 0 or label.find("radmin") >= 0 or label.find("tailscale") >= 0 or label.find("tun") >= 0 or label.find("tap") >= 0 or label.find("wintun") >= 0
+			if not virtual_name:
+				continue
+			var addrs_v: Variant = iface.get("addresses", [])
+			var list: Array = addrs_v if typeof(addrs_v) == TYPE_ARRAY else []
+			if typeof(addrs_v) == TYPE_PACKED_STRING_ARRAY:
+				for packed: String in addrs_v:
+					list.append(packed)
+			for one_v: Variant in list:
+				named[str(one_v)] = true
+	var out := PackedStringArray()
+	for ip: String in addrs:
+		if ip.begins_with("192.168.") or ip.begins_with("10.0.2.") or ip.begins_with("10.1.2.") or ip.begins_with("127."):
+			continue
+		var parts: PackedStringArray = ip.split(".")
+		if parts.size() != 4:
+			continue
+		var a := int(parts[0])
+		var b := int(parts[1])
+		var known := a == 25 or a == 26 or (a == 100 and b >= 64 and b <= 127)
+		if known or named.has(ip):
+			out.append(ip)
+	return out
+
+
 static func _subnet_prefix_24(ip: String) -> String:
 	if _subnet_broadcast_24(ip) == "":
 		return ""
@@ -252,6 +286,27 @@ static func _peer_destinations(addrs: PackedStringArray, discover_mode: bool = f
 		for i: int in range(EMU_WIFI_PEER_FIRST, EMU_WIFI_PEER_LAST + 1):
 			out.append("%s%d" % [EMU_WIFI_PREFIX, i])
 		print("[LanBeacon] emulator: prefer AndroidWifi (10.0.2.16+) — eth0 10.0.2.15 is isolated")
+	## Virtual LAN often drops broadcast. Probe that subnet only; home 192.168 and emulator Wi-Fi stay on the broadcast path above.
+	#（虚拟局域网匹配时单播该网段，不改家里网和模拟器背板）26.10.22 16:25 s
+	if discover_mode:
+		for virt_ip: String in _virtual_lan_ips(addrs):
+			var virt_pref: String = _subnet_prefix_24(virt_ip)
+			if virt_pref == "":
+				continue
+			for vi: int in range(1, 255):
+				var virt_peer: String = "%s%d" % [virt_pref, vi]
+				if seen.has(virt_peer):
+					continue
+				var virt_self := false
+				for a3: String in addrs:
+					if a3 == virt_peer:
+						virt_self = true
+						break
+				if virt_self:
+					continue
+				seen[virt_peer] = true
+				out.append(virt_peer)
+	#（虚拟局域网匹配时单播该网段，不改家里网和模拟器背板）26.10.22 16:25 e
 	## Real Android discover: unicast /24 so PC hosts reply even when broadcast RX is dead.
 	if discover_mode and OS.get_name() == "Android" and not is_android_emulator():
 		for pref: String in lan_prefixes:

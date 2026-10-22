@@ -5,7 +5,7 @@ class_name CrewRank
 
 const TONNAGES: Array[String] = ["frigate", "destroyer", "cruiser", "battlecruiser", "battleship"]
 const EFFECT_KEYS: Array[String] = [
-	"hp_mul", "shield_mul", "armor_mul", "structure_mul", "cap_mul", "recharge_mul", "resist_mul",
+	"shield_mul", "armor_mul", "structure_mul", "cap_mul", "recharge_mul", "resist_mul",
 	"speed_mul", "signature_mul", "scan_mul", "mass_mul", "inertia_mul", "prep_mul", "move_mul", "jump_mul", "landing_mul", "move_penalty_mul",
 	"build_mul", "work_mul",
 	"weapon_damage_mul", "damage_emp_mul", "damage_thermal_mul", "damage_kinetic_mul", "damage_explosive_mul",
@@ -15,7 +15,7 @@ const EFFECT_KEYS: Array[String] = [
 	"bubble_range_mul", "bubble_time_mul", "bubble_cap_mul",
 ]
 const BONUS_LABELS := {
-	"hp_mul": "血量", "shield_mul": "护盾", "armor_mul": "装甲", "structure_mul": "结构", "cap_mul": "电容", "recharge_mul": "电容回充秒", "resist_mul": "抗性",
+	"shield_mul": "护盾", "armor_mul": "装甲", "structure_mul": "结构", "cap_mul": "电容", "recharge_mul": "电容回充秒", "resist_mul": "抗性",
 	"speed_mul": "速度", "signature_mul": "签名", "scan_mul": "扫描分辨率", "mass_mul": "质量", "inertia_mul": "惯性",
 	"prep_mul": "跨格准备", "move_mul": "同系跨格", "jump_mul": "过门", "landing_mul": "落地僵直", "move_penalty_mul": "移速惩罚",
 	"build_mul": "制造时间", "work_mul": "作业值",

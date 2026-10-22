@@ -49,7 +49,7 @@ func _ready() -> void:
 	_nick.text = _ensure_default_nick()
 	_box.add_child(_nick)
 
-	_add_action_btn("匹配房间", func():
+	_add_action_btn("匹配局域网内房间", func():
 		if _gate_nick():
 			request_match_public.emit()
 	)

@@ -27,6 +27,9 @@ static var scale_jump := 1.0
 static var scale_landing := 1.0
 ## Same-system landing scale by cells skipped on the short arc. Index 0 = adjacent cell.
 static var land_arc: Array = [0.10, 0.20, 0.60, 1.0, 1.0, 1.0]
+static var _pose_ready := false
+static var _baked_scale: Dictionary = {}
+static var _baked_euler: Dictionary = {}
 
 static func master() -> bool:
 	return master_on
@@ -124,7 +127,15 @@ static func set_land_arc(skip: int, value: float) -> void:
 	land_arc[i] = value
 
 static func model_mul(ship_id: String) -> float:
-	return clampf(float(model_scale.get(ship_id, 1.0)), 0.10, 5.0)
+	_ensure_baked_pose()
+	#（没有用户调节时用表内模型比例）26.10.22 12:05 s
+	var v := 1.0
+	if model_scale.has(ship_id):
+		v = float(model_scale[ship_id])
+	elif _baked_scale.has(ship_id):
+		v = float(_baked_scale[ship_id])
+	return clampf(v, 0.10, 5.0)
+	#（没有用户调节时用表内模型比例）26.10.22 12:05 e
 
 static func hull_diameter(ship_id: String) -> float:
 	return BoardTypes.HULL_DIAMETER * model_mul(ship_id)
@@ -133,12 +144,19 @@ static func set_model_scale(ship_id: String, value: float) -> void:
 	model_scale[ship_id] = clampf(value, 0.10, 5.0)
 
 static func model_euler_of(ship_id: String) -> Vector3:
-	var row: Dictionary = _dict(model_euler.get(ship_id, {}))
+	_ensure_baked_pose()
+	#（没有用户调节时用表内模型朝向）26.10.22 12:05 s
+	var row: Dictionary = {}
+	if model_euler.has(ship_id):
+		row = _dict(model_euler[ship_id])
+	elif _baked_euler.has(ship_id):
+		row = _dict(_baked_euler[ship_id])
 	return Vector3(
 		float(row.get("x", 0.0)),
 		float(row.get("y", 0.0)),
 		float(row.get("z", 0.0))
 	)
+	#（没有用户调节时用表内模型朝向）26.10.22 12:05 e
 
 static func set_model_euler(ship_id: String, euler: Vector3) -> void:
 	model_euler[ship_id] = {
@@ -197,10 +215,63 @@ static func load() -> void:
 				land_arc = [0.10, 0.20, 0.60, 1.0, 1.0, 1.0]
 				for i in mini(6, arc_raw.size()):
 					land_arc[i] = float(arc_raw[i])
+	#（空的新用户目录补回改名前的调整）26.10.22 11:25 s
+	if hp.is_empty() and dph.is_empty() and model_scale.is_empty() and equip_num.is_empty():
+		if _absorb_legacy():
+			save()
+	#（空的新用户目录补回改名前的调整）26.10.22 11:25 e
 	if not master_on:
 		resource_bonus = 0
 		resource_pilot_ids.clear()
 	ensure_defaults()
+
+static func _absorb_legacy() -> bool:
+	var appdata := OS.get_environment("APPDATA")
+	if appdata == "":
+		return false
+	var root := appdata.path_join("Godot").path_join("app_userdata")
+	var picked: Dictionary = {}
+	for folder in ["eve战棋", "EVE模拟器：军团"]:
+		var path := root.path_join(folder).path_join("dev_balance.json")
+		if not FileAccess.file_exists(path):
+			continue
+		var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+		if typeof(parsed) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = parsed
+		if _dict(row.get("hp", {})).is_empty() and _dict(row.get("equip", {})).is_empty() and _dict(row.get("model_scale", {})).is_empty():
+			continue
+		picked = row
+		break
+	if picked.is_empty():
+		return false
+	master_on = bool(picked.get("master", master_on))
+	want_build_1s = bool(picked.get("build_1s", want_build_1s))
+	want_resource = bool(picked.get("resource", want_resource))
+	hp = _dict(picked.get("hp", {}))
+	dph = _dict(picked.get("dph", {}))
+	model_scale = _dict(picked.get("model_scale", {}))
+	model_euler = _dict(picked.get("model_euler", {}))
+	hidden_off = _dict(picked.get("hidden_off", {}))
+	equip_num = _dict(picked.get("equip", {}))
+	var old_build := _dict(picked.get("tonnage_build", {}))
+	if not old_build.is_empty():
+		tonnage_build = old_build
+	var old_work := _dict(picked.get("tonnage_work", {}))
+	if not old_work.is_empty():
+		tonnage_work = old_work
+	work_caps = _dict(picked.get("work_caps", {}))
+	scale_prep = float(picked.get("scale_prep", scale_prep))
+	scale_move = float(picked.get("scale_move", scale_move))
+	scale_jump = float(picked.get("scale_jump", scale_jump))
+	scale_landing = float(picked.get("scale_landing", scale_landing))
+	var arc_raw = picked.get("land_arc", [])
+	if typeof(arc_raw) == TYPE_ARRAY and not arc_raw.is_empty():
+		land_arc = [0.10, 0.20, 0.60, 1.0, 1.0, 1.0]
+		for i in mini(6, arc_raw.size()):
+			land_arc[i] = float(arc_raw[i])
+	return true
+
 
 static func save() -> void:
 	var body := {
@@ -233,12 +304,20 @@ static func apply_to_data(data: BoardData) -> void:
 		var def: Dictionary = data.ships[sid]
 		if hp.has(sid):
 			var row: Dictionary = _dict(hp[sid])
-			def["shield"] = float(row.get("shield", def.get("shield", 1)))
-			def["armor"] = float(row.get("armor", def.get("armor", 1)))
-			def["structure"] = float(row.get("structure", def.get("structure", 1)))
+			#（开发配置丢掉非有限数且负耗电不覆盖）26.10.22 10:25 s
+			for hk in ["shield", "armor", "structure"]:
+				if not row.has(hk):
+					continue
+				var hv := float(row.get(hk, def.get(hk, 1)))
+				if is_finite(hv):
+					def[hk] = hv
+			#（开发配置丢掉非有限数且负耗电不覆盖）26.10.22 10:25 e
 		if bool(def.get("npc_hull", false)):
 			continue
-		_ensure_dph(def, float(dph.get(sid, 1.0)))
+		#（空调节不把表内输出倍率改回 1）26.10.22 12:05 s
+		if dph.has(sid):
+			_ensure_dph(def, float(dph[sid]))
+		#（空调节不把表内输出倍率改回 1）26.10.22 12:05 e
 		var hidden = def.get("fit", {}).get("hidden", [])
 		if typeof(hidden) != TYPE_ARRAY:
 			continue
@@ -254,7 +333,20 @@ static func apply_to_data(data: BoardData) -> void:
 			continue
 		var fields: Dictionary = _dict(equip_num[eid])
 		for fk in fields.keys():
-			eq[str(fk)] = fields[fk]
+			#（开发配置丢掉非有限数且负耗电不覆盖）26.10.22 10:25 s
+			var raw = fields[fk]
+			var field_key := str(fk)
+			if typeof(raw) == TYPE_FLOAT or typeof(raw) == TYPE_INT:
+				var num := float(raw)
+				if not is_finite(num):
+					continue
+				if field_key == "cap_cost" and num < 0.0:
+					continue
+				if (field_key == "tracking" or field_key == "falloff_m") and num < 0.0:
+					eq[field_key] = 0.0
+					continue
+			eq[field_key] = raw
+			#（开发配置丢掉非有限数且负耗电不覆盖）26.10.22 10:25 e
 
 static func all_ships() -> Array:
 	var root := _read_json("res://data/board/ships.json")
@@ -313,6 +405,23 @@ static func _ensure_dph(def: Dictionary, value: float) -> void:
 			h["value"] = value
 			return
 	hidden.append({"kind": "dph_mul", "value": value})
+
+static func _ensure_baked_pose() -> void:
+	if _pose_ready:
+		return
+	_pose_ready = true
+	var root := _read_json("res://data/board/ships.json")
+	for s in root.get("ships", []):
+		if typeof(s) != TYPE_DICTIONARY:
+			continue
+		var sid := str(s.get("id", ""))
+		if sid == "":
+			continue
+		if s.has("model_scale"):
+			_baked_scale[sid] = float(s["model_scale"])
+		if typeof(s.get("model_euler", null)) == TYPE_DICTIONARY:
+			_baked_euler[sid] = s["model_euler"]
+
 
 static func _dict(v) -> Dictionary:
 	return v if typeof(v) == TYPE_DICTIONARY else {}

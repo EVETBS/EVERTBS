@@ -9,7 +9,7 @@ const COL_RESOURCE := Color(0.95, 0.78, 0.35, 0.95)
 const COL_NORMAL := Color(0.7, 0.75, 0.82, 0.85)
 const COL_BIRTH := Color(0.35, 1.0, 0.55, 1.0)
 const COL_LINK := Color(0.75, 0.85, 1.0, 0.45)
-const COL_BG := Color(0.08, 0.1, 0.14, 0.3)
+const COL_BG := Color(0.08, 0.1, 0.14, 0.5)
 const COL_BORDER := Color(0.7, 0.75, 0.82, 0.55)
 ## Same sector icons as the in-match starmap (STARMAP §4 / UI_AND_SHELL §0.2).
 const STATION_TEX := "res://assets/ui/sector/station.png"

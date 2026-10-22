@@ -159,6 +159,10 @@ func _ensure_desktop_maximized() -> void:
 
 
 func _notification(what: int) -> void:
+	#（系统返回不退出进程）26.10.22 22:50 s
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		print("[EVERTBSDBG] go_back keep")
+	#（系统返回不退出进程）26.10.22 22:50 e
 	if what == NOTIFICATION_WM_CLOSE_REQUEST \
 			or what == NOTIFICATION_APPLICATION_FOCUS_OUT \
 			or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT \

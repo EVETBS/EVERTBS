@@ -7,8 +7,17 @@ var capture_dirty := false # id -> SystemData dict
 var rng = RandomNumberGenerator.new()
 
 func load_layout(path: String) -> void:
+	#（地图打不开就停）26.10.22 10:25 s
 	var f = FileAccess.open(path, FileAccess.READ)
-	layout = JSON.parse_string(f.get_as_text())
+	if f == null:
+		push_error("BoardMapModel cannot open %s" % path)
+		return
+	var parsed = JSON.parse_string(f.get_as_text())
+	if typeof(parsed) != TYPE_DICTIONARY:
+		push_error("BoardMapModel layout is not an object %s" % path)
+		return
+	layout = parsed
+	#（地图打不开就停）26.10.22 10:25 e
 	rng.randomize()
 	_build_systems()
 
@@ -16,7 +25,13 @@ func _build_systems() -> void:
 	systems.clear()
 	for s in layout.get("systems", []):
 		var sid: String = s["id"]
-		var pos: Array = s["pos"]
+		#（星系坐标不足就跳过）26.10.22 10:25 s
+		var pos_v: Variant = s.get("pos", [])
+		if typeof(pos_v) != TYPE_ARRAY or (pos_v as Array).size() < 2:
+			push_error("星系 %s 坐标不足" % sid)
+			continue
+		var pos: Array = pos_v
+		#（星系坐标不足就跳过）26.10.22 10:25 e
 		var center = Vector3(float(pos[0]), 0.0, float(pos[1]))
 		var cells = _generate_cells(s)
 		systems[sid] = {
@@ -83,8 +98,10 @@ func _generate_cells(sys: Dictionary) -> Array:
 			if used.has(i):
 				continue
 			var mid = i * TAU / float(n)
-			var d = abs(mid - g["bearing"])
-			d = mini(d, TAU - d)
+			#（星门按真实角距占格）26.10.22 12:45 s
+			var d := absf(mid - float(g["bearing"]))
+			d = minf(d, TAU - d)
+			#（星门按真实角距占格）26.10.22 12:45 e
 			if d < best_d:
 				best_d = d
 				best_i = i
@@ -509,8 +526,18 @@ func tick_ring_align(_delta: float) -> bool:
 	return false
 
 func cell_world_pos(sys_id: String, cell_i: int, y: float = 0.0) -> Vector3:
+	#（格子索引拒绝越界）26.10.22 10:25 s
+	if not systems.has(sys_id):
+		push_error("cell_world_pos missing system %s" % sys_id)
+		return Vector3.ZERO
 	var sys: Dictionary = systems[sys_id]
-	var c: Dictionary = sys["cells"][cell_i]
+	var cells: Array = sys.get("cells", [])
+	if cell_i < 0 or cell_i >= cells.size():
+		push_error("cell_world_pos bad cell %s %d" % [sys_id, cell_i])
+		var center_v: Variant = sys.get("center", Vector3.ZERO)
+		return center_v if typeof(center_v) == TYPE_VECTOR3 else Vector3.ZERO
+	var c: Dictionary = cells[cell_i]
+	#（格子索引拒绝越界）26.10.22 10:25 e
 	var mid_r: float = (float(layout.get("ring_inner", 12)) + float(layout.get("ring_outer", 26))) * 0.5
 	var sc: float = float(sys.get("visual_scale", sys.get("scale", 1.0)))
 	mid_r *= sc

@@ -30,6 +30,11 @@ var _audit_slice: Dictionary = {}
 var _audit_ready: Dictionary = {}
 var _close_scheduled := false
 var _last_owner_ms: Dictionary = {}
+var _zone_fresh: Dictionary = {}
+var _zone_tx: Dictionary = {}
+var _zone_rx: Dictionary = {}
+var _zone_low: Dictionary = {}
+var _suspect_log: Dictionary = {}
 var _lerp_ms := 80
 var _targets: Dictionary = {}
 var _vision_acc := 0.0
@@ -71,10 +76,16 @@ func attach(host: Node) -> void:
 		net.peers_changed.connect(_on_peers_changed)
 	if not net.diplo_offer_received.is_connected(_on_diplo_offer):
 		net.diplo_offer_received.connect(_on_diplo_offer)
+	if not net.concede_received.is_connected(_on_concede):
+		net.concede_received.connect(_on_concede)
 	if not net.fit_received.is_connected(_on_fit):
 		net.fit_received.connect(_on_fit)
 	if not net.host_lost.is_connected(_on_host_lost):
 		net.host_lost.connect(_on_host_lost)
+	if not net.disc_notice.is_connected(_on_disc_notice):
+		net.disc_notice.connect(_on_disc_notice)
+	net.disc_capture = Callable(self, "_capture_disc")
+	net.disc_apply = Callable(self, "_apply_disc")
 	_apply_saved_progress()
 	if int(board.viewer_faction) <= 0:
 		fog_on = false
@@ -97,13 +108,18 @@ func sim_unit(u: Dictionary) -> bool:
 		return true
 	var primary: Dictionary = assign.get("primary", {})
 	if primary.is_empty():
-		return net.is_host
+		return net.is_host or net.host_gone
 	var sid := str(u.get("sys", ""))
 	var zid := str(zone_of.get(sid, ""))
 	if zid == "":
-		return net.is_host
+		return net.is_host or net.host_gone
 	var me := _me()
 	var secondary: Dictionary = assign.get("secondary", {})
+	#（房主掉线后接管他的区）26.10.22 11:25 s
+	if net.host_gone:
+		var owner := int(primary.get(zid, 1))
+		return owner == me or owner <= 1
+	#（房主掉线后接管他的区）26.10.22 11:25 e
 	if int(primary.get(zid, 0)) == me or int(secondary.get(zid, 0)) == me:
 		return true
 	if _audit_peer != 0 and Time.get_ticks_msec() < _audit_until and _audit_slice.has(zid) and _audit_ready.has(zid):
@@ -114,6 +130,9 @@ func sim_unit(u: Dictionary) -> bool:
 func owns_global(name: String) -> bool:
 	if not active():
 		return true
+	if net.host_gone:
+		var owner := int(assign.get("globals", {}).get(name, 1))
+		return owner == _me() or owner <= 1
 	var globals: Dictionary = assign.get("globals", {})
 	var secondary: Dictionary = assign.get("secondary", {})
 	var me := _me()
@@ -126,14 +145,6 @@ func fog_hides_unit(u: Dictionary) -> bool:
 	if int(u.get("faction", 0)) == int(board.viewer_faction):
 		return false
 	return not vision.has(str(u.get("sys", "")))
-
-
-func fog_blocks_arc(sid: String) -> bool:
-	if not fog_on:
-		return false
-	if sim_system(sid):
-		return false
-	return not vision.has(sid)
 
 
 func ai_units(faction: int, units: Array) -> Array:
@@ -156,12 +167,20 @@ func before_capture() -> Dictionary:
 		return saved
 	for sid_v in board.map.systems.keys():
 		var sid := str(sid_v)
-		if sim_system(sid):
+		if authority_zone(_zone_of(sid)):
 			continue
 		var cells: Array = []
 		for c_v in board.map.systems[sid]["cells"]:
-			if typeof(c_v) == TYPE_DICTIONARY:
-				cells.append(int((c_v as Dictionary).get("owner", 0)))
+			if typeof(c_v) != TYPE_DICTIONARY:
+				continue
+			var c: Dictionary = c_v
+			cells.append({
+				"owner": int(c.get("owner", 0)),
+				"work": float(c.get("work", 0.0)),
+				"capturing": int(c.get("capturing", 0)),
+				"cap_stall": float(c.get("cap_stall", 0.0)),
+				"cap_stall_done": bool(c.get("cap_stall_done", false)),
+			})
 		saved[sid] = cells
 	return saved
 
@@ -173,10 +192,22 @@ func after_capture(saved: Dictionary) -> void:
 		var sid := str(sid_v)
 		if not board.map.systems.has(sid):
 			continue
-		var owners: Array = saved[sid]
+		var rows: Array = saved[sid]
 		var cells: Array = board.map.systems[sid]["cells"]
-		for i in range(mini(owners.size(), cells.size())):
-			cells[i]["owner"] = int(owners[i])
+		for i in range(mini(rows.size(), cells.size())):
+			if typeof(rows[i]) != TYPE_DICTIONARY or typeof(cells[i]) != TYPE_DICTIONARY:
+				continue
+			var src: Dictionary = rows[i]
+			var cell: Dictionary = cells[i]
+			cell["owner"] = int(src.get("owner", 0))
+			cell["work"] = float(src.get("work", 0.0))
+			cell["capturing"] = int(src.get("capturing", 0))
+			cell["cap_stall"] = float(src.get("cap_stall", 0.0))
+			cell["cap_stall_done"] = bool(src.get("cap_stall_done", false))
+
+
+func _zone_of(sid: String) -> String:
+	return str(zone_of.get(sid, ""))
 
 
 func sim_system(sid: String) -> bool:
@@ -261,7 +292,7 @@ func on_path(u: Dictionary, to_sys: String, to_cell: int) -> void:
 		return
 	var zid := str(zone_of.get(str(u.get("sys", "")), ""))
 	var owner := int(assign.get("primary", {}).get(zid, 0))
-	net.send_order(str(u.get("id", "")), to_sys, to_cell, owner)
+	net.send_order(str(u.get("id", "")), to_sys, to_cell, owner, str(u.get("focus_id", "")))
 
 
 func on_group(unit_id: String, group_id: int) -> void:
@@ -282,10 +313,16 @@ func on_diplo(a: int, b: int, on: bool) -> void:
 	net.send_diplo(a, b, on)
 
 
-func offer_diplo(from_fac: int, to_fac: int) -> void:
+func offer_diplo(from_fac: int, to_fac: int, on: bool = true) -> void:
 	if not active() or _applying:
 		return
-	net.send_diplo_offer(from_fac, to_fac)
+	net.send_diplo_offer(from_fac, to_fac, on)
+
+
+func leave_match(rec: Dictionary, concede_fac: int) -> void:
+	if net == null:
+		return
+	net.leave_match(rec, concede_fac)
 
 
 func on_match_end(winner: int, reason: String) -> void:
@@ -299,23 +336,102 @@ func after_settlement() -> void:
 	if _close_scheduled or net == null or board == null:
 		return
 	_close_scheduled = true
-	var tree: SceneTree = board.get_tree()
-	if tree == null:
-		net.close_match()
-		return
-	tree.create_timer(1.0).timeout.connect(_close_after_settle)
-
-
-func _close_after_settle() -> void:
-	if net != null:
-		net.close_match()
+	#（终局同步结算并回到房间，不把还在打的人改成观战）26.10.22 15:10 s
+	var rec: Dictionary = {}
+	if board.has_method("mp_settlement_record"):
+		rec = board.mp_settlement_record(str(board.match_msg), false)
+	net.finish_match(rec)
+	#（终局同步结算并回到房间，不把还在打的人改成观战）26.10.22 15:10 e
 
 
 func _on_host_lost() -> void:
 	if board == null:
 		return
-	board.sim_paused = true
-	board._chat_append("与房主断开")
+	#（掉线后继续等重连，不暂停）26.10.22 11:25 s
+	board.sim_paused = false
+	var line := net.disc_wait_text() if net != null else ""
+	board._chat_append(line if line != "" else "与房主断开")
+	#（掉线后继续等重连，不暂停）26.10.22 11:25 e
+
+
+func _on_disc_notice(text: String) -> void:
+	if board != null and text != "":
+		board._chat_append(text)
+
+
+func note_player_combat(attacker: Dictionary, target: Dictionary) -> void:
+	if net != null:
+		net.note_player_combat(attacker, target)
+
+
+func _capture_disc() -> Dictionary:
+	var units: Array = []
+	var cells: Array = []
+	if board == null:
+		return {"units": units, "cells": cells}
+	for u in board.units:
+		if typeof(u) != TYPE_DICTIONARY:
+			continue
+		var pos: Vector3 = u.get("pos", Vector3.ZERO)
+		var inst: Dictionary = u.get("inst", {})
+		units.append({
+			"id": str(u.get("id", "")),
+			"sys": str(u.get("sys", "")),
+			"cell": int(u.get("cell", 0)),
+			"pos": [pos.x, pos.y, pos.z],
+			"motion_seq": int(u.get("motion_seq", 0)),
+			"alive": bool(u.get("alive", false)),
+			"shield": float(inst.get("shield", 0.0)),
+			"armor": float(inst.get("armor", 0.0)),
+			"structure": float(inst.get("structure", 0.0)),
+		})
+	if board.map != null:
+		for sid in board.map.systems.keys():
+			var sysd: Dictionary = board.map.systems[sid]
+			var row_cells: Array = sysd.get("cells", [])
+			for i in row_cells.size():
+				var c: Dictionary = row_cells[i]
+				cells.append({"sys": str(sid), "cell": i, "owner": int(c.get("owner", 0))})
+	return {"units": units, "cells": cells}
+
+
+func _apply_disc(body: Dictionary, combat: bool) -> void:
+	if board == null or typeof(body) != TYPE_DICTIONARY:
+		return
+	for row_v in body.get("units", []):
+		if typeof(row_v) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = row_v
+		var u: Dictionary = board._unit_by_id(str(row.get("id", "")))
+		if u.is_empty():
+			continue
+		#（重连底稿不能把更新的移动记录按回去）26.10.22 21:05 s
+		if _motion_newer(u, row):
+			_apply_motion_row(u, row, "RECONNECT")
+		elif int(row.get("motion_seq", 0)) < int(u.get("motion_seq", 0)):
+			DebugSessionLog.append("MOT", "mp_match_driver._apply_disc", "reject_old", {
+				"id": str(u.get("id", "")), "have": int(u.get("motion_seq", 0)),
+				"incoming": int(row.get("motion_seq", 0)), "runId": "motion-fence"
+			})
+		#（重连底稿不能把更新的移动记录按回去）26.10.22 21:05 e
+		if combat:
+			u["alive"] = bool(row.get("alive", u.get("alive", false)))
+			_write_hull(u, row)
+	if board.map == null:
+		return
+	for cell_v in body.get("cells", []):
+		if typeof(cell_v) != TYPE_DICTIONARY:
+			continue
+		var cell: Dictionary = cell_v
+		var sid := str(cell.get("sys", ""))
+		if not board.map.systems.has(sid):
+			continue
+		var sysd: Dictionary = board.map.systems[sid]
+		var row_cells: Array = sysd.get("cells", [])
+		var idx := int(cell.get("cell", -1))
+		if idx < 0 or idx >= row_cells.size():
+			continue
+		row_cells[idx]["owner"] = int(cell.get("owner", row_cells[idx].get("owner", 0)))
 
 
 func set_fog(on: bool) -> void:
@@ -506,14 +622,27 @@ func _should_publish(zid: String) -> bool:
 	var secondary := int(assign.get("secondary", {}).get(zid, 0))
 	if primary == me:
 		return true
-	if secondary != me:
-		return false
-	var silent := Time.get_ticks_msec() - int(_last_owner_ms.get(zid, 0))
-	return silent > 1500
+	if secondary == me:
+		var silent := Time.get_ticks_msec() - int(_last_owner_ms.get(zid, 0))
+		#（静默只记怀疑，不把写权限交给备机）26.10.22 21:05 s
+		if silent > 1500 and int(_suspect_log.get(zid, -1)) != int(Time.get_ticks_msec() / 1000):
+			_suspect_log[zid] = int(Time.get_ticks_msec() / 1000)
+			DebugSessionLog.append("MOT", "mp_match_driver._should_publish", "suspect_silent", {
+				"zone": zid, "silent_ms": silent, "runId": "motion-fence"
+			})
+		#（静默只记怀疑，不把写权限交给备机）26.10.22 21:05 e
+	return false
 
 
 func _is_primary(zid: String) -> bool:
 	return int(assign.get("primary", {}).get(zid, 0)) == _me()
+
+
+func authority_zone(zid: String) -> bool:
+	## One writer: the assigned primary. Silence does not grant the backup a term.
+	if not active() or zid == "":
+		return true
+	return _is_primary(zid)
 
 
 func _packet(zone: Dictionary, with_arcs: bool, with_kills: bool = false) -> Dictionary:
@@ -521,6 +650,8 @@ func _packet(zone: Dictionary, with_arcs: bool, with_kills: bool = false) -> Dic
 	var want: Dictionary = {}
 	for s_v in systems:
 		want[str(s_v)] = true
+	var zid_tx := str(zone.get("id", ""))
+	_zone_tx[zid_tx] = int(_zone_tx.get(zid_tx, 0)) + 1
 	var units: Array = []
 	var presence: Dictionary = {}
 	for u_v in board.units:
@@ -528,7 +659,7 @@ func _packet(zone: Dictionary, with_arcs: bool, with_kills: bool = false) -> Dic
 			continue
 		var u: Dictionary = u_v
 		var sid := str(u.get("sys", ""))
-		if not want.has(sid):
+		if not _zone_wants_unit(want, u):
 			continue
 		if not presence.has(sid):
 			presence[sid] = {"owner": _owner_of(sid), "facs": [], "owners": []}
@@ -540,6 +671,10 @@ func _packet(zone: Dictionary, with_arcs: bool, with_kills: bool = false) -> Dic
 			presence[sid]["ships"] = int(presence[sid].get("ships", 0)) + 1
 		#（本机模拟星系写出存活舰数）26.10.22 01:52 e
 		var pos: Vector3 = u.get("pos", Vector3.ZERO)
+		#（快照带船头和这一步终点）26.10.22 23:58 s
+		var face: Vector3 = u.get("face_dir", Vector3.ZERO)
+		var to_p: Vector3 = u.get("to_pos", pos)
+		#（快照带船头和这一步终点）26.10.22 23:58 e
 		var inst_v: Variant = u.get("inst", {})
 		var inst: Dictionary = inst_v if typeof(inst_v) == TYPE_DICTIONARY else {}
 		var shield := float(inst.get("shield", 0.0))
@@ -559,13 +694,28 @@ func _packet(zone: Dictionary, with_arcs: bool, with_kills: bool = false) -> Dic
 			"alive": bool(u.get("alive", false)),
 			"phase": int(u.get("phase", 0)),
 			"pos": [pos.x, pos.y, pos.z],
+			"face": [face.x, face.z],
+			"to": [to_p.x, to_p.y, to_p.z],
 			"faction": fac,
 			"ship_id": str(u.get("ship_id", "")),
 			"pilot_id": str(u.get("pilot_id", "")),
 			"garrison": bool(u.get("garrison", false)),
+			"focus_id": str(u.get("focus_id", "")),
 			"cap": float(inst.get("cap", 0.0)),
 			"max_cap": float(inst.get("max_cap", 0.0)),
 			"step_t": float(u.get("step_t", 0.0)),
+			"motion_seq": int(u.get("motion_seq", 0)),
+			"phase_t": float(u.get("phase_t", 0.0)),
+			"from_sys": str(u.get("from_sys", sid)),
+			"from_cell": int(u.get("from_cell", u.get("cell", 0))),
+			"to_sys": str(u.get("to_sys", sid)),
+			"to_cell": int(u.get("to_cell", u.get("cell", 0))),
+			"step_kind": str(u.get("step_kind", "")),
+			"step_invuln": float(u.get("step_invuln", 0.0)),
+			"order_dest_sys": str(u.get("order_dest_sys", "")),
+			"order_dest_cell": int(u.get("order_dest_cell", -1)),
+			"command_id": int(u.get("command_id", 0)),
+			"nav_standby": bool(u.get("nav_standby_on_sys_enter", false)),
 			"weapon_cd": _cd_list(u.get("weapons", [])),
 			"repair_cd": _cd_list(u.get("self_rep", [])),
 			"path": _path_blob(u.get("path", [])),
@@ -579,11 +729,23 @@ func _packet(zone: Dictionary, with_arcs: bool, with_kills: bool = false) -> Dic
 		if not presence.has(sid_s):
 			presence[sid_s] = {"owner": _owner_of(sid_s), "facs": [], "owners": []}
 		var owners: Array = []
+		var works: Array = []
+		var caps: Array = []
+		var stalls: Array = []
+		var assignees: Array = []
 		if board.map != null and board.map.systems.has(sid_s):
 			for c_v in board.map.systems[sid_s]["cells"]:
 				if typeof(c_v) == TYPE_DICTIONARY:
 					owners.append(int((c_v as Dictionary).get("owner", 0)))
+					works.append(float((c_v as Dictionary).get("work", 0.0)))
+					caps.append(int((c_v as Dictionary).get("capturing", 0)))
+					stalls.append(float((c_v as Dictionary).get("cap_stall", 0.0)))
+					assignees.append(str((c_v as Dictionary).get("assigned_pilot_id", "")))
 		presence[sid_s]["owners"] = owners
+		presence[sid_s]["works"] = works
+		presence[sid_s]["capturing"] = caps
+		presence[sid_s]["stalls"] = stalls
+		presence[sid_s]["assignees"] = assignees
 		if not presence[sid_s].has("ships"):
 			presence[sid_s]["ships"] = 0
 	var kills: Array = []
@@ -599,6 +761,7 @@ func _packet(zone: Dictionary, with_arcs: bool, with_kills: bool = false) -> Dic
 			arcs[sid2] = weights
 	var pkt: Dictionary = {
 		"zone": str(zone.get("id", "")),
+		"frame_seq": int(_zone_tx.get(zid_tx, 0)),
 		"owner": _me(),
 		"hot": bool(zone.get("hot", false)),
 		"units": units,
@@ -606,6 +769,7 @@ func _packet(zone: Dictionary, with_arcs: bool, with_kills: bool = false) -> Dic
 		"arcs": arcs,
 		"kills": kills,
 		"vision": _all_faction_vision(),
+		"fx": board._fx_recent.duplicate(),
 	}
 	return pkt
 
@@ -701,6 +865,47 @@ func _global_live(name: String) -> bool:
 	return Time.get_ticks_msec() - int(_last_owner_ms.get("g:" + name, 0)) > 1500
 
 
+func _take_zone_frame(zid: String, sender: int, frame_seq: int) -> bool:
+	## Live primary keeps its own counter. A new primary, or the same one
+	## climbing through a stale watermark for 1.5s, becomes the sequence.
+	if frame_seq <= 0:
+		return true
+	var now := Time.get_ticks_msec()
+	var st_v: Variant = _zone_rx.get(zid, {})
+	var st: Dictionary = st_v if typeof(st_v) == TYPE_DICTIONARY else {}
+	var have_sender := int(st.get("sender", -999))
+	var have_seq := int(st.get("seq", -1))
+	if have_sender != sender or frame_seq >= have_seq:
+		if have_sender != sender and have_sender != -999:
+			DebugSessionLog.append("MOT", "mp_match_driver._take_zone_frame", "accept_sender", {
+				"zone": zid, "sender": sender, "prev": have_sender, "seq": frame_seq, "runId": "post-fix"
+			})
+		_zone_rx[zid] = {"sender": sender, "seq": frame_seq, "accept_ms": now}
+		_zone_low.erase(zid)
+		return true
+	var low_v: Variant = _zone_low.get(zid, {})
+	var low: Dictionary = low_v if typeof(low_v) == TYPE_DICTIONARY else {}
+	if int(low.get("sender", -999)) != sender or frame_seq <= int(low.get("prev", -1)):
+		low = {"sender": sender, "prev": frame_seq, "n": 1, "since_ms": now}
+	else:
+		low["prev"] = frame_seq
+		low["n"] = int(low.get("n", 0)) + 1
+	_zone_low[zid] = low
+	var silent := now - int(st.get("accept_ms", now))
+	if int(low.get("n", 0)) >= 8 and silent > 1500:
+		_zone_rx[zid] = {"sender": sender, "seq": frame_seq, "accept_ms": now}
+		_zone_low.erase(zid)
+		DebugSessionLog.append("MOT", "mp_match_driver._take_zone_frame", "resync", {
+			"zone": zid, "sender": sender, "have": have_seq, "incoming": frame_seq,
+			"silent_ms": silent, "runId": "post-fix"
+		})
+		return true
+	DebugSessionLog.append("MOT", "mp_match_driver._on_zone", "reject_frame", {
+		"zone": zid, "have": have_seq, "incoming": frame_seq, "sender": sender, "runId": "motion-fence"
+	})
+	return false
+
+
 func _on_zone(pkt: Dictionary, _reliable: bool) -> void:
 	if board == null or _applying:
 		return
@@ -715,14 +920,18 @@ func _on_zone(pkt: Dictionary, _reliable: bool) -> void:
 		_applying = false
 		return
 	var primary := int(assign.get("primary", {}).get(zid, sender))
-	if sender != primary and sender != int(assign.get("secondary", {}).get(zid, 0)):
+	if sender != primary:
 		_applying = false
 		return
-	if sender != primary:
-		var silent := Time.get_ticks_msec() - int(_last_owner_ms.get(zid, 0))
-		if silent < 1500:
-			_applying = false
-			return
+	var frame_seq := int(pkt.get("frame_seq", 0))
+	#（同一任期只接受更新的区帧）26.10.22 21:05 s
+	#（主节点换人或旧帧停住超过一秒半就改认新序列）26.10.22 23:35 s
+	if not _take_zone_frame(zid, sender, frame_seq):
+		_applying = false
+		return
+	#（主节点换人或旧帧停住超过一秒半就改认新序列）26.10.22 23:35 e
+	#（同一任期只接受更新的区帧）26.10.22 21:05 e
+	_zone_fresh[zid] = Time.get_ticks_msec()
 	_last_owner_ms[zid] = Time.get_ticks_msec()
 	_lerp_ms = clampi(int(net.rtt_ms.get(sender, 80)), 50, 250)
 	var in_audit := _audit_slice.has(zid) and sender == _audit_peer and Time.get_ticks_msec() < _audit_until
@@ -734,31 +943,50 @@ func _on_zone(pkt: Dictionary, _reliable: bool) -> void:
 			var u: Dictionary = _ensure_unit(row)
 			if u.is_empty():
 				continue
-			if sim_unit(u) and int(assign.get("primary", {}).get(zid, 0)) == _me():
+			if sim_unit(u) and _is_primary(zid):
 				continue
+			var skip_combat := net.disc_skip_remote_combat(sender == 1)
 			if bool(row.get("alive", true)):
-				u["sys"] = str(row.get("sys", u.get("sys", "")))
-				u["cell"] = int(row.get("cell", u.get("cell", 0)))
-				var pos: Array = row.get("pos", [])
-				if pos.size() >= 3:
-					_targets[str(u.get("id", ""))] = Vector3(float(pos[0]), float(pos[1]), float(pos[2]))
-			u["alive"] = bool(row.get("alive", true))
-			_write_hull(u, row)
-			_write_combat(u, row)
+				var inc_seq := int(row.get("motion_seq", 0))
+				var have_seq := int(u.get("motion_seq", 0))
+				if inc_seq < have_seq:
+					if int(u.get("_mot_rej", -1)) != int(Time.get_ticks_msec() / 500):
+						u["_mot_rej"] = int(Time.get_ticks_msec() / 500)
+						DebugSessionLog.append("MOT", "mp_match_driver._on_zone", "reject_old", {
+							"id": str(u.get("id", "")), "have": have_seq, "incoming": inc_seq,
+							"cell": int(u.get("cell", -1)), "pkt_cell": int(row.get("cell", -1)),
+							"runId": "motion-fence"
+						})
+				else:
+					#（出发区旧包不再改已经归新区的船）26.10.23 01:04 s
+					var home := str(zone_of.get(str(u.get("sys", "")), ""))
+					if home != "" and home != zid and _is_primary(home):
+						pass
+					else:
+						_apply_motion_row(u, row, "NET_SNAPSHOT", inc_seq > have_seq)
+					#（出发区旧包不再改已经归新区的船）26.10.23 01:04 e
+			if not skip_combat:
+				u["alive"] = bool(row.get("alive", true))
+				_write_hull(u, row)
+			_write_combat(u, row, not skip_combat)
 		var arcs_v: Variant = pkt.get("arcs", {})
 		if typeof(arcs_v) == TYPE_DICTIONARY and board.map != null:
 			for sid_v in (arcs_v as Dictionary).keys():
 				var sid := str(sid_v)
-				if fog_blocks_arc(sid):
-					continue
+				#（迷雾里仍套用弧长）26.10.22 13:42 s
 				if not board.map.systems.has(sid):
 					continue
+				#（迷雾里仍套用弧长）26.10.22 13:42 e
 				var weights: Array = (arcs_v as Dictionary)[sid_v]
 				var cells: Array = board.map.systems[sid]["cells"]
 				for i in range(mini(weights.size(), cells.size())):
 					cells[i]["weight"] = float(weights[i])
 	if pkt.get("sim_clock", null) != null and not owns_global("clock"):
-		board._sim_clock = float(pkt.get("sim_clock", board._sim_clock))
+		#（全局时钟只向前对齐）26.10.23 01:04 s
+		var incoming_clock := float(pkt.get("sim_clock", board._sim_clock))
+		if incoming_clock + 0.02 >= board._sim_clock:
+			board._sim_clock = incoming_clock
+		#（全局时钟只向前对齐）26.10.23 01:04 e
 	var dip_v: Variant = pkt.get("diplomacy", null)
 	if typeof(dip_v) == TYPE_DICTIONARY and board.data != null and not owns_global("diplo"):
 		board.data.diplomacy = dip_v
@@ -771,6 +999,9 @@ func _on_zone(pkt: Dictionary, _reliable: bool) -> void:
 			for fac_v in (occ_v as Dictionary).keys():
 				board._stat_fac(int(fac_v))["occupy_score"] = float((occ_v as Dictionary)[fac_v])
 	_apply_presence(pkt.get("presence", {}))
+	for ev_v in pkt.get("fx", []):
+		if typeof(ev_v) == TYPE_DICTIONARY:
+			board.play_replicated_fx(ev_v)
 	_applying = false
 
 
@@ -781,7 +1012,7 @@ func _apply_presence(presence_v: Variant, force: bool = false) -> void:
 		var sid := str(sid_v)
 		if not board.map.systems.has(sid):
 			continue
-		if not force and sim_system(sid):
+		if not force and authority_zone(_zone_of(sid)):
 			continue
 		var row_v: Variant = (presence_v as Dictionary)[sid_v]
 		if typeof(row_v) != TYPE_DICTIONARY:
@@ -790,29 +1021,59 @@ func _apply_presence(presence_v: Variant, force: bool = false) -> void:
 		var cells: Array = board.map.systems[sid]["cells"]
 		var owners_v: Variant = row.get("owners", [])
 		var owners: Array = owners_v if owners_v is Array else []
-		if (force or owns_global("victory")) and not owners.is_empty():
+		#（观察端套用整格占领）26.10.22 17:58 s
+		var works_v: Variant = row.get("works", [])
+		var caps_v: Variant = row.get("capturing", [])
+		var stalls_v: Variant = row.get("stalls", [])
+		var asg_v: Variant = row.get("assignees", [])
+		var works: Array = works_v if works_v is Array else []
+		var caps: Array = caps_v if caps_v is Array else []
+		var stalls: Array = stalls_v if stalls_v is Array else []
+		var asg: Array = asg_v if asg_v is Array else []
+		var names_changed := false
+		if not owners.is_empty():
 			for i in range(mini(owners.size(), cells.size())):
-				if typeof(cells[i]) == TYPE_DICTIONARY:
-					(cells[i] as Dictionary)["owner"] = int(owners[i])
+				if typeof(cells[i]) != TYPE_DICTIONARY:
+					continue
+				var cell: Dictionary = cells[i]
+				cell["owner"] = int(owners[i])
+				if i < works.size():
+					cell["work"] = float(works[i])
+				if i < caps.size():
+					cell["capturing"] = int(caps[i])
+				if i < stalls.size():
+					cell["cap_stall"] = float(stalls[i])
+				#（资源点换人后清掉上一个名字）26.10.22 23:58 s
+				if i < asg.size():
+					var next_id := str(asg[i])
+					if str(cell.get("assigned_pilot_id", "")) != next_id:
+						cell["assigned_pilot_id"] = next_id
+						names_changed = true
+				#（资源点换人后清掉上一个名字）26.10.22 23:58 e
+			if board.map:
+				board.map.capture_dirty = true
+			if names_changed and board.starmap_view:
+				board.starmap_view.rebuild_labels(board.pilots)
+				# #region agent log
+				DebugSessionLog.append("RES", "mp_match_driver._apply_presence", "assignees", {
+					"sys": sid, "runId": "post-fix", "hypothesisId": "RES",
+				})
+				# #endregion
+			if int(Time.get_ticks_msec() / 1000) != int(board.get_meta("_dbg_cap", -1)):
+				board.set_meta("_dbg_cap", int(Time.get_ticks_msec() / 1000))
+				DebugSessionLog.append("CAP", "mp_match_driver._apply_presence", "owners", {"sys": sid, "n": owners.size(), "runId": "post-fix"})
 			continue
+		#（观察端套用整格占领）26.10.22 17:58 e
 		var owner := int(row.get("owner", 0))
 		for c_v in cells:
 			if typeof(c_v) == TYPE_DICTIONARY and int((c_v as Dictionary).get("kind", -1)) == BoardTypes.CellKind.SOV:
 				(c_v as Dictionary)["owner"] = owner
 
 
-func _lerp_remote(delta: float) -> void:
-	var buf := maxf(float(_lerp_ms) / 1000.0, 0.05)
-	var k := clampf(delta / buf, 0.0, 1.0)
-	for id_v in _targets.keys():
-		var u: Dictionary = board._unit_by_id(str(id_v))
-		if u.is_empty():
-			continue
-		if sim_unit(u):
-			continue
-		var target: Vector3 = _targets[id_v]
-		var pos: Vector3 = u.get("pos", target)
-		u["pos"] = pos.lerp(target, k)
+func _lerp_remote(_delta: float) -> void:
+	#（显示层自己追，不再把插值写回拟真坐标）26.10.22 17:58 s
+	return
+	#（显示层自己追，不再把插值写回拟真坐标）26.10.22 17:58 e
 
 
 func _maybe_reassign() -> void:
@@ -1126,12 +1387,21 @@ func _apply_saved_progress() -> void:
 			board._stat_fac(int(fac_v))["occupy_score"] = float((saved_occ as Dictionary)[fac_v])
 
 
-func _on_order(unit_id: String, to_sys: String, to_cell: int) -> void:
+func _on_order(unit_id: String, to_sys: String, to_cell: int, focus_id: String = "") -> void:
 	var u: Dictionary = board._unit_by_id(unit_id)
 	if u.is_empty():
 		return
 	_applying = true
+	if focus_id != "":
+		u["focus_id"] = focus_id
 	board._pathfind_apply(u, to_sys, to_cell)
+	if focus_id != "":
+		u["focus_id"] = focus_id
+	# #region agent log
+	DebugSessionLog.append("ATK", "mp_match_driver._on_order", "focus_applied", {
+		"unit": unit_id, "focus": focus_id, "to": [to_sys, to_cell], "runId": "post-fix",
+	})
+	# #endregion
 	_applying = false
 
 
@@ -1155,13 +1425,30 @@ func _on_diplo(a: int, b: int, on: bool) -> void:
 	board.diplo_offer.erase("%d>%d" % [a, b])
 	board.diplo_offer.erase("%d>%d" % [b, a])
 	board._set_alliance(a, b, on)
+	if on:
+		board._diplo_chat_allied(a, b)
+	else:
+		board._diplo_chat_cancelled(a, b)
 	board._rebuild_diplomacy_rows()
 	_applying = false
 
 
-func _on_diplo_offer(from_fac: int, to_fac: int) -> void:
-	board.diplo_offer["%d>%d" % [from_fac, to_fac]] = true
+func _on_diplo_offer(from_fac: int, to_fac: int, on: bool = true) -> void:
+	var key := "%d>%d" % [from_fac, to_fac]
+	if on:
+		board.diplo_offer[key] = true
+		if int(board.viewer_faction) == to_fac:
+			board._diplo_chat_received(from_fac)
+	else:
+		board.diplo_offer.erase(key)
+		board.diplo_ai_wait.erase(key)
 	board._rebuild_diplomacy_rows()
+
+
+func _on_concede(fac: int) -> void:
+	if board == null or board._faction_out.has(fac):
+		return
+	board._defeat_faction(fac)
 
 
 func _on_assignment() -> void:
@@ -1225,34 +1512,105 @@ func _global_from(sender: int, name: String) -> bool:
 	return sender == int(assign.get("globals", {}).get(name, 0)) or sender == int(assign.get("secondary", {}).get("g:" + name, 0))
 
 
-func _write_combat(u: Dictionary, row: Dictionary) -> void:
+func _zone_wants_unit(want: Dictionary, u: Dictionary) -> bool:
+	if want.has(str(u.get("sys", ""))):
+		return true
+	var ph := int(u.get("phase", 0))
+	if (ph == BoardTypes.MovePhase.INVULN or ph == BoardTypes.MovePhase.LANDING) and want.has(str(u.get("from_sys", ""))):
+		return true
+	if float(u.get("handoff_until", 0.0)) > float(board._sim_clock) and want.has(str(u.get("handoff_from", ""))):
+		return true
+	return false
+
+
+func _motion_newer(u: Dictionary, row: Dictionary) -> bool:
+	return int(row.get("motion_seq", 0)) > int(u.get("motion_seq", 0))
+
+
+func _apply_motion_row(u: Dictionary, row: Dictionary, reason: String, structural: bool = true) -> void:
+	var old_sys := str(u.get("sys", ""))
+	var old_cell := int(u.get("cell", -1))
+	var old_pos: Vector3 = u.get("pos", Vector3.ZERO)
+	var pos: Array = row.get("pos", [])
+	if pos.size() >= 3:
+		var sim_p := Vector3(float(pos[0]), float(pos[1]), float(pos[2]))
+		u["pos"] = sim_p
+		u["rest_pos"] = Vector3(sim_p.x, BoardTypes.UNIT_Y, sim_p.z)
+	if row.has("phase"):
+		u["phase"] = int(row.get("phase", u.get("phase", 0)))
+	if row.has("phase_t"):
+		u["phase_t"] = float(row.get("phase_t", 0.0))
+	#（观察端套用权威朝向和终点）26.10.22 23:58 s
+	var face_v: Variant = row.get("face", [])
+	if face_v is Array and (face_v as Array).size() >= 2:
+		u["face_dir"] = Vector3(float((face_v as Array)[0]), 0.0, float((face_v as Array)[1]))
+	var to_v: Variant = row.get("to", [])
+	if to_v is Array and (to_v as Array).size() >= 3:
+		u["to_pos"] = Vector3(float((to_v as Array)[0]), float((to_v as Array)[1]), float((to_v as Array)[2]))
+	#（观察端套用权威朝向和终点）26.10.22 23:58 e
+	if not structural:
+		return
+	u["sys"] = str(row.get("sys", old_sys))
+	u["cell"] = int(row.get("cell", old_cell))
+	if row.has("from_sys"):
+		u["from_sys"] = str(row.get("from_sys", ""))
+		u["from_cell"] = int(row.get("from_cell", u.get("cell", 0)))
+		u["to_sys"] = str(row.get("to_sys", u.get("sys", "")))
+		u["to_cell"] = int(row.get("to_cell", u.get("cell", 0)))
+		u["step_kind"] = str(row.get("step_kind", ""))
+		u["step_invuln"] = float(row.get("step_invuln", 0.0))
+	if row.has("order_dest_sys"):
+		var dest_sys := str(row.get("order_dest_sys", ""))
+		if dest_sys == "":
+			u.erase("order_dest_sys")
+			u.erase("order_dest_cell")
+		else:
+			u["order_dest_sys"] = dest_sys
+			u["order_dest_cell"] = int(row.get("order_dest_cell", -1))
+	if row.has("nav_standby"):
+		u["nav_standby_on_sys_enter"] = bool(row.get("nav_standby", false))
+	if row.has("path") and typeof(row.get("path", [])) == TYPE_ARRAY:
+		u["path"] = _accepted_path(row.get("path", []))
+	u["motion_seq"] = int(row.get("motion_seq", u.get("motion_seq", 0)))
+	var new_pos: Vector3 = u.get("pos", old_pos)
+	if old_sys != str(u.get("sys", "")) or old_cell != int(u.get("cell", -1)) or old_pos.distance_to(new_pos) > 0.4:
+		DebugSessionLog.append("MOT", "mp_match_driver._apply_motion_row", reason, {
+			"id": str(u.get("id", "")), "seq": int(u.get("motion_seq", 0)),
+			"old": [old_sys, old_cell], "new": [str(u.get("sys", "")), int(u.get("cell", -1))],
+			"runId": "motion-fence"
+		})
+
+
+func _write_combat(u: Dictionary, row: Dictionary, combat: bool = true) -> void:
 	var inst_v: Variant = u.get("inst", {})
 	var inst: Dictionary = inst_v if typeof(inst_v) == TYPE_DICTIONARY else {}
-	if row.has("cap"):
+	if combat and row.has("cap"):
 		inst["cap"] = float(row.get("cap", 0.0))
-	if row.has("max_cap"):
+	if combat and row.has("max_cap"):
 		inst["max_cap"] = float(row.get("max_cap", inst.get("max_cap", 0.0)))
 	if not inst.is_empty():
 		u["inst"] = inst
-	if row.has("phase"):
-		u["phase"] = int(row.get("phase", u.get("phase", 0)))
+	if row.has("focus_id") and not sim_unit(u):
+		u["focus_id"] = str(row.get("focus_id", ""))
 	if row.has("step_t"):
 		u["step_t"] = float(row.get("step_t", 0.0))
-	_write_cds(u.get("weapons", []), row.get("weapon_cd", []))
-	_write_cds(u.get("self_rep", []), row.get("repair_cd", []))
-	if row.has("path") and typeof(row.get("path", [])) == TYPE_ARRAY:
-		u["path"] = (row.get("path", []) as Array).duplicate(true)
+	if combat:
+		_write_cds(u.get("weapons", []), row.get("weapon_cd", []))
+		_write_cds(u.get("self_rep", []), row.get("repair_cd", []))
 	if row.has("skirmish_left"):
 		u["skirmish_left"] = float(row.get("skirmish_left", 0.0))
 		u["skirmish_speed"] = float(row.get("skirmish_speed", 0.0))
 		u["skirmish_prep"] = float(row.get("skirmish_prep", 0.0))
 	var bursts_v: Variant = row.get("bursts", [])
-	if typeof(bursts_v) == TYPE_ARRAY:
+	if combat and typeof(bursts_v) == TYPE_ARRAY:
 		var local: Array = u.get("bursts", [])
 		for i in mini(local.size(), (bursts_v as Array).size()):
-			var src: Dictionary = (bursts_v as Array)[i]
-			if typeof(src) != TYPE_DICTIONARY or typeof(local[i]) != TYPE_DICTIONARY:
+			#（指挥波条目先确认是字典）26.10.22 10:25 s
+			var src_v: Variant = (bursts_v as Array)[i]
+			if typeof(src_v) != TYPE_DICTIONARY or typeof(local[i]) != TYPE_DICTIONARY:
 				continue
+			var src: Dictionary = src_v
+			#（指挥波条目先确认是字典）26.10.22 10:25 e
 			local[i]["cd"] = float(src.get("cd", 0.0))
 			local[i]["remain"] = float(src.get("remain", 0.0))
 			local[i]["auto_on"] = bool(src.get("auto_on", true))
@@ -1275,17 +1633,58 @@ func _on_fit(unit_id: String, kind: String, on: bool) -> void:
 	_applying = false
 
 
+func _accepted_path(raw: Array) -> Array:
+	#（路径步骤先查类型）26.10.22 10:25 s
+	var out: Array = []
+	for step_v in raw:
+		if typeof(step_v) != TYPE_DICTIONARY:
+			push_warning("EVERTBS path step is not a dictionary")
+			continue
+		var step: Dictionary = step_v
+		if not step.has("to") or not step.has("kind") or str(step.get("kind", "")) == "":
+			push_warning("EVERTBS path step missing to or kind")
+			continue
+		if str(step.get("kind", "")) == "jump" and typeof(step.get("to_sys", null)) != TYPE_STRING:
+			push_warning("EVERTBS jump step missing to_sys")
+			continue
+		out.append(step.duplicate(true))
+	#（路径步骤先查类型）26.10.22 10:25 e
+	return out
+
+
+func _clamp_layer(inst: Dictionary, cur_key: String, max_key: String) -> void:
+	var cur := float(inst.get(cur_key, 0.0))
+	if not is_finite(cur) or cur < 0.0:
+		cur = 0.0
+	var mx := float(inst.get(max_key, 0.0))
+	if is_finite(mx) and mx >= 0.0 and cur > mx:
+		cur = mx
+	inst[cur_key] = cur
+
+
 func _write_hull(u: Dictionary, row: Dictionary) -> void:
 	var inst_v: Variant = u.get("inst", {})
 	var inst: Dictionary = inst_v if typeof(inst_v) == TYPE_DICTIONARY else {}
+	if inst.is_empty():
+		return
 	if row.has("shield"):
 		inst["shield"] = float(row.get("shield", 0.0))
 	if row.has("armor"):
 		inst["armor"] = float(row.get("armor", 0.0))
 	if row.has("structure"):
 		inst["structure"] = float(row.get("structure", 0.0))
-	if not inst.is_empty():
-		u["inst"] = inst
+	#（已有单位套用当前上限并夹紧）26.10.22 10:25 s
+	if row.has("max_s"):
+		inst["max_s"] = float(row.get("max_s", inst.get("max_s", 0.0)))
+	if row.has("max_a"):
+		inst["max_a"] = float(row.get("max_a", inst.get("max_a", 0.0)))
+	if row.has("max_h"):
+		inst["max_h"] = float(row.get("max_h", inst.get("max_h", 0.0)))
+	_clamp_layer(inst, "shield", "max_s")
+	_clamp_layer(inst, "armor", "max_a")
+	_clamp_layer(inst, "structure", "max_h")
+	#（已有单位套用当前上限并夹紧）26.10.22 10:25 e
+	u["inst"] = inst
 
 
 func _ensure_unit(row: Dictionary) -> Dictionary:
@@ -1305,25 +1704,28 @@ func _ensure_unit(row: Dictionary) -> Dictionary:
 			"home": str(row.get("sys", "")),
 		}
 	var def: Dictionary = board.data.ship_def(ship_id)
-	var inst := {
-		"ship_id": ship_id,
-		"shield": float(row.get("shield", 0.0)),
-		"armor": float(row.get("armor", 0.0)),
-		"structure": float(row.get("structure", 0.0)),
-		"max_s": float(row.get("max_s", def.get("shield", 0.0))),
-		"max_a": float(row.get("max_a", def.get("armor", 0.0))),
-		"max_h": float(row.get("max_h", def.get("structure", 0.0))),
-		"pristine_s": float(row.get("max_s", 0.0)),
-		"pristine_a": float(row.get("max_a", 0.0)),
-		"pristine_h": float(row.get("max_h", 0.0)),
-		"cap": float(def.get("cap", 0.0)),
-		"max_cap": float(def.get("cap", 0.0)),
-		"resist": int(def.get("resist", 0)),
-	}
+	if def.is_empty() or board.pilots_sys == null:
+		return {}
+	#（联机重建用本地表算原始上限）26.10.22 10:25 s
+	var inst: Dictionary = board.pilots_sys.make_ship_instance(ship_id, board.pilots_sys._crew_eq(pilot))
+	inst["shield"] = float(row.get("shield", inst.get("shield", 0.0)))
+	inst["armor"] = float(row.get("armor", inst.get("armor", 0.0)))
+	inst["structure"] = float(row.get("structure", inst.get("structure", 0.0)))
+	if row.has("max_s"):
+		inst["max_s"] = float(row.get("max_s", inst.get("max_s", 0.0)))
+	if row.has("max_a"):
+		inst["max_a"] = float(row.get("max_a", inst.get("max_a", 0.0)))
+	if row.has("max_h"):
+		inst["max_h"] = float(row.get("max_h", inst.get("max_h", 0.0)))
+	#（联机重建用本地表算原始上限）26.10.22 10:25 e
 	var spawned: Dictionary = board._spawn_unit(pilot, inst, str(row.get("sys", "")), int(row.get("cell", 0)))
 	if spawned.is_empty():
 		return {}
 	spawned["id"] = uid
+	#（联机远端舰补显示节点）26.10.22 17:58 s
+	if board.has_node("Units"):
+		board._ensure_unit_node(spawned)
+	#（联机远端舰补显示节点）26.10.22 17:58 e
 	return spawned
 
 

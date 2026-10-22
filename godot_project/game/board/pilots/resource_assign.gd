@@ -142,7 +142,17 @@ static func effective_build_s(data: BoardData, map: BoardMapModel, pilot: Dictio
 			"reduction": 0.0,
 		}
 	var eff_pts := maxi(0, held - unlock)
-	var red := minf(reduction_cap(data), float(eff_pts) * reduction_per_point(data))
+	#（制造折扣夹在正区间）26.10.22 10:25 s
+	var cap_raw := reduction_cap(data)
+	var cap := 0.99
+	if is_finite(cap_raw):
+		cap = clampf(cap_raw, 0.0, 0.99)
+	var per := reduction_per_point(data)
+	var raw := 0.0
+	if is_finite(per):
+		raw = float(eff_pts) * per
+	var red := clampf(raw, 0.0, cap)
+	#（制造折扣夹在正区间）26.10.22 10:25 e
 	return {
 		"ok": true,
 		"build_s": base_s * (1.0 - red),

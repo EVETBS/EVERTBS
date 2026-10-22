@@ -8,7 +8,7 @@ signal failed(msg: String)
 signal room_updated
 signal chat_received(text: String, scope: String, faction: int)
 signal zone_received(pkt: Dictionary, reliable: bool)
-signal order_received(unit_id: String, to_sys: String, to_cell: int)
+signal order_received(unit_id: String, to_sys: String, to_cell: int, focus_id: String)
 signal fit_received(unit_id: String, kind: String, on: bool)
 signal group_received(unit_id: String, group_id: int)
 signal deputy_received(faction: int, group_id: int)
@@ -18,12 +18,15 @@ signal match_over_received(winner: int, reason: String)
 signal audit_sample(rows: Array)
 signal assignment_updated
 signal peers_changed
-signal diplo_offer_received(from_fac: int, to_fac: int)
+signal diplo_offer_received(from_fac: int, to_fac: int, on: bool)
+signal concede_received(fac: int)
 signal host_lost
+signal disc_notice(text: String)
 
 const GAME_BASE := 24567
 const BEACON_PORT := 24567
 const TICKET_PATH := "user://etb_campaign_ticket.json"
+const HISTORY_PATH := "user://mp_match_history.json"
 const TABLES_PATH := "user://mp_campaign_tables.json"
 const PROGRESS_PATH := "user://mp_campaign_progress.json"
 const BOOT_PATH := "user://board_boot.json"
@@ -32,6 +35,7 @@ const LIVE_PATH := "user://mp_campaign_live"
 
 var is_host := false
 var match_started := false
+var reopen_room := false
 var local_nick := ""
 var room_code := 0
 var room_password := ""
@@ -57,6 +61,24 @@ var _progress_flush := 0.0
 var _layout_sig := ""
 var _audit_watcher_id := 0
 var host_gone := false
+var disc_capture: Callable = Callable()
+var disc_apply: Callable = Callable()
+var _opening := false
+var _opening_layout: Dictionary = {}
+var _opening_tables: Dictionary = {}
+var _opening_prog: Dictionary = {}
+var _opening_loaded: Dictionary = {}
+var _boot_layer: CanvasLayer
+var _boot_label: Label
+var _boot_bar: ProgressBar
+var _disc_active := false
+var _disc_pvp := false
+var _disc_link_ok := false
+var _disc_probed := false
+var _disc_wait_until := 0.0
+var _disc_line := ""
+const PAGES_URL := "https://evetbs.github.io/EVERTBS-online-update/"
+const DUEL_WAIT_S := 600.0
 
 var _beacon: PacketPeerUDP
 var _beacon_acc := 0.0
@@ -271,15 +293,17 @@ func send_fit(unit_id: String, kind: String, on: bool, owner_peer: int) -> void:
 		rpc_id(1, "rpc_fit_to", owner_peer, unit_id, kind, on)
 
 
-func send_order(unit_id: String, to_sys: String, to_cell: int, owner_peer: int) -> void:
+func send_order(unit_id: String, to_sys: String, to_cell: int, owner_peer: int, focus_id: String = "") -> void:
 	if owner_peer <= 0 or not multiplayer.has_multiplayer_peer():
 		return
 	if owner_peer == _self_id():
 		return
+	#（攻击目标随移动命令交给星系模拟者）26.10.22 16:45 s
 	if is_host or owner_peer == 1:
-		rpc_id(owner_peer, "rpc_order", unit_id, to_sys, to_cell)
+		rpc_id(owner_peer, "rpc_order", unit_id, to_sys, to_cell, focus_id)
 	else:
-		rpc_id(1, "rpc_order_to", owner_peer, unit_id, to_sys, to_cell)
+		rpc_id(1, "rpc_order_to", owner_peer, unit_id, to_sys, to_cell, focus_id)
+	#（攻击目标随移动命令交给星系模拟者）26.10.22 16:45 e
 
 
 func send_group(unit_id: String, group_id: int) -> void:
@@ -312,13 +336,23 @@ func send_diplo(a: int, b: int, on: bool) -> void:
 		rpc_id(1, "rpc_diplo", a, b, on)
 
 
-func send_diplo_offer(from_fac: int, to_fac: int) -> void:
+func send_diplo_offer(from_fac: int, to_fac: int, on: bool = true) -> void:
 	if not multiplayer.has_multiplayer_peer():
 		return
 	if is_host:
-		_deliver_diplo_offer(from_fac, to_fac, _self_id())
+		_deliver_diplo_offer(from_fac, to_fac, _self_id(), on)
 	else:
-		rpc_id(1, "rpc_diplo_offer", from_fac, to_fac)
+		rpc_id(1, "rpc_diplo_offer", from_fac, to_fac, on)
+
+
+func send_concede(fac: int) -> void:
+	if not multiplayer.has_multiplayer_peer():
+		return
+	if is_host:
+		for pid in _relay_targets(_self_id()):
+			rpc_id(int(pid), "rpc_concede", fac)
+	else:
+		rpc_id(1, "rpc_concede", fac)
 
 
 func send_fog(on: bool) -> void:
@@ -362,20 +396,27 @@ func reject_mod_install(path: String) -> void:
 
 
 func try_autostart() -> void:
-	if not is_host or match_started:
+	if not is_host or match_started or _opening:
 		return
 	if not _ready_to_start():
 		return
-	var layout := _layout_for_match()
-	var tables := _read_tables()
-	var prog := {"sim_clock": 0.0, "units": [], "cells": [], "diplomacy": {}}
-	progress = prog
-	var tj := JSON.stringify(tables)
-	var pj := JSON.stringify(prog)
-	for pid in _relay_targets(_self_id()):
-		var mine := _layout_for_peer(int(pid))
-		rpc_id(int(pid), "rpc_match_start", JSON.stringify(mine), tj, pj)
-	_enter_match(layout, tables, prog)
+	_opening = true
+	#（开局冻结一份布局，进局不再重抽）26.10.22 21:40 s
+	_opening_layout = _layout_for_match()
+	#（开局冻结一份布局，进局不再重抽）26.10.22 21:40 e
+	_opening_tables = _read_tables()
+	_opening_prog = {"sim_clock": 0.0, "units": [], "cells": [], "diplomacy": {}}
+	progress = _opening_prog
+	_opening_loaded.clear()
+	var content_hash := _content_hash(_opening_tables)
+	_opening_tables["content_hash"] = content_hash
+	_show_boot("正在核对数据", 0.2)
+	var targets := _relay_targets(_self_id())
+	if targets.is_empty():
+		_finish_opening()
+		return
+	for pid in targets:
+		rpc_id(int(pid), "rpc_opening_hash", content_hash)
 
 
 func _process(delta: float) -> void:
@@ -385,6 +426,10 @@ func _process(delta: float) -> void:
 			_beacon_acc = 0.0
 			_beacon_announce()
 		_beacon_replies()
+	if _disc_active and _disc_wait_until > 0.0 and Time.get_unix_time_from_system() >= _disc_wait_until:
+		_disc_active = false
+		_disc_line = "等待重连已到 10 分钟，对局继续。"
+		disc_notice.emit(_disc_line)
 	if not multiplayer.has_multiplayer_peer():
 		return
 	_probe_acc += delta
@@ -413,21 +458,26 @@ func _ready_to_start() -> bool:
 		if typeof(m_v) != TYPE_DICTIONARY:
 			continue
 		var m: Dictionary = m_v
-		var spectate := str(m.get("seat", "")) == "spectate"
+		var spectate := str(m.get("seat", "")) == "spectate" or bool(m.get("left", false))
 		if not spectate:
 			seated += 1
-		if bool(m.get("ai", false)) or spectate:
+		if bool(m.get("ai", false)) or spectate or bool(m.get("left", false)):
 			continue
 		humans += 1
 		if str(m.get("hash", "")) != "" and str(m.get("hash", "")) != rules_hash:
 			return false
 		if bool(m.get("ready", false)):
+			if _roster_block(m) != "":
+				return false
 			ready_n += 1
 	return humans >= 1 and ready_n == humans and seated >= 2 and not room.get("layout", {}).is_empty()
 
 
 func _layout_for_match() -> Dictionary:
+	_ensure_players_seated()
 	var layout: Dictionary = (room.get("layout", {}) as Dictionary).duplicate(true)
+	if str(layout.get("mp_match_id", "")) == "":
+		layout["mp_match_id"] = "%s:%d" % [room_key, int(Time.get_unix_time_from_system())]
 	var opening: Dictionary = {}
 	var deps: Dictionary = {}
 	var ai_facs: Array = []
@@ -459,10 +509,22 @@ func _layout_for_match() -> Dictionary:
 	layout["pilots"] = pilots
 	layout["viewer_faction"] = _faction_of_peer(multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1)
 	layout["match_modes"] = room.get("modes", ["hua_di"])
-	layout["match_limit_s"] = int(room.get("limit_s", 5400))
-	layout["annihilate_goal"] = int(room.get("annihilate", 50))
+	layout["match_limit_s"] = clampi(int(room.get("limit_s", 5400)), 600, 86400)
+	layout["annihilate_goal"] = clampi(int(room.get("annihilate", 50)), 10, 1000)
 	layout["fog_of_war"] = bool(room.get("fog", false))
 	layout["mp"] = true
+	var fac_names: Dictionary = {}
+	for m2_v in room.get("members", []):
+		if typeof(m2_v) != TYPE_DICTIONARY:
+			continue
+		var m2: Dictionary = m2_v
+		var fac2 := int(m2.get("faction", 0))
+		if fac2 <= 0 or bool(m2.get("ai", false)):
+			continue
+		var nick := str(m2.get("nick", "")).strip_edges()
+		if nick != "":
+			fac_names[str(fac2)] = nick
+	layout["faction_names"] = fac_names
 	#（联机冻结名单不再套本机配置）26.10.22 01:52 s
 	layout["roster_applied"] = true
 	#（联机冻结名单不再套本机配置）26.10.22 01:52 e
@@ -479,18 +541,18 @@ func _layout_for_peer(pid: int) -> Dictionary:
 
 
 func _enter_match(layout: Dictionary, tables: Dictionary, prog: Dictionary) -> void:
+	_hide_boot()
+	_opening = false
 	host_gone = false
 	match_started = true
-	var mine := _layout_for_match()
-	mine["viewer_faction"] = _faction_of_peer(multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1)
-	## Guests rebuild viewer from the host layout, then overwrite viewer faction locally.
-	if not is_host:
-		mine = layout.duplicate(true)
-		var fac := _faction_of_peer(multiplayer.get_unique_id())
-		if fac > 0:
-			mine["viewer_faction"] = fac
-		elif int(mine.get("viewer_faction", 0)) <= 0:
-			mine["fog_of_war"] = false
+	#（进局用冻结布局，不再按当时房间重做）26.10.22 21:40 s
+	var mine := layout.duplicate(true)
+	var fac := _faction_of_peer(multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1)
+	if fac > 0:
+		mine["viewer_faction"] = fac
+	elif int(mine.get("viewer_faction", 0)) <= 0:
+		mine["fog_of_war"] = false
+	#（进局用冻结布局，不再按当时房间重做）26.10.22 21:40 e
 	_write_json(LAYOUT_PATH, mine)
 	_write_json(TABLES_PATH, tables)
 	_write_json(PROGRESS_PATH, prog)
@@ -507,6 +569,144 @@ func close_match() -> void:
 	_remove_user(LIVE_PATH)
 	_remove_user(TABLES_PATH)
 	_remove_user(PROGRESS_PATH)
+
+
+func finish_match(rec: Dictionary) -> void:
+	#（终局才把提前离开的人移出房间，并给还在的人发最终结算）26.10.22 15:10 s
+	upsert_history(rec)
+	reopen_room = true
+	match_started = false
+	_remove_user(LIVE_PATH)
+	if is_host:
+		var kept: Array = []
+		for m_v in room.get("members", []):
+			if typeof(m_v) != TYPE_DICTIONARY:
+				continue
+			var m: Dictionary = m_v
+			if bool(m.get("left", false)) and not bool(m.get("ai", false)):
+				continue
+			kept.append(m)
+		room["members"] = kept
+		for m2_v in kept:
+			var m2: Dictionary = m2_v
+			m2["left"] = false
+			m2["offline"] = false
+			if bool(m2.get("wants_spectate", false)):
+				m2["seat"] = "spectate"
+				m2["faction"] = 0
+				m2["ready"] = true
+			else:
+				m2["seat"] = ""
+				m2["ready"] = false
+		_renumber()
+		var body := JSON.stringify(rec)
+		if multiplayer.has_multiplayer_peer():
+			rpc("rpc_match_closed", body)
+		_broadcast_room()
+	#（终局才把提前离开的人移出房间，并给还在的人发最终结算）26.10.22 15:10 e
+
+
+func leave_match(rec: Dictionary, concede_fac: int) -> void:
+	upsert_history(rec)
+	reopen_room = false
+	if concede_fac > 0:
+		send_concede(concede_fac)
+	if is_host:
+		var me := _member(1)
+		if not me.is_empty():
+			me["left"] = true
+			me["settle"] = rec
+		get_tree().create_timer(0.4).timeout.connect(_drop_local_after_leave)
+		return
+	submit_intent("leave", {"settle": rec})
+	get_tree().create_timer(0.4).timeout.connect(_drop_local_after_leave)
+
+
+func _drop_local_after_leave() -> void:
+	_reset_peer()
+	room = {}
+	match_started = false
+	is_host = false
+
+
+func _ensure_players_seated() -> void:
+	if not is_host or match_started:
+		return
+	var changed := false
+	for m_v in room.get("members", []):
+		if typeof(m_v) != TYPE_DICTIONARY:
+			continue
+		var m: Dictionary = m_v
+		if bool(m.get("left", false)) or bool(m.get("wants_spectate", false)):
+			continue
+		if str(m.get("seat", "")) == "spectate":
+			m["seat"] = ""
+			m["faction"] = 0
+			changed = true
+	if changed:
+		_renumber()
+
+
+static func read_history() -> Array:
+	if not FileAccess.file_exists(HISTORY_PATH):
+		return []
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(HISTORY_PATH))
+	return parsed if typeof(parsed) == TYPE_ARRAY else []
+
+
+static func upsert_history(rec: Dictionary) -> void:
+	if rec.is_empty():
+		return
+	var arr := read_history()
+	var mid := str(rec.get("match_id", ""))
+	if mid != "":
+		for i in range(arr.size()):
+			if typeof(arr[i]) != TYPE_DICTIONARY:
+				continue
+			if str((arr[i] as Dictionary).get("match_id", "")) != mid:
+				continue
+			if bool(rec.get("provisional", false)) and not bool((arr[i] as Dictionary).get("provisional", true)):
+				return
+			arr[i] = rec
+			_write_history(arr)
+			return
+	arr.append(rec)
+	_write_history(arr)
+
+
+static func _write_history(arr: Array) -> void:
+	var f := FileAccess.open(HISTORY_PATH, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(JSON.stringify(arr))
+	f.close()
+
+
+static func history_text() -> String:
+	var arr := read_history()
+	if arr.is_empty():
+		return "还没有多人对战结算"
+	var lines: PackedStringArray = PackedStringArray()
+	for i in range(arr.size() - 1, -1, -1):
+		if typeof(arr[i]) != TYPE_DICTIONARY:
+			continue
+		var rec: Dictionary = arr[i]
+		var stamp := Time.get_datetime_string_from_unix_time(int(rec.get("at", 0)))
+		var kind := "离场结算" if bool(rec.get("provisional", false)) else "最终结算"
+		lines.append("%s  %s  %s" % [stamp, kind, str(rec.get("reason", ""))])
+		var detail := str(rec.get("detail", ""))
+		if detail != "":
+			lines.append(detail)
+		for row_v in rec.get("rows", []):
+			if typeof(row_v) != TYPE_DICTIONARY:
+				continue
+			var row: Dictionary = row_v
+			lines.append("%s  制造%d  击毁%d  损失%d  占领%.0f" % [
+				str(row.get("name", "")), int(row.get("built", 0)), int(row.get("kills", 0)),
+				int(row.get("losses", 0)), float(row.get("occupy", 0.0)),
+			])
+		lines.append("")
+	return "\n".join(lines)
 
 
 func persist() -> void:
@@ -532,7 +732,7 @@ func _empty_room() -> Dictionary:
 		"modes": ["hua_di"],
 		"limit_s": 5400,
 		"annihilate": 50,
-		"scale": 20,
+		"scale": RosterTemplates.active_size(),
 		"fog": false,
 		"hash": rules_hash,
 		"members": [],
@@ -672,40 +872,80 @@ func _apply_intent(sender: int, kind: String, payload: Dictionary) -> void:
 	var member := _member(sender)
 	if member.is_empty() and kind != "hello":
 		return
+	#（开局核对期间不再改名单和规则）26.10.22 21:40 s
+	if _opening and kind != "report":
+		return
+	#（开局核对期间不再改名单和规则）26.10.22 21:40 e
 	match kind:
 		"ready":
-			member["ready"] = bool(payload.get("on", false))
+			var want_ready := bool(payload.get("on", false))
+			if want_ready:
+				var why := _roster_block(member)
+				if why != "":
+					member["ready"] = false
+					_fanout_chat("[全体] %s：名单未通过（%s）" % [str(member.get("nick", "")), why], "all", 0, 0)
+				else:
+					member["ready"] = true
+			else:
+				member["ready"] = false
 		"deputy":
 			member["deputy"] = str(payload.get("id", "yang"))
+			member["ready"] = false
 		"roster":
 			member["roster"] = payload.get("pilots", [])
-			member["crew"] = payload.get("crew", [])
+			if payload.has("crew"):
+				member["crew"] = payload.get("crew", [])
+			member["ready"] = false
 		"seat":
-			if sender == 1 and not match_started:
+			if not match_started:
 				var target := int(payload.get("peer", sender))
-				var row := _member(target) if target > 0 else _member_ai(int(payload.get("ai", -1)))
-				if not row.is_empty():
-					var new_seat := str(payload.get("seat", "spectate"))
-					var old_seat := str(row.get("seat", ""))
-					if new_seat != "" and new_seat != "spectate":
-						for other_v in room.get("members", []):
-							if typeof(other_v) != TYPE_DICTIONARY:
-								continue
-							var other: Dictionary = other_v
-							if other == row:
-								continue
-							if str(other.get("seat", "")) == new_seat:
-								other["seat"] = old_seat if old_seat != "" else "spectate"
-								other["ready"] = false
-					row["seat"] = new_seat
-					row["ready"] = false
-					_renumber()
+				var ai_index := int(payload.get("ai", -1))
+				#（每人能改自己的出生站，房主能改所有人）26.10.22 15:10 s
+				if sender != 1 and (ai_index > 0 or target != sender):
+					pass
+				else:
+					var row := _member(target) if target > 0 else _member_ai(ai_index)
+					if not row.is_empty():
+						var new_seat := str(payload.get("seat", "spectate"))
+						var old_seat := str(row.get("seat", ""))
+						if new_seat != "" and new_seat != "spectate":
+							for other_v in room.get("members", []):
+								if typeof(other_v) != TYPE_DICTIONARY:
+									continue
+								var other: Dictionary = other_v
+								if other == row:
+									continue
+								if str(other.get("seat", "")) == new_seat:
+									other["seat"] = old_seat if old_seat != "" else "spectate"
+									other["wants_spectate"] = false
+									other["ready"] = false
+						row["seat"] = new_seat
+						row["wants_spectate"] = new_seat == "spectate"
+						row["ready"] = false
+						_renumber()
+				#（每人能改自己的出生站，房主能改所有人）26.10.22 15:10 e
+		"leave":
+			if not member.is_empty():
+				member["left"] = true
+				member["offline"] = true
+				member["peer"] = 0
+				var settle_v: Variant = payload.get("settle", {})
+				if typeof(settle_v) == TYPE_DICTIONARY:
+					member["settle"] = settle_v
 		"rules":
 			if sender == 1:
 				var scale_changed := payload.has("scale") and int(payload.get("scale", 0)) != int(room.get("scale", 0))
+				var touched := false
 				for key in ["modes", "limit_s", "annihilate", "scale", "fog"]:
 					if payload.has(key):
 						room[key] = payload[key]
+						touched = true
+				if touched:
+					for ready_row_v in room.get("members", []):
+						if typeof(ready_row_v) != TYPE_DICTIONARY:
+							continue
+						if not bool((ready_row_v as Dictionary).get("ai", false)):
+							(ready_row_v as Dictionary)["ready"] = false
 				if scale_changed:
 					for m_v in room.get("members", []):
 						if typeof(m_v) != TYPE_DICTIONARY:
@@ -792,8 +1032,14 @@ func _pilots_from_resolve(res: Dictionary, fac: int, home: String, ai: bool, r: 
 	var ships_root: Variant = _read_json_file("res://data/board/ships.json")
 	if typeof(ships_root) == TYPE_DICTIONARY:
 		for s_v in (ships_root as Dictionary).get("ships", []):
-			if typeof(s_v) == TYPE_DICTIONARY:
-				ship_ids.append(str((s_v as Dictionary).get("id", "")))
+			if typeof(s_v) != TYPE_DICTIONARY:
+				continue
+			var sdef: Dictionary = s_v
+			if bool(sdef.get("npc_hull", false)) or bool(sdef.get("npc", false)):
+				continue
+			var sid := str(sdef.get("id", "")).strip_edges()
+			if sid != "":
+				ship_ids.append(sid)
 	var ids: PackedStringArray = res.get("ids", PackedStringArray())
 	var starters: Dictionary = res.get("starters", {})
 	var out: Array = []
@@ -803,7 +1049,7 @@ func _pilots_from_resolve(res: Dictionary, fac: int, home: String, ai: bool, r: 
 		var ship_id := str(mem.get("default_ship", "")).strip_edges()
 		if ai and not ship_ids.is_empty():
 			ship_id = str(ship_ids[r.randi_range(0, ship_ids.size() - 1)])
-		if ship_id == "" and not ship_ids.is_empty():
+		if ship_id not in ship_ids and not ship_ids.is_empty():
 			ship_id = str(ship_ids[n % ship_ids.size()])
 		out.append({
 			"id": "f%d_p%d" % [fac, n + 1],
@@ -814,18 +1060,82 @@ func _pilots_from_resolve(res: Dictionary, fac: int, home: String, ai: bool, r: 
 			"member_id": mid,
 			"cell_kind": "station",
 			"starter": starters.has(mid),
+			"pref_eq": str(mem.get("pref_eq", "")),
 		})
 	return out
 
 
 func build_local_roster(scale: int) -> Array:
 	var r := RandomNumberGenerator.new()
-	r.randomize()
+	#（同一份模版关闭和准备得到同一份名单）26.10.22 21:40 s
+	var entry: Dictionary = RosterTemplates.get_entry(scale)
+	var on_ids: PackedStringArray = entry.get("onfield", PackedStringArray())
+	var st_ids: PackedStringArray = entry.get("starters", PackedStringArray())
+	r.seed = hash("%d|%s|%s" % [scale, "|".join(on_ids), "|".join(st_ids)])
+	#（同一份模版关闭和准备得到同一份名单）26.10.22 21:40 e
 	var fac := local_faction()
 	var home := ""
 	var me := _member(multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1)
 	home = str(me.get("seat", ""))
-	return _pilots_from_resolve(RosterTemplates.resolve(scale, r), fac, home, false, r)
+	var built: Array = _pilots_from_resolve(RosterTemplates.resolve(scale, r), fac, home, false, r)
+	# #region agent log
+	var ids: PackedStringArray = PackedStringArray()
+	for p_v in built:
+		if typeof(p_v) == TYPE_DICTIONARY:
+			ids.append(str((p_v as Dictionary).get("member_id", "")))
+	var ships := PackedStringArray()
+	for p2_v in built:
+		if typeof(p2_v) == TYPE_DICTIONARY:
+			ships.append(str((p2_v as Dictionary).get("ship", "")))
+	DebugSessionLog.append("ROSTER", "mp_campaign_net.build_local_roster", "mount", {
+		"scale": scale,
+		"n": built.size(),
+		"ids": ",".join(ids),
+		"ships": ",".join(ships),
+		"runId": "post-fix",
+		"hypothesisId": "R1",
+	})
+	# #endregion
+	return built
+
+
+func _roster_block(member: Dictionary) -> String:
+	if str(member.get("seat", "")) == "spectate" or bool(member.get("left", false)):
+		return ""
+	var scale := int(room.get("scale", 20))
+	var roster: Array = member.get("roster", [])
+	if roster.size() != scale:
+		return "人数不是本局 %d 人" % scale
+	var playable := {}
+	var ships_root: Variant = _read_json_file("res://data/board/ships.json")
+	if typeof(ships_root) == TYPE_DICTIONARY:
+		for s_v in (ships_root as Dictionary).get("ships", []):
+			if typeof(s_v) != TYPE_DICTIONARY:
+				continue
+			var sdef: Dictionary = s_v
+			if bool(sdef.get("npc_hull", false)) or bool(sdef.get("npc", false)):
+				continue
+			var sid := str(sdef.get("id", "")).strip_edges()
+			if sid != "":
+				playable[sid] = true
+	var seen := {}
+	var starters := 0
+	for p_v in roster:
+		if typeof(p_v) != TYPE_DICTIONARY:
+			return "名单缺驾驶员"
+		var p: Dictionary = p_v
+		var mid := str(p.get("member_id", "")).strip_edges()
+		if mid == "" or seen.has(mid):
+			return "驾驶员重复或为空"
+		seen[mid] = true
+		var ship := str(p.get("ship", "")).strip_edges()
+		if not playable.has(ship):
+			return "舰型无效"
+		if bool(p.get("starter", false)):
+			starters += 1
+	if starters > scale / 2:
+		return "首发超过 %d" % (scale / 2)
+	return ""
 
 
 func crew_for_roster(pilots: Array) -> Array:
@@ -938,8 +1248,16 @@ func _merge_progress(pkt: Dictionary) -> void:
 		if typeof(u_v) == TYPE_DICTIONARY:
 			by_id[str((u_v as Dictionary).get("id", ""))] = u_v
 	for u2_v in pkt.get("units", []):
-		if typeof(u2_v) == TYPE_DICTIONARY:
-			by_id[str((u2_v as Dictionary).get("id", ""))] = u2_v
+		if typeof(u2_v) != TYPE_DICTIONARY:
+			continue
+		#（进度缓存留下序号更新的移动记录）26.10.22 21:05 s
+		var incoming: Dictionary = u2_v
+		var uid := str(incoming.get("id", ""))
+		var old_v: Variant = by_id.get(uid, null)
+		if typeof(old_v) == TYPE_DICTIONARY and int((old_v as Dictionary).get("motion_seq", 0)) > int(incoming.get("motion_seq", 0)):
+			continue
+		by_id[uid] = incoming
+		#（进度缓存留下序号更新的移动记录）26.10.22 21:05 e
 	progress["units"] = by_id.values()
 	var arcs: Dictionary = progress.get("arcs", {})
 	if typeof(arcs) != TYPE_DICTIONARY:
@@ -1243,17 +1561,18 @@ func _rtt_estimate(pid: int) -> Dictionary:
 
 
 func _reclaim_member(pid: int, nick: String, ticket_key: String) -> bool:
-	if ticket_key == "" or ticket_key != room_key:
-		return false
+	var ticket_ok := ticket_key != "" and ticket_key == room_key
 	var found: Dictionary = {}
 	for m_v in room.get("members", []):
 		if typeof(m_v) != TYPE_DICTIONARY:
 			continue
 		var m: Dictionary = m_v
-		if bool(m.get("ai", false)) or str(m.get("nick", "")) != nick:
+		if bool(m.get("ai", false)) or bool(m.get("left", false)) or str(m.get("nick", "")) != nick:
 			continue
 		var old := int(m.get("peer", 0))
 		if old == 1 and pid != 1:
+			continue
+		if not ticket_ok and not bool(m.get("offline", false)) and old != 0:
 			continue
 		if found.is_empty() or int(m.get("faction", 0)) > int(found.get("faction", 0)):
 			found = m
@@ -1285,7 +1604,7 @@ func _add_spectator(pid: int, nick: String, score: float, hash: String) -> void:
 	room["members"] = members
 
 
-func _deliver_diplo_offer(from_fac: int, to_fac: int, skip: int) -> void:
+func _deliver_diplo_offer(from_fac: int, to_fac: int, skip: int, on: bool = true) -> void:
 	var target := 0
 	for m_v in room.get("members", []):
 		if typeof(m_v) != TYPE_DICTIONARY:
@@ -1297,9 +1616,9 @@ func _deliver_diplo_offer(from_fac: int, to_fac: int, skip: int) -> void:
 	if target == 0 or target == skip:
 		return
 	if target == _self_id():
-		diplo_offer_received.emit(from_fac, to_fac)
+		diplo_offer_received.emit(from_fac, to_fac, on)
 	else:
-		rpc_id(target, "rpc_diplo_offer_to", from_fac, to_fac)
+		rpc_id(target, "rpc_diplo_offer_to", from_fac, to_fac, on)
 
 
 func _remove_user(path: String) -> void:
@@ -1331,8 +1650,12 @@ func _on_peer_disconnected(id: int) -> void:
 	if match_started:
 		var gone := _member(id)
 		if not gone.is_empty() and not bool(gone.get("ai", false)):
+			#（掉线按主动离开留在名单里，先记一笔，终局才删）26.10.22 15:10 s
 			gone["offline"] = true
 			gone["peer"] = 0
+			gone["left"] = true
+			#（掉线按主动离开留在名单里，先记一笔，终局才删）26.10.22 15:10 e
+			_begin_disc_wait()
 		peers_changed.emit()
 		_broadcast_room()
 		return
@@ -1358,6 +1681,7 @@ func _on_connection_failed() -> void:
 func _on_server_disconnected() -> void:
 	if match_started:
 		host_gone = true
+		_begin_disc_wait()
 		host_lost.emit()
 		return
 	failed.emit("与房主断开")
@@ -1764,30 +2088,48 @@ func rpc_fit_to(target: int, unit_id: String, kind: String, on: bool) -> void:
 
 
 @rpc("any_peer", "reliable")
-func rpc_order(unit_id: String, to_sys: String, to_cell: int) -> void:
-	order_received.emit(unit_id, to_sys, to_cell)
+func rpc_order(unit_id: String, to_sys: String, to_cell: int, focus_id: String = "") -> void:
+	order_received.emit(unit_id, to_sys, to_cell, focus_id)
 
 
 @rpc("any_peer", "reliable")
-func rpc_order_to(target: int, unit_id: String, to_sys: String, to_cell: int) -> void:
+func rpc_order_to(target: int, unit_id: String, to_sys: String, to_cell: int, focus_id: String = "") -> void:
 	if not is_host:
 		return
 	if target == _self_id():
-		order_received.emit(unit_id, to_sys, to_cell)
+		order_received.emit(unit_id, to_sys, to_cell, focus_id)
 	elif target > 0:
-		rpc_id(target, "rpc_order", unit_id, to_sys, to_cell)
+		rpc_id(target, "rpc_order", unit_id, to_sys, to_cell, focus_id)
 
 
 @rpc("any_peer", "reliable")
-func rpc_diplo_offer(from_fac: int, to_fac: int) -> void:
+func rpc_diplo_offer(from_fac: int, to_fac: int, on: bool = true) -> void:
 	if not is_host:
 		return
-	_deliver_diplo_offer(from_fac, to_fac, multiplayer.get_remote_sender_id())
+	_deliver_diplo_offer(from_fac, to_fac, multiplayer.get_remote_sender_id(), on)
 
 
 @rpc("any_peer", "reliable")
-func rpc_diplo_offer_to(from_fac: int, to_fac: int) -> void:
-	diplo_offer_received.emit(from_fac, to_fac)
+func rpc_diplo_offer_to(from_fac: int, to_fac: int, on: bool = true) -> void:
+	diplo_offer_received.emit(from_fac, to_fac, on)
+
+
+@rpc("any_peer", "reliable")
+func rpc_concede(fac: int) -> void:
+	var sender := multiplayer.get_remote_sender_id()
+	concede_received.emit(fac)
+	if is_host:
+		for pid in _relay_targets(sender):
+			rpc_id(int(pid), "rpc_concede", fac)
+
+
+@rpc("any_peer", "reliable")
+func rpc_match_closed(body: String) -> void:
+	match_started = false
+	reopen_room = true
+	var parsed: Variant = JSON.parse_string(body)
+	if typeof(parsed) == TYPE_DICTIONARY:
+		upsert_history(parsed)
 
 
 @rpc("any_peer", "reliable")
@@ -1845,6 +2187,275 @@ func rpc_fog_req(on: bool) -> void:
 	_fanout_chat("[全体] %s：希望把战争迷雾调整为%s" % [who, "开" if on else "关"], "all", 0, 0)
 
 
+func _content_hash(tables: Dictionary) -> String:
+	var body := {
+		"ships": tables.get("ships", {}),
+		"equipment": tables.get("equipment", {}),
+		"members": tables.get("members", []),
+	}
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	ctx.update(_canon(body).to_utf8_buffer())
+	return ctx.finish().hex_encode()
+
+
+func _canon(v: Variant) -> String:
+	if typeof(v) == TYPE_DICTIONARY:
+		var keys: Array = (v as Dictionary).keys()
+		keys.sort()
+		var parts: PackedStringArray = PackedStringArray()
+		for k in keys:
+			parts.append(JSON.stringify(str(k)) + ":" + _canon((v as Dictionary)[k]))
+		return "{" + "|".join(parts) + "}"
+	if typeof(v) == TYPE_ARRAY:
+		var bits: PackedStringArray = PackedStringArray()
+		for item in v:
+			bits.append(_canon(item))
+		return "[" + "|".join(bits) + "]"
+	if typeof(v) == TYPE_FLOAT or typeof(v) == TYPE_INT:
+		return "%.6f" % float(v)
+	return JSON.stringify(v)
+
+
+func _cached_tables() -> Dictionary:
+	var parsed: Variant = _read_json_file(TABLES_PATH)
+	return parsed if typeof(parsed) == TYPE_DICTIONARY else {}
+
+
+func _human_peer_ids() -> Array:
+	var out: Array = []
+	for m_v in room.get("members", []):
+		if typeof(m_v) != TYPE_DICTIONARY:
+			continue
+		var m: Dictionary = m_v
+		if bool(m.get("ai", false)) or str(m.get("seat", "")) == "spectate":
+			continue
+		var pid := int(m.get("peer", 0))
+		if pid > 0:
+			out.append(pid)
+	return out
+
+
+func _count_humans() -> int:
+	var n := 0
+	for m_v in room.get("members", []):
+		if typeof(m_v) != TYPE_DICTIONARY:
+			continue
+		var m: Dictionary = m_v
+		if bool(m.get("ai", false)) or str(m.get("seat", "")) == "spectate":
+			continue
+		n += 1
+	return n
+
+
+func _show_boot(text: String, ratio: float) -> void:
+	if _boot_layer == null or not is_instance_valid(_boot_layer):
+		_boot_layer = CanvasLayer.new()
+		_boot_layer.layer = 120
+		add_child(_boot_layer)
+		var bg := ColorRect.new()
+		bg.color = Color(0, 0, 0, 1)
+		bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_boot_layer.add_child(bg)
+		var box := VBoxContainer.new()
+		box.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+		box.offset_left = -220
+		box.offset_right = 220
+		box.offset_top = -120
+		box.offset_bottom = -36
+		box.add_theme_constant_override("separation", 8)
+		_boot_layer.add_child(box)
+		_boot_label = Label.new()
+		_boot_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_boot_label.add_theme_color_override("font_color", Color.WHITE)
+		box.add_child(_boot_label)
+		_boot_bar = ProgressBar.new()
+		_boot_bar.min_value = 0.0
+		_boot_bar.max_value = 1.0
+		_boot_bar.custom_minimum_size = Vector2(360, 18)
+		box.add_child(_boot_bar)
+	_boot_label.text = text
+	_boot_bar.value = clampf(ratio, 0.0, 1.0)
+	_boot_layer.visible = true
+
+
+func _hide_boot() -> void:
+	if _boot_layer != null and is_instance_valid(_boot_layer):
+		_boot_layer.queue_free()
+	_boot_layer = null
+	_boot_label = null
+	_boot_bar = null
+
+
+func _finish_opening() -> void:
+	if not _opening:
+		return
+	_show_boot("正在进入对局", 1.0)
+	var base: Dictionary = _opening_layout if not _opening_layout.is_empty() else _layout_for_match()
+	for pid in _relay_targets(_self_id()):
+		var mine := base.duplicate(true)
+		var fac := _faction_of_peer(int(pid))
+		mine["viewer_faction"] = fac
+		if fac <= 0:
+			mine["fog_of_war"] = false
+		rpc_id(int(pid), "rpc_opening_go", JSON.stringify(mine), JSON.stringify(_opening_prog))
+	_enter_match(base.duplicate(true), _opening_tables, _opening_prog)
+
+
+func _note_opening_loaded(pid: int) -> void:
+	_opening_loaded[pid] = true
+	var humans := _human_peer_ids()
+	var done := 0
+	var need := 0
+	for pid2 in humans:
+		if int(pid2) == _self_id():
+			continue
+		need += 1
+		if bool(_opening_loaded.get(pid2, false)):
+			done += 1
+	_show_boot("正在加载", 0.8 + (0.15 * float(done) / maxf(1.0, float(need))))
+	if done >= need:
+		_finish_opening()
+
+
+func _begin_disc_wait() -> void:
+	_disc_active = true
+	_disc_pvp = false
+	_disc_link_ok = false
+	_disc_probed = false
+	if _count_humans() <= 2:
+		_disc_wait_until = Time.get_unix_time_from_system() + DUEL_WAIT_S
+		_disc_line = "有人掉线。拟真已交接，双人最多再等 10 分钟。"
+		_probe_pages_once()
+	else:
+		_disc_wait_until = 0.0
+		_disc_line = "有人掉线。拟真已交接，多人等待重连不限时。"
+	disc_notice.emit(_disc_line)
+
+
+func disc_wait_text() -> String:
+	return _disc_line
+
+
+func note_player_combat(attacker: Dictionary, target: Dictionary) -> void:
+	if not _disc_active or attacker.is_empty() or target.is_empty():
+		return
+	if bool(attacker.get("garrison", false)) or bool(target.get("garrison", false)):
+		return
+	var af := int(attacker.get("faction", 0))
+	var tf := int(target.get("faction", 0))
+	if af <= 0 or tf <= 0 or af == tf:
+		return
+	_disc_pvp = true
+
+
+func disc_skip_remote_combat(from_host: bool) -> bool:
+	if not _disc_pvp:
+		return false
+	if _disc_link_ok:
+		return true
+	return not from_host
+
+
+func _probe_pages_once() -> void:
+	if _disc_probed:
+		return
+	_disc_probed = true
+	var http := HTTPRequest.new()
+	http.timeout = 8.0
+	add_child(http)
+	http.request_completed.connect(func(result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
+		_disc_link_ok = result == HTTPRequest.RESULT_SUCCESS and code > 0
+		if is_instance_valid(http):
+			http.queue_free()
+	)
+	if http.request(PAGES_URL) != OK:
+		_disc_link_ok = false
+		http.queue_free()
+
+
+func _disc_body() -> Dictionary:
+	if disc_capture.is_valid():
+		var captured = disc_capture.call()
+		if typeof(captured) == TYPE_DICTIONARY:
+			return captured
+	return {}
+
+
+@rpc("authority", "reliable")
+func rpc_opening_hash(content_hash: String) -> void:
+	_show_boot("正在核对数据", 0.25)
+	var need: bool = _content_hash(_cached_tables()) != content_hash
+	_show_boot("正在同步数据" if need else "数据一致", 0.45 if need else 0.6)
+	rpc_id(1, "rpc_opening_need", need)
+
+
+@rpc("any_peer", "reliable")
+func rpc_opening_need(need: bool) -> void:
+	if not is_host or not _opening:
+		return
+	var pid := multiplayer.get_remote_sender_id()
+	if need:
+		_show_boot("正在同步数据", 0.55)
+		rpc_id(pid, "rpc_opening_tables", JSON.stringify(_opening_tables))
+	else:
+		rpc_id(pid, "rpc_opening_load")
+
+
+@rpc("authority", "reliable")
+func rpc_opening_tables(body: String) -> void:
+	var parsed: Variant = JSON.parse_string(body)
+	if typeof(parsed) == TYPE_DICTIONARY:
+		_write_json(TABLES_PATH, parsed)
+	_show_boot("正在加载", 0.8)
+	rpc_id(1, "rpc_opening_loaded")
+
+
+@rpc("authority", "reliable")
+func rpc_opening_load() -> void:
+	_show_boot("正在加载", 0.8)
+	rpc_id(1, "rpc_opening_loaded")
+
+
+@rpc("any_peer", "reliable")
+func rpc_opening_loaded() -> void:
+	if not is_host or not _opening:
+		return
+	_note_opening_loaded(multiplayer.get_remote_sender_id())
+
+
+@rpc("authority", "reliable")
+func rpc_opening_go(layout_json: String, progress_json: String) -> void:
+	_show_boot("正在进入对局", 1.0)
+	var layout_v: Variant = JSON.parse_string(layout_json)
+	var prog_v: Variant = JSON.parse_string(progress_json)
+	var layout: Dictionary = layout_v if typeof(layout_v) == TYPE_DICTIONARY else {}
+	var prog: Dictionary = prog_v if typeof(prog_v) == TYPE_DICTIONARY else {}
+	_enter_match(layout, _cached_tables(), prog)
+
+
+@rpc("any_peer", "reliable")
+func rpc_disc_push(body_json: String) -> void:
+	if not is_host:
+		return
+	var parsed: Variant = JSON.parse_string(body_json)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	var apply_combat := bool((parsed as Dictionary).get("link_ok", false)) and bool((parsed as Dictionary).get("pvp", false))
+	if disc_apply.is_valid():
+		disc_apply.call(parsed, apply_combat)
+	if not apply_combat:
+		rpc_id(sender, "rpc_disc_state", JSON.stringify(_disc_body()))
+
+
+@rpc("authority", "reliable")
+func rpc_disc_state(body_json: String) -> void:
+	var parsed: Variant = JSON.parse_string(body_json)
+	if typeof(parsed) == TYPE_DICTIONARY and disc_apply.is_valid():
+		disc_apply.call(parsed, false)
+
+
 @rpc("authority", "reliable")
 func rpc_match_start(layout_json: String, tables_json: String, progress_json: String) -> void:
 	var layout_v: Variant = JSON.parse_string(layout_json)
@@ -1858,6 +2469,26 @@ func rpc_match_start(layout_json: String, tables_json: String, progress_json: St
 
 @rpc("authority", "reliable")
 func rpc_resume(layout_json: String, tables_json: String, progress_json: String) -> void:
+	if match_started and _disc_active:
+		var layout_v: Variant = JSON.parse_string(layout_json)
+		var tables_v: Variant = JSON.parse_string(tables_json)
+		var prog_v: Variant = JSON.parse_string(progress_json)
+		var layout: Dictionary = layout_v if typeof(layout_v) == TYPE_DICTIONARY else {}
+		var tables: Dictionary = tables_v if typeof(tables_v) == TYPE_DICTIONARY else {}
+		var prog: Dictionary = prog_v if typeof(prog_v) == TYPE_DICTIONARY else {}
+		if _disc_pvp and not _disc_link_ok:
+			_disc_active = false
+			_enter_match(layout, tables, prog)
+			return
+		var mine := _disc_body()
+		mine["pvp"] = _disc_pvp
+		mine["link_ok"] = _disc_link_ok
+		rpc_id(1, "rpc_disc_push", JSON.stringify(mine))
+		if not _disc_pvp and disc_apply.is_valid():
+			disc_apply.call(prog, false)
+		_disc_active = false
+		host_gone = false
+		return
 	rpc_match_start(layout_json, tables_json, progress_json)
 
 

@@ -38,11 +38,9 @@ var TACTICAL_DIST_MAX := 3090.0
 var STARMAP_ENTER := 1400.0
 const PAN_SENS := 0.22
 const EDGE_PAN_SPEED_PX := 520.0
-const EDGE_PAN_TAU := 0.08
 var _edge_dir := Vector2.ZERO
 var _edge_depth := 0.0
 var _edge_vel := Vector3.ZERO
-var _edge_intent_on := false
 ## When valid and returns true, skip cam wheel/pan/rotate.
 var block_input_fn: Callable = Callable()
 
@@ -248,7 +246,6 @@ func cut_edge_pan() -> void:
 	_edge_dir = Vector2.ZERO
 	_edge_depth = 0.0
 	_edge_vel = Vector3.ZERO
-	_edge_intent_on = false
 
 func _screen_pan_axes() -> Array:
 	if tactical_mode:
@@ -262,8 +259,7 @@ func _screen_pan_axes() -> Array:
 	]
 
 func _tick_edge_velocity(delta: float) -> void:
-	## World-space velocity, same axes as middle-drag.
-	## EDGE_PAN_TAU kept; response latched to full (no accel ramp feel). Hotzone on = full speed.
+	## World-space velocity, same axes as middle-drag. Hotzone on = full speed.
 	var desired := Vector3.ZERO
 	if _edge_dir != Vector2.ZERO:
 		var k := PAN_SENS * (distance / TACTICAL_DIST_ENTER) if tactical_mode else PAN_SENS * (distance / 140.0)
@@ -275,10 +271,6 @@ func _tick_edge_velocity(delta: float) -> void:
 		var y := -nd.y if tactical_mode else nd.y
 		desired = (ax[0] as Vector3) * (nd.x * speed) + (ax[1] as Vector3) * (y * speed)
 		clear_follow_keep_look()
-	## Keep EDGE_PAN_TAU field; response latched (no accel ramp).
-	var _tau_keep := EDGE_PAN_TAU
-	var _a_keep := 1.0 - exp(-delta / maxf(_tau_keep * 0.0001, 0.000001))
-	_a_keep = 1.0
 	_edge_vel = desired if desired != Vector3.ZERO else Vector3.ZERO
 	if _edge_vel.length_squared() < 0.04:
 		_edge_vel = Vector3.ZERO
@@ -286,51 +278,47 @@ func _tick_edge_velocity(delta: float) -> void:
 	look_at_point += _edge_vel * delta
 	_look_smooth = look_at_point
 	_look_init = true
-	# #region agent log
-	var intent := _edge_dir != Vector2.ZERO
-	if intent != _edge_intent_on:
-		_edge_intent_on = intent
-		var path := "h:/debug-59aff0.log"
-		var f := FileAccess.open(path, FileAccess.READ_WRITE)
-		if f == null:
-			f = FileAccess.open(path, FileAccess.WRITE)
-		if f:
-			f.seek_end()
-			f.store_line(JSON.stringify({
-				"sessionId": "59aff0", "hypothesisId": "EDGE",
-				"location": "board_camera._tick_edge_velocity", "message": "edge_toggle",
-				"data": {
-					"on": intent, "dir_x": _edge_dir.x, "dir_y": _edge_dir.y,
-					"y_sign": "tac_neg" if tactical_mode else "battle_pos",
-					"speed": snappedf(desired.length(), 0.01), "dt": snappedf(delta, 0.0001),
-					"tac": tactical_mode, "star": starmap_mode, "runId": "post-fix"
-				},
-				"timestamp": Time.get_ticks_msec()
-			}))
-			f.close()
-	# #endregion
 
 func pan_by_screen_delta(rel: Vector2) -> void:
-	## Same axes as middle-drag pan (tactical nadir or battle orbit look shift).
-	if tactical_mode:
-		var k: float = PAN_SENS * (distance / TACTICAL_DIST_ENTER)
-		var s_right := Vector3(cos(tactical_yaw), 0.0, sin(tactical_yaw))
-		var s_up := Vector3(sin(tactical_yaw), 0.0, -cos(tactical_yaw))
-		look_at_point += s_right * (-rel.x * k) + s_up * (rel.y * k)
-		_look_smooth = look_at_point
-		_look_init = true
-		clear_follow_keep_look()
-		_apply()
-	else:
-		## Battle: shift look in camera right / forward-flat.
-		var k2: float = PAN_SENS * (distance / 140.0)
-		var right := Vector3(cos(yaw), 0.0, -sin(yaw))
-		var fwd := Vector3(sin(yaw), 0.0, cos(yaw))
-		look_at_point += right * (-rel.x * k2) + fwd * (rel.y * k2)
-		_look_smooth = look_at_point
-		_look_init = true
-		clear_follow_keep_look()
-		_apply()
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var center := vp.get_visible_rect().size * 0.5
+	pan_by_screen_points(center, center + rel)
+
+
+func pan_by_screen_points(a: Vector2, b: Vector2) -> void:
+	## Ground point under the pointer stays under the pointer. Missed rays are skipped.
+	if cam == null or a.distance_squared_to(b) < 0.0000001:
+		return
+	var grounded: Variant = _ground_hit(a)
+	var shifted: Variant = _ground_hit(b)
+	if grounded == null or shifted == null:
+		return
+	look_at_point += (grounded as Vector3) - (shifted as Vector3)
+	_look_smooth = look_at_point
+	_look_init = true
+	clear_follow_keep_look()
+	_apply()
+
+
+func _ground_hit(screen: Vector2) -> Variant:
+	var origin := cam.project_ray_origin(screen)
+	var dir := cam.project_ray_normal(screen)
+	if absf(dir.y) < 0.00001:
+		return null
+	#（地面交点比例写成 float，否则相机脚本编译失败、进对局黑屏）26.10.22 15:50 s
+	var t: float = float(look_at_point.y - origin.y) / float(dir.y)
+	#（地面交点比例写成 float，否则相机脚本编译失败、进对局黑屏）26.10.22 15:50 e
+	if t < 0.0:
+		return null
+	return origin + dir * t
+
+
+func release_stuck_buttons() -> void:
+	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
+		panning = false
+		rotating = false
 
 ## Prefer _input so wheel is not lost when board_root/_gui consumes unhandled path.
 func _input(event: InputEvent) -> void:
@@ -405,36 +393,7 @@ func _handle_cam_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion:
 		var mm = event as InputEventMouseMotion
 		if tactical_mode and panning:
-			## Nadir: pan in screen axes (follow tactical_yaw).
-			## Screen-up axis: same sign as mouse Y (drag up → look moves screen-up); was inverted on Z@yaw0.
-			var k: float = PAN_SENS * (distance / TACTICAL_DIST_ENTER)
-			var s_right := Vector3(cos(tactical_yaw), 0.0, sin(tactical_yaw))
-			var s_up := Vector3(sin(tactical_yaw), 0.0, -cos(tactical_yaw))
-			var d_right: float = -mm.relative.x * k
-			var d_up: float = mm.relative.y * k
-			look_at_point += s_right * d_right + s_up * d_up
-			_look_smooth = look_at_point
-			_look_init = true
-			# #region agent log
-			if Engine.get_process_frames() % 8 == 0:
-				var path := "h:/debug-59aff0.log"
-				var f := FileAccess.open(path, FileAccess.READ_WRITE)
-				if f == null:
-					f = FileAccess.open(path, FileAccess.WRITE)
-				if f:
-					f.seek_end()
-					f.store_line(JSON.stringify({
-						"sessionId": "59aff0", "hypothesisId": "PAN_Z",
-						"location": "board_camera.pan", "message": "tac_pan",
-						"data": {
-							"rel_y": mm.relative.y, "d_up": d_up, "look_z": look_at_point.z,
-							"s_up_z": s_up.z, "yaw": tactical_yaw, "runId": "pan-z-fix"
-						},
-						"timestamp": Time.get_ticks_msec(), "runId": "pan-z-fix"
-					}))
-					f.close()
-			# #endregion
-			_apply()
+			pan_by_screen_points(mm.position - mm.relative, mm.position)
 			get_viewport().set_input_as_handled()
 		elif rotating and not tactical_mode:
 			yaw -= mm.relative.x * 0.005
@@ -443,6 +402,7 @@ func _handle_cam_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func tick_breathe(delta: float) -> void:
+	release_stuck_buttons()
 	_tick_edge_velocity(delta)
 	if not _look_init:
 		_look_smooth = look_at_point
@@ -459,6 +419,8 @@ func _apply() -> void:
 		return
 	cam.fov = FOV
 	var focus = _look_smooth if _look_init else look_at_point
+	#（先放父节点，再放子相机，避免父节点带动多移一截）26.10.22 15:20 s
+	global_position = focus
 	if tactical_mode:
 		## Nadir: distance = height. tactical_yaw spins screen-up (default north = -Z).
 		cam.global_position = focus + Vector3(0.0, distance, 0.0)
@@ -467,7 +429,6 @@ func _apply() -> void:
 			up = Vector3(0.0, 0.0, -1.0)
 		if cam.global_position.distance_squared_to(focus) > 0.0001:
 			cam.look_at(focus, up)
-		global_position = focus
 		return
 	var cp = cos(pitch)
 	var sp = sin(pitch)
@@ -485,4 +446,4 @@ func _apply() -> void:
 	cam.global_position = focus + offset + breath
 	if cam.global_position.distance_squared_to(focus) > 0.0001:
 		cam.look_at(focus, Vector3.UP)
-	global_position = focus
+	#（先放父节点，再放子相机，避免父节点带动多移一截）26.10.22 15:20 e

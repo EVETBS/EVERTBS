@@ -3,6 +3,7 @@ class_name RatioDualSlider
 ## One track, two thumbs. Left = station systems, middle = resource, right = normal.
 
 signal ratio_changed(station_pct: float, resource_pct: float)
+signal drag_finished(station_pct: float, resource_pct: float)
 
 var station_pct := 35.0
 var resource_pct := 25.0
@@ -21,6 +22,15 @@ func set_ratio(station: float, resource: float) -> void:
 	queue_redraw()
 
 
+func _notification(what: int) -> void:
+	if not dragging:
+		return
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT or what == NOTIFICATION_EXIT_TREE:
+		dragging = false
+		_which = 0
+		drag_finished.emit(station_pct, resource_pct)
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
@@ -33,6 +43,7 @@ func _gui_input(event: InputEvent) -> void:
 		else:
 			dragging = false
 			_which = 0
+			drag_finished.emit(station_pct, resource_pct)
 		accept_event()
 	elif event is InputEventMouseMotion and dragging:
 		_move_to((event as InputEventMouseMotion).position.x)
