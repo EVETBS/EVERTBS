@@ -47,4 +47,4 @@ $Godot = "H:\game\game_dev\EVERTBS\tools\godot\Godot_v4.7.1-stable_win64.exe"
 
 ## License
 
-BSD 3-Clause（见 [`LICENSE`](LICENSE)）。相关美术与设定权利归属各自权利人；本项目为非商业玩家二创。
+BSD 3-Clause（见 [`LICENSE`](LICENSE)），只覆盖本仓库贡献者自己的代码。CCP 公开给全体玩家的非商业内容创作条款整理见 [`docs/CCP_CONTENT_CREATION_TERMS.md`](docs/CCP_CONTENT_CREATION_TERMS.md)。EVE 相关名称、商标与素材的权利人仍是 CCP；本项目为非商业玩家二创。
